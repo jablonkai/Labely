@@ -11,6 +11,7 @@ mod file;
 mod history;
 mod phase2;
 mod schema;
+mod templates;
 
 use labely_core::{CommandError, Session};
 use serde_json::{Value, json};

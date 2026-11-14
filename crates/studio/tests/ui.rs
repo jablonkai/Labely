@@ -392,3 +392,69 @@ fn group_select_and_align() {
     let ys: Vec<f64> = doc.elements().map(|e| e.y_mm).collect();
     assert_eq!(ys, vec![1.0, 1.0, 7.0]);
 }
+
+#[test]
+fn template_gallery_open_save_and_manage() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = harness(LabelyApp::new(
+        None,
+        StudioOptions {
+            template_dir: Some(dir.path().to_path_buf()),
+            ..options()
+        },
+    ));
+    h.run();
+    // Welcome screen → gallery → open a starter by double-click.
+    h.get_by_label("New from template…").click();
+    h.run();
+    assert!(h.query_by_label("Starter templates").is_some());
+    h.get_by_label("Price tag").click();
+    h.run();
+    h.get_by_label("Open").click();
+    h.run();
+    let doc = h.state().session.doc(None).expect("opened from template");
+    assert_eq!(doc.name, "Price tag");
+    assert_eq!(doc.elements().count(), 3);
+    assert!(h.state().ui.dialog.is_none());
+
+    // File → Save as template… into a new folder.
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label("Save as template…").click();
+    h.run();
+    let folder = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Folder");
+    folder.focus();
+    folder.type_text("Shop");
+    h.run();
+    h.get_by_label("Save").click();
+    h.run();
+    assert!(dir.path().join("Shop/Price tag.labely").is_file());
+    // Saving again asks before replacing.
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label("Save as template…").click();
+    h.run();
+    let folder = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Folder");
+    folder.focus();
+    folder.type_text("Shop");
+    h.run();
+    h.get_by_label("Save").click();
+    h.run();
+    assert!(h.query_by_label("Replace").is_some());
+    h.get_by_label("Replace").click();
+    h.run();
+    assert!(h.state().ui.dialog.is_none());
+
+    // The gallery lists the folder; delete the template there.
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label_contains("New from template…").click();
+    h.run();
+    h.get_by_label("  🗀 Shop").click();
+    h.run();
+    h.get_by_label("Price tag").click();
+    h.run();
+    h.get_by_label("Delete").click();
+    h.run();
+    assert!(!dir.path().join("Shop/Price tag.labely").exists());
+}

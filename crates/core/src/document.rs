@@ -75,6 +75,33 @@ impl Document {
         self.elements().find(|e| e.id == id)
     }
 
+    /// Drop assets no image element and no data cell refers to; returns how many went.
+    /// Data cells hold asset keys for images bound with `{{column}}` (ADR-0018).
+    pub fn prune_assets(&mut self) -> usize {
+        let used: std::collections::BTreeSet<&str> = self
+            .elements()
+            .filter_map(|e| match &e.kind {
+                ElementKind::Image(i) => Some(i.asset.as_str()),
+                _ => None,
+            })
+            .chain(
+                self.data
+                    .iter()
+                    .flat_map(|d| d.rows.iter().flatten().map(String::as_str)),
+            )
+            .collect();
+        let unused: Vec<String> = self
+            .assets
+            .keys()
+            .filter(|k| !used.contains(k.as_str()))
+            .cloned()
+            .collect();
+        for k in &unused {
+            self.assets.remove(k);
+        }
+        unused.len()
+    }
+
     pub fn element_mut(&mut self, id: ElementId) -> Option<&mut Element> {
         self.pages
             .iter_mut()

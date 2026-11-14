@@ -840,6 +840,12 @@ pub fn welcome(app: &mut LabelyApp, ui: &mut Ui) {
             menu::invoke(app, "doc.new");
         }
         if ui
+            .button(menu::command_label(&app.i18n, "template.new"))
+            .clicked()
+        {
+            menu::invoke(app, "template.new");
+        }
+        if ui
             .button(menu::command_label(&app.i18n, "doc.open"))
             .clicked()
         {

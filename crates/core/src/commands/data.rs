@@ -168,7 +168,7 @@ fn file_name(path: &str) -> Option<String> {
 }
 
 /// Attach `source` to the document, warning about names that shadow variables or serials.
-fn attach(
+pub(crate) fn attach(
     ctx: &mut Ctx<'_>,
     doc_id: Option<&str>,
     source: DataSource,
@@ -187,6 +187,7 @@ fn attach(
     let replaced = doc.data.is_some();
     let out = summary(&source);
     doc.data = Some(source);
+    doc.prune_assets();
     if !shadowed.is_empty() {
         ctx.warn(format!(
             "column(s) {} shadow a variable or serial of the same name",
@@ -436,9 +437,9 @@ impl Command for Detach {
 
     fn run(ctx: &mut Ctx<'_>, p: DocParams) -> Result<DetachOutput, CommandError> {
         let doc = ctx.doc_mut(p.doc_id.as_deref())?;
-        Ok(DetachOutput {
-            removed: doc.data.take().is_some(),
-        })
+        let removed = doc.data.take().is_some();
+        doc.prune_assets();
+        Ok(DetachOutput { removed })
     }
 }
 

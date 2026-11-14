@@ -12,7 +12,7 @@ use crate::command::{Command, CommandError, CommandMeta, Ctx};
 use crate::document::{Document, Element, ElementId, ElementKind};
 use crate::services::{RenderError, RenderIssue};
 
-fn render_error(e: RenderError) -> CommandError {
+pub(crate) fn render_error(e: RenderError) -> CommandError {
     match e {
         RenderError::NoSuchPage(p) => CommandError::bad_params(e.to_string())
             .with_param("page")
@@ -24,7 +24,11 @@ fn render_error(e: RenderError) -> CommandError {
 }
 
 /// The dpi to use: explicit, else the document's model, else 203.
-fn pick_dpi(ctx: &Ctx<'_>, doc: &Document, dpi: Option<u32>) -> Result<u32, CommandError> {
+pub(crate) fn pick_dpi(
+    ctx: &Ctx<'_>,
+    doc: &Document,
+    dpi: Option<u32>,
+) -> Result<u32, CommandError> {
     match dpi {
         Some(d) => check_dpi(d),
         None => Ok(doc_model(ctx, doc).map_or(DEFAULT_DPI, |m| m.dpi)),
@@ -517,7 +521,7 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
                         Severity::Warning,
                         Some(*element_id),
                         format!(
-                            "{} element {} has {have_mm:.2} mm of quiet zone, {need_mm:.2} mm                              ({quiet_modules} modules) is recommended",
+                            "{} element {} has {have_mm:.2} mm of quiet zone, {need_mm:.2} mm ({quiet_modules} modules) is recommended",
                             e.kind.type_name(),
                             element_id.0
                         ),

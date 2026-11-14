@@ -1,0 +1,80 @@
+{
+  "format_version": 2,
+  "name": "Wi-Fi",
+  "label": {
+    "width_mm": 50.0,
+    "height_mm": 30.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 2.0,
+          "y_mm": 3.0,
+          "width_mm": 25.0,
+          "height_mm": 7.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Wi-Fi",
+          "font_family": "Noto Sans",
+          "font_size_pt": 14.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "none",
+          "invert": false
+        },
+        {
+          "id": 2,
+          "x_mm": 2.0,
+          "y_mm": 11.0,
+          "width_mm": 25.0,
+          "height_mm": 16.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Network: MyNetwork\nPassword: secret123",
+          "font_family": "Noto Sans",
+          "font_size_pt": 8.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "top",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 3,
+          "x_mm": 29.0,
+          "y_mm": 6.0,
+          "width_mm": 17.0,
+          "height_mm": 17.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "code2d",
+          "data": "WIFI:T:WPA;S:MyNetwork;P:secret123;;",
+          "symbology": "qr",
+          "ecc": "M"
+        }
+      ]
+    }
+  ],
+  "next_id": 4
+}

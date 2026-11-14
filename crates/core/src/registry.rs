@@ -10,7 +10,8 @@ use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
 use crate::commands::{
-    arrange, data, decor, device, doc, element, history, meta, render, selection, table, variable,
+    arrange, data, decor, device, doc, element, export, history, images, meta, render, selection,
+    table, template, variable,
 };
 use crate::schema::{output_schema, params_schema};
 
@@ -294,6 +295,15 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<doc::DocOpen>().in_menu("file", Some("Ctrl+O")),
         Entry::of::<doc::DocSave>().in_menu("file", Some("Ctrl+S")),
         Entry::of::<doc::DocClose>().in_menu("file", Some("Ctrl+W")),
+        Entry::of::<template::TemplateNew>().in_menu("file", Some("Ctrl+Shift+N")),
+        Entry::of::<template::TemplateSave>().in_menu("file", None),
+        Entry::of::<export::ExportPng>().in_menu("file", None),
+        Entry::of::<export::ExportPdf>().in_menu("file", Some("Ctrl+E")),
+        Entry::of::<template::TemplateList>(),
+        Entry::of::<template::TemplateDelete>(),
+        Entry::of::<template::TemplateMove>(),
+        Entry::of::<template::TemplateDuplicate>(),
+        Entry::of::<template::TemplateFolder>(),
         Entry::of::<doc::DocGet>(),
         Entry::of::<doc::DocSetLabel>().in_menu("label", None),
         Entry::of::<render::DocCheck>().in_menu("label", Some("Ctrl+K")),
@@ -330,6 +340,7 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<variable::VariableSet>(),
         Entry::of::<data::AttachCsv>().in_menu("data", None),
         Entry::of::<data::AttachXlsx>().in_menu("data", None),
+        Entry::of::<images::AttachImages>().in_menu("data", None),
         Entry::of::<data::Detach>().in_menu("data", None),
         Entry::of::<data::Get>(),
         Entry::of::<data::Bind>(),

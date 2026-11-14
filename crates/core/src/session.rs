@@ -106,6 +106,8 @@ pub struct Session {
     services: Services,
     registry: &'static Registry,
     policy: Policy,
+    /// Root of the local template library (`template.*`), if the frontend set one.
+    template_dir: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for Session {
@@ -127,6 +129,7 @@ impl Session {
             services,
             registry: Registry::builtin(),
             policy: Policy::default(),
+            template_dir: None,
         }
     }
 
@@ -143,6 +146,16 @@ impl Session {
 
     pub fn set_policy(&mut self, policy: Policy) {
         self.policy = policy;
+    }
+
+    /// Set the directory of the local template library (ADR-0018). Template commands address
+    /// templates by name inside it, so it is not subject to the policy's file roots.
+    pub fn set_template_dir(&mut self, dir: Option<PathBuf>) {
+        self.template_dir = dir;
+    }
+
+    pub fn template_dir(&self) -> Option<&std::path::Path> {
+        self.template_dir.as_deref()
     }
 
     /// Selected element ids of a document (default: active) that still exist.

@@ -34,6 +34,8 @@ pub struct StudioOptions {
     pub native_dialogs: bool,
     /// MCP connection file; default `<app-data>/mcp-connection.json`.
     pub connection_file: Option<PathBuf>,
+    /// Template library; default `<app-data>/templates`.
+    pub template_dir: Option<PathBuf>,
 }
 
 impl Default for StudioOptions {
@@ -46,6 +48,7 @@ impl Default for StudioOptions {
             lang: Lang::detect(),
             native_dialogs: true,
             connection_file: None,
+            template_dir: None,
         }
     }
 }
@@ -87,6 +90,8 @@ pub struct Status {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Dialog {
     NewDoc(dialogs::NewDocForm),
+    Templates(crate::templates::Gallery),
+    SaveTemplate(crate::templates::SaveForm),
     Print,
     About,
 }
@@ -191,6 +196,8 @@ pub struct LabelyApp {
     pub opts: StudioOptions,
     pub(crate) raster: Option<Raster>,
     pub(crate) mcp: Option<McpHost>,
+    /// Template thumbnails by reference (`None`: could not render).
+    pub(crate) thumbs: std::collections::HashMap<String, Option<egui::TextureHandle>>,
     pending: VecDeque<McpCall>,
     agent_roots: Vec<PathBuf>,
 }
@@ -223,10 +230,17 @@ impl LabelyApp {
             i18n: I18n::new(opts.lang),
             raster: None,
             mcp: None,
+            thumbs: Default::default(),
             pending: VecDeque::new(),
             agent_roots,
             opts,
         };
+        let templates = app
+            .opts
+            .template_dir
+            .clone()
+            .unwrap_or_else(|| labely_mcp::connection::data_dir().join("templates"));
+        app.session.set_template_dir(Some(templates));
         if let Some(path) = app.opts.open.clone() {
             app.run_reporting("doc.open", json!({ "path": path }));
         }
