@@ -7,5 +7,6 @@ pub mod dialogs;
 pub mod mcp_host;
 pub mod menu;
 pub mod panels;
+pub mod templates;
 
 pub use app::{LabelyApp, StudioOptions};

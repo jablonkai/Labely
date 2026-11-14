@@ -19,3 +19,4 @@
 | [0015](0015-date-bindings-flip-vertical-text.md) | Date bindings, flip, vertical text | proposed |
 | [0016](0016-tables-icons-borders.md) | Tables, icons, borders, reading codes from images | proposed |
 | [0017](0017-arranging-groups-snapping.md) | Arranging, groups, locking and snapping | proposed |
+| [0018](0018-templates-export-image-records.md) | Templates, export and image records | proposed |

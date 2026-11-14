@@ -546,6 +546,616 @@ expression: r
       "undoable": false
     },
     {
+      "description": "Create a new, unsaved document from a template (`ref` from template.list) and make it active. Returns {doc_id, name}.",
+      "id": "template.new",
+      "journal": true,
+      "kind": "edit",
+      "label": "New from template",
+      "menu": "file",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "doc_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_id",
+          "name"
+        ],
+        "title": "OpenOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "default": null,
+            "description": "Name of the new document (default: the template's name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "description": "Template reference from template.list, e.g. `starter:price-tag` or `my:Shop/Shelf`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "NewParams",
+        "type": "object"
+      },
+      "shortcut": "Ctrl+Shift+N",
+      "undoable": false
+    },
+    {
+      "description": "Save a copy of the document (default: active) in the template library under `name` (default: the document name) in `folder` (default folder when absent). Fails if it exists unless overwrite is true. Returns {ref}.",
+      "id": "template.save",
+      "journal": false,
+      "kind": "edit",
+      "label": "Save as template",
+      "menu": "file",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ref": {
+            "description": "Reference of the saved, moved or copied template.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "RefOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folder": {
+            "default": null,
+            "description": "Library folder (default: the default folder); created when missing.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Template name (default: the document's name).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overwrite": {
+            "default": null,
+            "description": "Replace a template of the same name (default false).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "title": "SaveParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Write one label as a 1-bit PNG: the exact print raster at `dpi` (default: the model's, else 203), for `page` and data `record` (1-based, default 1).",
+      "id": "export.png",
+      "journal": false,
+      "kind": "query",
+      "label": "Export PNG",
+      "menu": "file",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dpi": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "height_dots": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "width_dots": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "bytes",
+          "width_dots",
+          "height_dots",
+          "dpi"
+        ],
+        "title": "PngOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dpi": {
+            "default": null,
+            "description": "Resolution in dpi; defaults to the label's printer model dpi, else 203.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "page": {
+            "default": null,
+            "description": "0-based page index (default 0).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "Target `.png` file.",
+            "type": "string"
+          },
+          "record": {
+            "default": null,
+            "description": "Data record, 1-based (default 1).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PngParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Write labels to a PDF, one page per label sized to the label in mm, each the exact 1-bit print raster at `dpi`. With data: one label per record (`records` like `1,3,5-7`, default all); without: `count` labels (default 1) with serials advancing.",
+      "id": "export.pdf",
+      "journal": false,
+      "kind": "query",
+      "label": "Export PDF",
+      "menu": "file",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dpi": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pages": {
+            "description": "PDF pages written: labels × document pages.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "bytes",
+          "pages",
+          "dpi"
+        ],
+        "title": "PdfOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "default": null,
+            "description": "Labels without a data source, 1–5000 (default 1); serials advance per label.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dpi": {
+            "default": null,
+            "description": "Raster resolution in dpi; defaults to the label's printer model dpi, else 203.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "Target `.pdf` file.",
+            "type": "string"
+          },
+          "records": {
+            "default": null,
+            "description": "Data records, 1-based: `all` (default), `3`, `1,4,6-9`. Needs a data source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PdfParams",
+        "type": "object"
+      },
+      "shortcut": "Ctrl+E",
+      "undoable": false
+    },
+    {
+      "description": "List the starter templates and the local library: {library, folders, templates: [{ref, name, folder, starter, width_mm, height_mm, printer_model}]}. `query` filters by name; `folder` lists one library folder only. Open one with template.new {ref}.",
+      "id": "template.list",
+      "journal": false,
+      "kind": "query",
+      "label": "Templates",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "folders": {
+            "description": "Library folders besides the default one.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "library": {
+            "description": "Library directory, when the session has one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "templates": {
+            "items": {
+              "description": "One `template.list` entry.",
+              "properties": {
+                "folder": {
+                  "description": "Library folder; empty for the default folder and for starters.",
+                  "type": "string"
+                },
+                "height_mm": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "printer_model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ref": {
+                  "description": "Reference for the other `template.*` commands.",
+                  "type": "string"
+                },
+                "starter": {
+                  "type": "boolean"
+                },
+                "width_mm": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "ref",
+                "name",
+                "folder",
+                "starter",
+                "width_mm",
+                "height_mm"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "folders",
+          "templates"
+        ],
+        "title": "ListOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "default": null,
+            "description": "Only this library folder (`\"\"` is the default folder); starters are left out.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "default": null,
+            "description": "Case-insensitive part of the name to look for.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ListParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Delete a library template (`my:…`). Starters cannot be deleted. Cannot be undone.",
+      "id": "template.delete",
+      "journal": false,
+      "kind": "edit",
+      "label": "Delete template",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "DeleteOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "RefParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Rename a library template and/or move it to another folder. Fails if the target exists. Returns the new {ref}.",
+      "id": "template.move",
+      "journal": false,
+      "kind": "edit",
+      "label": "Rename or move template",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ref": {
+            "description": "Reference of the saved, moved or copied template.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "RefOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "default": null,
+            "description": "Target folder, `\"\"` for the default folder (default: unchanged); created when missing.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "New name (default: unchanged).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "MoveParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Copy a template (a starter or a library one) into the library. Without `name` the copy is numbered (`Name 2`). Returns the copy's {ref}.",
+      "id": "template.duplicate",
+      "journal": false,
+      "kind": "edit",
+      "label": "Duplicate template",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ref": {
+            "description": "Reference of the saved, moved or copied template.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "RefOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "default": null,
+            "description": "Folder of the copy (default: the original's; the default folder for starters).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Name of the copy (default: the original's, numbered when taken).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ref": {
+            "description": "Template to copy; starters may be copied into the library.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref"
+        ],
+        "title": "DuplicateParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Create, rename or delete a template library folder (`op`). Delete needs an empty folder unless with_templates is true. Returns the folders.",
+      "id": "template.folder",
+      "journal": false,
+      "kind": "edit",
+      "label": "Template folder",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "folders": {
+            "description": "Library folders after the change.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "folders"
+        ],
+        "title": "FolderOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "description": "Folder to create, rename or delete.",
+            "type": "string"
+          },
+          "op": {
+            "description": "Folder operation.",
+            "enum": [
+              "create",
+              "rename",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "default": null,
+            "description": "New name, for `rename`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "with_templates": {
+            "default": null,
+            "description": "`delete`: also delete the templates in it (default false: it must be empty).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "op",
+          "folder"
+        ],
+        "title": "FolderParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
       "description": "Return the full document JSON (units mm, elements with ids) plus doc_id, path, dirty and undo/redo availability.",
       "id": "doc.get",
       "journal": false,
@@ -8288,6 +8898,150 @@ expression: r
           "path"
         ],
         "title": "AttachXlsxParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Embed image files as the data source, replacing any other: one record per image with columns `image` (the asset) and `file` (the file name). An image element whose asset is `{{image}}` shows each record's picture; one filling the label is placed unless it exists (place: false skips it). Printing prints one label per image. 1–500 paths.",
+      "id": "data.attach_images",
+      "journal": true,
+      "kind": "edit",
+      "label": "Attach images",
+      "menu": "data",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Summary of the attached data source.",
+        "properties": {
+          "columns": {
+            "description": "Column names; bind them as `{{column}}`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "element_id": {
+            "description": "The image element that was placed, if any.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview": {
+            "description": "The first rows.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "row_count": {
+            "description": "Number of records.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sheet": {
+            "description": "Sheet that was read (spreadsheets only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sheets": {
+            "description": "All sheets in the workbook (spreadsheets only).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns",
+          "row_count",
+          "preview"
+        ],
+        "title": "AttachImagesOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "default": null,
+            "description": "Column holding each record's image (default `image`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dither": {
+            "default": null,
+            "description": "1-bit conversion of the placed element (default `floyd_steinberg`).",
+            "enum": [
+              "threshold",
+              "floyd_steinberg",
+              "atkinson",
+              "bayer",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fit": {
+            "default": null,
+            "description": "Fit of the placed element (default `contain`).",
+            "enum": [
+              "contain",
+              "cover",
+              "stretch",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paths": {
+            "description": "Image files (PNG, JPEG, BMP, WebP), one record each, in this order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "place": {
+            "default": null,
+            "description": "Add an image element filling the label and bound to the column, unless one already\nuses it (default true).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "AttachImagesParams",
         "type": "object"
       },
       "undoable": true

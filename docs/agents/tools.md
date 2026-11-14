@@ -22,7 +22,7 @@ Hints:
 - `readOnlyHint` is set for queries.
 - `destructiveHint` and `openWorldHint` are set for device tools.
 
-## Commands (API version 2)
+## Commands (API version 3)
 
 | Id | Kind | Params |
 |---|---|---|
@@ -35,6 +35,15 @@ Hints:
 | `doc.get` | query | doc_id |
 | `doc.set_label` | edit | name, width_mm, height_mm, corner_radius_mm, media, printer_model, density |
 | `doc.check` | query | dpi, margin_mm, address, doc_id |
+| `template.list` | query | query, folder → library, folders, templates [{ref, name, folder, starter, width_mm, height_mm, printer_model}] |
+| `template.new` | edit | ref (`starter:<id>` or `my:[<folder>/]<name>`), name |
+| `template.save` | edit | name, folder, overwrite, doc_id → ref |
+| `template.move` | edit | ref, name, folder → ref |
+| `template.duplicate` | edit | ref (a starter or library template), name, folder → ref |
+| `template.delete` | edit | ref (library only) |
+| `template.folder` | edit | op (create, rename, delete), folder, to, with_templates → folders |
+| `export.png` | query | path, dpi, page, record |
+| `export.pdf` | query | path, dpi, records or count → pages (one per label) |
 | `element.add_text` | edit | frame\*, text, font_family, font_size_pt, bold, italic, underline, align, valign, line_spacing, letter_spacing_mm, wrap, fit, invert, direction (horizontal, vertical) |
 | `element.add_barcode` | edit | frame\*, data, symbology, human_readable, text_size_pt |
 | `element.add_code2d` | edit | frame\*, data, symbology, ecc |
@@ -65,6 +74,7 @@ Hints:
 | `variable.set` | edit | name, value (used as `{{name}}`) |
 | `data.attach_csv` | edit | path or text, delimiter, header |
 | `data.attach_xlsx` | edit | path (.xlsx, .xls, .ods), sheet, header |
+| `data.attach_images` | edit | paths (1–500), column (default `image`), place, fit, dither → one record per image, element_id |
 | `data.detach` | edit | doc_id |
 | `data.get` | query | from (1-based), limit |
 | `data.bind` | edit | id, column (a column, serial or variable) |
@@ -80,6 +90,10 @@ Hints:
 \* `frame` is `x_mm, y_mm, width_mm, height_mm`, plus optional `rotation_deg` and `name`. Every
 document command also takes an optional `doc_id`; the default is the active document. The JSON
 Schemas from `command_list` are the authority.
+
+Template library writes (`template.save`, `.move`, `.duplicate`, `.delete`, `.folder`) are not
+journaled and cannot be undone. They address templates by reference inside the library
+directory, so they are not limited by the file roots; `export.*` paths are.
 
 Printer addresses:
 - `ble:<id>`
@@ -97,6 +111,9 @@ to a data column, then a serial, then a variable. Date bindings are computed at 
 | `{{now}}` | `2026-11-14` |
 | `{{now:%d.%m.%Y %H:%M}}` | `14.11.2026 09:30` (chrono strftime) |
 | `{{now+30d}}`, `{{now-2h:%H:%M}}`, `{{now+1M:%Y-%m}}` | offset units: s, m (minutes), h, d, w, M (months), y |
+
+An image element whose `asset` is a binding, e.g. `{{image}}`, shows the asset whose key the
+binding yields. `data.attach_images` fills such a column with one asset key per record.
 
 The clock is the local time unless the `now` variable is set (`YYYY-MM-DD[ HH:MM[:SS]]`), which
 pins it. Pin it for reproducible previews and tests.

@@ -78,6 +78,24 @@ enum Cmd {
         #[arg(long)]
         data: Option<PathBuf>,
     },
+    /// Export labels to a PDF (one page per label) or a PNG, by the output extension.
+    Export {
+        file: PathBuf,
+        /// `.pdf` or `.png` file to write.
+        #[arg(short, long)]
+        output: PathBuf,
+        #[arg(long)]
+        dpi: Option<u32>,
+        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods).
+        #[arg(long)]
+        data: Option<PathBuf>,
+        /// PDF: records to export, 1-based (`all` by default). PNG: the one record (`3`).
+        #[arg(long)]
+        records: Option<String>,
+        /// PDF without data: number of labels (serials advance per label).
+        #[arg(long)]
+        count: Option<u32>,
+    },
     /// Check a document for printing problems.
     Check {
         file: PathBuf,
@@ -192,8 +210,10 @@ impl Ctx {
 }
 
 fn run(cli: Cli) -> Result<()> {
+    let mut session = Session::new(labely_printers::default_services());
+    session.set_template_dir(Some(labely_mcp::connection::data_dir().join("templates")));
     let mut ctx = Ctx {
-        session: Session::new(labely_printers::default_services()),
+        session,
         json: cli.json,
         i18n: labely_i18n::I18n::new(labely_i18n::Lang::detect()),
     };
@@ -299,6 +319,42 @@ fn run(cli: Cli) -> Result<()> {
                 );
             }
         }
+        Cmd::Export {
+            file,
+            output,
+            dpi,
+            data,
+            records,
+            count,
+        } => {
+            ctx.open(&file)?;
+            if let Some(d) = &data {
+                ctx.attach(d)?;
+            }
+            let pdf = output
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
+            let mut p = json!({ "path": output });
+            if let Some(d) = dpi {
+                p["dpi"] = json!(d);
+            }
+            if pdf {
+                if let Some(r) = records {
+                    p["records"] = json!(r);
+                }
+                if let Some(c) = count {
+                    p["count"] = json!(c);
+                }
+            } else if let Some(r) = records {
+                let r: usize = r
+                    .trim()
+                    .parse()
+                    .context("PNG export takes one record number in --records")?;
+                p["record"] = json!(r);
+            }
+            let env = ctx.exec(if pdf { "export.pdf" } else { "export.png" }, p)?;
+            ctx.show(&env)?;
+        }
         Cmd::Check { file, dpi } => {
             ctx.open(&file)?;
             let mut p = json!({});
@@ -402,7 +458,8 @@ fn mcp(
         };
         let mut policy = labely_core::Policy::restricted(roots);
         policy.allow_print = allow_print;
-        let session = Session::with_policy(labely_printers::default_services(), policy);
+        let mut session = Session::with_policy(labely_printers::default_services(), policy);
+        session.set_template_dir(Some(conn::data_dir().join("templates")));
         let server = LabelyMcp::new(std::sync::Arc::new(LocalExecutor::new(session)));
         labely_mcp::serve_stdio(server).await?;
         Ok(())

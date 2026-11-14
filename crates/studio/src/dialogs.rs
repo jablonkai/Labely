@@ -1,4 +1,4 @@
-//! Modal dialogs: new document, print, about.
+//! Modal dialogs: new document, templates, print, about.
 
 use egui::{Context, Modal, Ui};
 use serde_json::json;
@@ -58,10 +58,14 @@ pub fn show(app: &mut LabelyApp, ctx: &Context) {
     };
     let mut close = false;
     let mut next = dialog.clone();
-    Modal::new(egui::Id::unique("labely-dialog")).show(ctx, |ui| {
+    // One id per dialog kind, so each sizes itself instead of inheriting another's size.
+    let kind = std::mem::discriminant(&dialog);
+    Modal::new(egui::Id::unique(("labely-dialog", kind))).show(ctx, |ui| {
         ui.set_min_width(320.0);
         close = match &mut next {
             Dialog::NewDoc(form) => new_doc(app, ui, form),
+            Dialog::Templates(g) => crate::templates::gallery(app, ui, g),
+            Dialog::SaveTemplate(f) => crate::templates::save(app, ui, f),
             Dialog::Print => print(app, ui),
             Dialog::About => about(app, ui),
         };

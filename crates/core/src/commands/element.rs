@@ -389,7 +389,7 @@ add_params!(ImageParams {
     invert: Option<bool>,
 });
 
-fn sniff_mime(bytes: &[u8]) -> Option<&'static str> {
+pub(crate) fn sniff_mime(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         Some("image/png")
     } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -401,6 +401,22 @@ fn sniff_mime(bytes: &[u8]) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Read an image file below the session's file roots; `param` names it in errors.
+pub(crate) fn read_image_file(
+    ctx: &Ctx<'_>,
+    param: &str,
+    path: &str,
+) -> Result<Vec<u8>, CommandError> {
+    std::fs::read(ctx.check_path(param, path, false)?).map_err(|e| {
+        let err = if e.kind() == std::io::ErrorKind::NotFound {
+            CommandError::not_found(format!("cannot read image {path}: {e}"))
+        } else {
+            CommandError::bad_params(format!("cannot read image {path}: {e}"))
+        };
+        err.with_param(param)
+    })
 }
 
 /// Lowercase hex sha256.
@@ -430,16 +446,7 @@ impl Command for AddImage {
 
     fn run(ctx: &mut Ctx<'_>, p: ImageParams) -> Result<AddOutput, CommandError> {
         let bytes = match (&p.path, &p.data_base64) {
-            (Some(path), None) => {
-                std::fs::read(ctx.check_path("path", path, false)?).map_err(|e| {
-                    let err = if e.kind() == std::io::ErrorKind::NotFound {
-                        CommandError::not_found(format!("cannot read image {path}: {e}"))
-                    } else {
-                        CommandError::bad_params(format!("cannot read image {path}: {e}"))
-                    };
-                    err.with_param("path")
-                })?
-            }
+            (Some(path), None) => read_image_file(ctx, "path", path)?,
             (None, Some(b64)) => base64::engine::general_purpose::STANDARD
                 .decode(b64.trim())
                 .map_err(|e| {

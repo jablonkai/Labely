@@ -6,11 +6,14 @@ pub mod decor;
 pub mod device;
 pub mod doc;
 pub mod element;
+pub mod export;
 pub mod history;
+pub mod images;
 pub mod meta;
 pub mod render;
 pub mod selection;
 pub mod table;
+pub mod template;
 pub mod variable;
 
 use std::collections::BTreeMap;

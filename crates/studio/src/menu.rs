@@ -54,7 +54,7 @@ fn enabled(app: &LabelyApp, id: &str) -> bool {
     let has_doc = app.session.active_doc_id().is_some();
     let has_sel = !app.selection().is_empty();
     match id {
-        "doc.new" | "doc.open" | "device.scan" => true,
+        "doc.new" | "doc.open" | "template.new" | "device.scan" => true,
         "history.undo" => app.session.can_undo(None),
         "history.redo" => app.session.can_redo(None),
         "element.delete" | "element.duplicate" | "element.reorder" | "element.ungroup"
@@ -360,6 +360,30 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
             }
         }
         "doc.save" => save(app),
+        "template.new" => {
+            app.ui.dialog = Some(Dialog::Templates(crate::templates::Gallery::default()));
+        }
+        "template.save" => {
+            let form = crate::templates::SaveForm::new(app);
+            app.ui.dialog = Some(Dialog::SaveTemplate(form));
+        }
+        "export.png" | "export.pdf" => export(app, id),
+        "data.attach_images" => {
+            if !app.opts.native_dialogs {
+                app.set_status(app.i18n.t("status-no-dialogs"), true);
+                return;
+            }
+            let Some(paths) = rfd::FileDialog::new()
+                .add_filter("", &["png", "jpg", "jpeg", "bmp", "webp"])
+                .pick_files()
+            else {
+                return;
+            };
+            if app.run_reporting(id, json!({ "paths": paths })).ok {
+                app.ui.record = 1;
+                app.ui.show_data = true;
+            }
+        }
         "doc.set_label" => app.select(&[]),
         "doc.check" => {
             let env = app.run_reporting("doc.check", json!({}));
@@ -535,6 +559,33 @@ pub fn save(app: &mut LabelyApp) {
         if env.ok {
             app.set_status(app.i18n.t("status-saved"), false);
         }
+    }
+}
+
+/// Ask for a target file and run `export.png` / `export.pdf` (all records for PDF).
+fn export(app: &mut LabelyApp, id: &str) {
+    if !app.opts.native_dialogs {
+        app.set_status(app.i18n.t("status-no-dialogs"), true);
+        return;
+    }
+    let ext = if id == "export.pdf" { "pdf" } else { "png" };
+    let name = app
+        .session
+        .doc(None)
+        .map_or_else(|| "label".to_owned(), |d| d.name.clone());
+    let Some(path) = rfd::FileDialog::new()
+        .add_filter(ext.to_uppercase(), &[ext])
+        .set_file_name(format!("{name}.{ext}"))
+        .save_file()
+    else {
+        return;
+    };
+    let mut p = json!({ "path": path });
+    if id == "export.png" {
+        p["record"] = json!(app.ui.record);
+    }
+    if app.run_reporting(id, p).ok {
+        app.set_status(app.i18n.t("status-exported"), false);
     }
 }
 

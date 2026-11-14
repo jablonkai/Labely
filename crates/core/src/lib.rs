@@ -9,6 +9,7 @@ pub mod datetime;
 pub mod document;
 pub mod envelope;
 pub mod file;
+pub mod pdf;
 pub mod policy;
 pub mod raster;
 pub mod registry;

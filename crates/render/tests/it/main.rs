@@ -1146,3 +1146,33 @@ fn decode_image_reads_a_rendered_qr() {
     );
     assert!(r.decode_image(b"not an image").is_err());
 }
+
+#[test]
+fn image_asset_bound_to_a_record() {
+    let mut d = Doc::new(20.0, 20.0);
+    add_asset(&mut d, "small", 8, 8);
+    add_asset(&mut d, "wide", 40, 8);
+    let id = d.add(
+        0.0,
+        0.0,
+        20.0,
+        20.0,
+        0.0,
+        ElementKind::Image(image("{{image}}", ImageFit::Contain, Dither::Threshold)),
+    );
+    let mut opts = RenderOptions::at_dpi(203);
+    let mut black = Vec::new();
+    for key in ["small", "wide"] {
+        opts.values.insert("image".into(), key.into());
+        let out = LabelRenderer::new().render(&d.doc, &opts).expect("render");
+        assert!(out.issues.is_empty(), "{key}: {:?}", out.issues);
+        black.push(out.bitmap.count_black());
+    }
+    assert_ne!(black[0], black[1], "each record shows its own image");
+    // Unfilled binding: reported like a missing asset.
+    let out = render(&d.doc, 203);
+    assert!(has_issue(
+        &out,
+        |i| matches!(i, RenderIssue::BadAsset { element_id, .. } if *element_id == id)
+    ));
+}

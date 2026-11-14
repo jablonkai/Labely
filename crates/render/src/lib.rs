@@ -819,7 +819,13 @@ fn image_layer(
     w: u32,
     h: u32,
 ) -> Result<Option<Pixmap>, RenderError> {
-    let img = match load_image(ctx.doc, &p.asset) {
+    // The key may be a `{{column}}` binding filled per record (data.attach_images).
+    let key = if p.asset.contains("{{") {
+        ctx.subst(&p.asset)
+    } else {
+        p.asset.clone()
+    };
+    let img = match load_image(ctx.doc, &key) {
         Ok(img) => img,
         Err(message) => {
             ctx.issues.push(RenderIssue::BadAsset {
