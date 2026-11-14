@@ -256,3 +256,62 @@ fn attach_xlsx_sheets_and_cells() {
         Some(vec!["Items".to_owned(), "Other".to_owned()])
     );
 }
+
+#[test]
+fn date_bindings_use_the_pinned_clock() {
+    let mut kit = test_kit();
+    let s = &mut kit.session;
+    ok(s, "doc.new", json!({"width_mm": 40, "height_mm": 20}));
+    let t = add_text(s, "{{now:%d.%m.%Y}} / {{now+1M}} / {{ now }}");
+    ok(
+        s,
+        "variable.set",
+        json!({"name": "now", "value": "2026-01-31 10:00"}),
+    );
+    ok(s, "render.preview", json!({}));
+    let v = kit.renderer.rendered_values().pop().unwrap();
+    assert_eq!(v["now:%d.%m.%Y"], "31.01.2026");
+    assert_eq!(v["now+1M"], "2026-02-28");
+    assert_eq!(v["now"], "2026-01-31");
+    let issues = ok(s, "doc.check", json!({}))["issues"].clone();
+    assert!(
+        !issues
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["rule"].as_str().unwrap().starts_with("binding")),
+        "{issues}"
+    );
+
+    ok(
+        s,
+        "element.set_props",
+        json!({"id": t, "props": {"text": "{{now+3q}}"}}),
+    );
+    let issues = ok(s, "doc.check", json!({}))["issues"].clone();
+    assert!(
+        issues
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["rule"] == "binding_invalid" && i["severity"] == "error"),
+        "{issues}"
+    );
+}
+
+#[test]
+fn flip_and_direction_props() {
+    let mut s = session_with_doc();
+    let t = add_text(&mut s, "x");
+    let r = ok(
+        &mut s,
+        "element.set_props",
+        json!({"id": t, "props": {"flip_h": true, "direction": "vertical"}}),
+    );
+    assert_eq!(r["element"]["flip_h"], true);
+    assert_eq!(r["element"]["direction"], "vertical");
+    assert!(
+        r["element"].get("flip_v").is_none(),
+        "false flips are omitted"
+    );
+}

@@ -264,3 +264,93 @@ fn agent_edits_the_open_document_live() {
         "layers list shows it"
     );
 }
+
+#[test]
+fn data_panel_binds_and_insert_date() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    app.run(
+        "data.attach_csv",
+        json!({"text": "name,sku\nApple,A1\nPear,P2\n"}),
+    );
+    app.run(
+        "element.add_text",
+        json!({"x_mm": 1, "y_mm": 1, "width_mm": 40, "height_mm": 8, "text": "x"}),
+    );
+    let id = app.session.doc(None).unwrap().elements().next().unwrap().id;
+    app.select(&[id]);
+    app.ui.show_data = true;
+    let mut h = harness(app);
+    h.run();
+    assert!(h.query_by_label_contains("2 records").is_some());
+
+    // Bind the selected text to the first column, then step to record 2.
+    h.get_all_by_label("Bind").next().unwrap().click();
+    h.run();
+    let doc = h.state().session.doc(None).unwrap();
+    match &doc.element(id).unwrap().kind {
+        labely_core::ElementKind::Text(t) => assert_eq!(t.text, "{{name}}"),
+        k => panic!("{k:?}"),
+    }
+    h.get_by_label("▶").click();
+    h.run();
+    assert_eq!(h.state().ui.record, 2);
+    assert!(h.query_by_label("Pear").is_some(), "panel shows record 2");
+
+    // Insert → Serial number creates the counter and a bound text.
+    h.get_by_label("Insert").click();
+    h.run();
+    h.get_by_label("Serial number").click();
+    h.run();
+    let doc = h.state().session.doc(None).unwrap();
+    assert!(doc.serials.contains_key("serial"));
+    assert_eq!(doc.elements().count(), 2);
+}
+
+#[test]
+fn table_editing_and_code_from_image() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    let mut h = harness(app);
+    h.run();
+    h.get_by_label("Insert").click();
+    h.run();
+    h.get_by_label("Table").click();
+    h.run();
+    let id = h.state().selection()[0];
+    h.get_by_label("Merge right").click();
+    h.run();
+    h.get_by_label("+ Row").click();
+    h.run();
+    let t = match &h
+        .state()
+        .session
+        .doc(None)
+        .unwrap()
+        .element(id)
+        .unwrap()
+        .kind
+    {
+        labely_core::ElementKind::Table(t) => t.clone(),
+        k => panic!("{k:?}"),
+    };
+    assert_eq!(t.row_heights.len(), 4);
+    assert_eq!(t.merges.len(), 1);
+
+    // A QR rendered by Labely is read back and recreated.
+    let app = h.state_mut();
+    app.run("doc.new", json!({"width_mm": 30, "height_mm": 30}));
+    app.run(
+        "element.add_code2d",
+        json!({"x_mm": 5, "y_mm": 5, "width_mm": 20, "height_mm": 20, "data": "from image"}),
+    );
+    let png = app.run("render.preview", json!({})).result.unwrap()["png_base64"].clone();
+    app.run("doc.new", json!({"width_mm": 30, "height_mm": 30}));
+    labely_studio::menu::insert_code_from_image(app, &json!({ "data_base64": png }));
+    let doc = app.session.doc(None).unwrap();
+    let e = doc.elements().next().expect("code added");
+    match &e.kind {
+        labely_core::ElementKind::Code2d(c) => assert_eq!(c.data, "from image"),
+        k => panic!("{k:?}"),
+    }
+}

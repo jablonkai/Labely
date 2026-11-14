@@ -87,6 +87,35 @@ pub fn menu_bar(app: &mut LabelyApp, ui: &mut Ui) {
 /// Studio-only items (view state, settings) after the generated ones.
 fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
     match menu {
+        "insert" => {
+            ui.separator();
+            let has_doc = app.session.active_doc_id().is_some();
+            for (key, text) in [
+                ("action-insert-date", "{{now:%Y-%m-%d}}"),
+                ("action-insert-time", "{{now:%H:%M}}"),
+                ("action-insert-serial", "{{serial}}"),
+            ] {
+                if ui
+                    .add_enabled(has_doc, egui::Button::new(app.i18n.t(key)))
+                    .clicked()
+                {
+                    insert_bound_text(app, text);
+                    ui.close();
+                }
+            }
+            if ui
+                .add_enabled(
+                    has_doc,
+                    egui::Button::new(app.i18n.t("action-insert-code-from-image")),
+                )
+                .clicked()
+            {
+                ui.close();
+                if let Some(path) = pick_file(app, &["png", "jpg", "jpeg", "bmp", "webp"]) {
+                    insert_code_from_image(app, &json!({ "path": path }));
+                }
+            }
+        }
         "edit" => {
             ui.separator();
             if ui
@@ -237,12 +266,19 @@ pub fn add_defaults(app: &LabelyApp, id: &str) -> Option<Value> {
         "element.add_rect" | "element.add_ellipse" => boxed(w * 0.4, h * 0.4),
         "element.add_line" => boxed(w * 0.6, 0.0),
         "element.add_image" => boxed(w * 0.4, h * 0.6),
+        "element.add_table" => boxed(w * 0.8, h * 0.6),
+        "element.add_icon" => {
+            let s = (h * 0.5).min(w * 0.5);
+            boxed(s, s)
+        }
+        "element.add_border" => json!({"x_mm": 0.0, "y_mm": 0.0, "width_mm": w, "height_mm": h}),
         _ => return None,
     };
     let extra = match id {
         "element.add_text" => json!({"text": app.i18n.t("default-text")}),
         "element.add_barcode" => json!({"data": "123456789012"}),
         "element.add_code2d" => json!({"data": "https://labely.org"}),
+        "element.add_icon" => json!({"icon": "check"}),
         _ => json!({}),
     };
     if let (Some(p), Some(e)) = (p.as_object_mut(), extra.as_object()) {
@@ -348,6 +384,49 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
         _ => {
             app.run_reporting(id, json!({}));
         }
+    }
+}
+
+/// Decode the codes in an image and add the first one as a barcode or 2D-code element.
+pub fn insert_code_from_image(app: &mut LabelyApp, source: &Value) {
+    let env = app.run_reporting("code.decode", source.clone());
+    let Some(code) = env
+        .result
+        .as_ref()
+        .and_then(|r| r["codes"].as_array())
+        .and_then(|c| c.first())
+        .cloned()
+    else {
+        if env.ok {
+            app.set_status(app.i18n.t("status-no-code-found"), true);
+        }
+        return;
+    };
+    let id = if code["kind"] == "code2d" {
+        "element.add_code2d"
+    } else {
+        "element.add_barcode"
+    };
+    if let Some(mut p) = add_defaults(app, id) {
+        p["data"] = code["text"].clone();
+        p["symbology"] = code["symbology"].clone();
+        add(app, id, p);
+    }
+}
+
+/// Add a text element holding `text`, creating the `serial` counter first if it is used.
+pub fn insert_bound_text(app: &mut LabelyApp, text: &str) {
+    let needs_serial = text.contains("{{serial}}")
+        && app
+            .session
+            .doc(None)
+            .is_some_and(|d| !d.serials.contains_key("serial"));
+    if needs_serial && !app.run_reporting("data.set_serial", json!({})).ok {
+        return;
+    }
+    if let Some(mut p) = add_defaults(app, "element.add_text") {
+        p["text"] = json!(text);
+        add(app, "element.add_text", p);
     }
 }
 

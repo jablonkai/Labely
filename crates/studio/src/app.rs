@@ -14,6 +14,11 @@ use serde_json::{Value, json};
 use crate::mcp_host::{McpCall, McpHost};
 use crate::{canvas, dialogs, menu, panels};
 
+/// Spreadsheet-style column name: 0 → A, 26 → AA.
+pub fn column_name(i: usize) -> String {
+    labely_core::commands::data::column_letter(i)
+}
+
 /// Start-up options.
 #[derive(Debug, Clone)]
 pub struct StudioOptions {
@@ -96,6 +101,8 @@ pub struct UiState {
     pub show_printers: bool,
     pub show_preview: bool,
     pub show_data: bool,
+    /// Focused table cell (row, column) in the properties panel.
+    pub table_cell: (usize, usize),
     /// Data record shown on the canvas, 1-based.
     pub record: usize,
     pub gesture: Option<Gesture>,
@@ -125,6 +132,7 @@ impl Default for UiState {
             show_printers: false,
             show_preview: false,
             show_data: false,
+            table_cell: (0, 0),
             record: 1,
             gesture: None,
             gesture_seq: 0,

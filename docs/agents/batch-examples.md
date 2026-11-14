@@ -67,6 +67,49 @@ files. Check a record with `data.preview_record {"record": 2}` or `render.previe
 
 The serial is the label's position in the job, so `records: "5-9"` numbers them from `start`.
 
+## Best-before label with a date offset
+
+```json
+{"steps": [
+  {"id": "element.add_text", "params": {"x_mm": 2, "y_mm": 2, "width_mm": 46, "height_mm": 8,
+    "text": "Packed {{now:%d.%m.%Y}}"}},
+  {"id": "element.add_text", "params": {"x_mm": 2, "y_mm": 12, "width_mm": 46, "height_mm": 8,
+    "text": "Best before {{now+14d:%d.%m.%Y}}", "bold": true}}
+]}
+```
+
+Set `variable.set {"name": "now", "value": "2026-12-01"}` to preview a fixed date.
+
+## Table with a merged header
+
+```json
+{"steps": [
+  {"id": "element.add_table", "params": {"x_mm": 2, "y_mm": 2, "width_mm": 46, "height_mm": 26,
+    "cells": [["Nutrition per 100 g"], ["Energy", "{{kcal}} kcal"], ["Fat", "{{fat}} g"]]}},
+  {"id": "element.table_edit", "params": {"id": "$0.id",
+    "edit": {"op": "merge", "row": 0, "col": 0, "rows": 1, "cols": 2}}},
+  {"id": "element.table_edit", "params": {"id": "$0.id",
+    "edit": {"op": "set_cell", "row": 0, "col": 0, "bold": true, "invert": true}}},
+  {"id": "element.table_edit", "params": {"id": "$0.id",
+    "edit": {"op": "resize_column", "at": 0, "width": 2}}}
+]}
+```
+
+Cells take bindings like any text and shrink to fit. Sizes are relative weights, so resizing the
+element scales the whole table.
+
+## Recreate a code from a photo
+
+```json
+{"steps": [
+  {"id": "code.decode", "params": {"path": "photo.jpg"}},
+  {"id": "element.add_code2d", "params": {"x_mm": 10, "y_mm": 3, "width_mm": 24, "height_mm": 24,
+    "data": "$0.codes.0.text", "symbology": "$0.codes.0.symbology"}}
+]}
+```
+
+If `codes[0].kind` is `barcode`, use `element.add_barcode` instead.
+
 ## Non-atomic: keep going after a failing step
 
 ```json

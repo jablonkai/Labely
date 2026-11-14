@@ -316,6 +316,18 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
             if doc.serials.contains_key(&name) {
                 continue;
             }
+            if crate::datetime::is_date_binding(&name) {
+                if let Err(why) = crate::datetime::check(&name) {
+                    issues.push(CheckIssue::new(
+                        "binding_invalid",
+                        Severity::Error,
+                        Some(e.id),
+                        format!("element {} uses {{{{{name}}}}}: {why}", e.id.0),
+                        "use {{now}}, {{now:%d.%m.%Y}} or {{now+30d:%Y-%m-%d}}",
+                    ));
+                }
+                continue;
+            }
             match doc.variables.get(&name) {
                 None => issues.push(CheckIssue::new(
                     "binding_missing",

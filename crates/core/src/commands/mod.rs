@@ -1,6 +1,7 @@
 //! Built-in commands. Registered in [`crate::registry`].
 
 pub mod data;
+pub mod decor;
 pub mod device;
 pub mod doc;
 pub mod element;
@@ -8,6 +9,7 @@ pub mod history;
 pub mod meta;
 pub mod render;
 pub mod selection;
+pub mod table;
 pub mod variable;
 
 use std::collections::BTreeMap;
@@ -39,7 +41,55 @@ pub fn binding_values(doc: &Document, row: Option<usize>, n: u64) -> BTreeMap<St
     if let (Some(d), Some(r)) = (&doc.data, row) {
         values.extend(d.record(r));
     }
+    let names = bound_names(doc);
+    if names.iter().any(|n| crate::datetime::is_date_binding(n)) {
+        let now = crate::datetime::clock(doc);
+        for n in names {
+            if crate::datetime::is_date_binding(&n)
+                && let Ok(v) = crate::datetime::eval(&n, now)
+            {
+                values.insert(n, v);
+            }
+        }
+    }
     values
+}
+
+/// Every `{{name}}` used in the bindable strings (text, barcode and 2D-code data).
+pub fn bound_names(doc: &Document) -> Vec<String> {
+    use crate::document::ElementKind;
+    let mut out: Vec<String> = Vec::new();
+    for e in doc.elements() {
+        let s = match &e.kind {
+            ElementKind::Text(t) => &t.text,
+            ElementKind::Barcode(b) => &b.data,
+            ElementKind::Code2d(c) => &c.data,
+            ElementKind::Table(t) => {
+                for c in t.cells.iter().flatten() {
+                    collect_names(&c.text, &mut out);
+                }
+                continue;
+            }
+            _ => continue,
+        };
+        collect_names(s, &mut out);
+    }
+    out
+}
+
+fn collect_names(s: &str, out: &mut Vec<String>) {
+    {
+        let mut rest = s;
+        while let Some(start) = rest.find("{{") {
+            let after = &rest[start + 2..];
+            let Some(end) = after.find("}}") else { break };
+            let name = after[..end].trim();
+            if !name.is_empty() && !out.iter().any(|n| n == name) {
+                out.push(name.to_owned());
+            }
+            rest = &after[end + 2..];
+        }
+    }
 }
 
 /// Render options for the first label: record 1 when data is attached, serials at start.

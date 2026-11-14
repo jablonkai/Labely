@@ -147,6 +147,20 @@ impl TextEngine {
     }
 }
 
+/// Stack characters one per line for vertical text; source lines are separated by a blank line.
+pub fn vertical(s: &str) -> String {
+    s.lines()
+        .map(|l| {
+            l.chars()
+                .filter(|c| !c.is_whitespace() || *c == ' ')
+                .map(String::from)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// Replace `{{name}}` with a value from `lookup`; unknown names are left untouched.
 pub(crate) fn substitute<'a>(text: &str, lookup: impl Fn(&str) -> Option<&'a str>) -> String {
     let mut out = String::with_capacity(text.len());
@@ -186,6 +200,7 @@ mod tests {
         };
         assert_eq!(substitute("x{{a}}y{{ name }}z", look), "x1yAdaz");
         assert_eq!(substitute("{{missing}} {{a", look), "{{missing}} {{a");
+        assert_eq!(vertical("ab\nc"), "a\nb\n\nc");
         assert_eq!(substitute("plain", look), "plain");
     }
 

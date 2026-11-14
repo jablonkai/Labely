@@ -18,6 +18,9 @@ fn add_command(kind: &str) -> &'static str {
         "image" => "element.add_image",
         "rect" => "element.add_rect",
         "ellipse" => "element.add_ellipse",
+        "table" => "element.add_table",
+        "icon" => "element.add_icon",
+        "border" => "element.add_border",
         _ => "element.add_line",
     }
 }
@@ -158,7 +161,12 @@ fn prop_editor(ui: &mut Ui, label: &str, schema: &Value, value: &Value) -> Optio
         )
         .id;
     let out = if let Some(choices) = enum_values(schema) {
-        let mut cur = value.as_str().unwrap_or("").to_owned();
+        // Omitted enum props are at their default, which is the first variant.
+        let mut cur = value
+            .as_str()
+            .or_else(|| choices.first().map(String::as_str))
+            .unwrap_or("")
+            .to_owned();
         let before = cur.clone();
         egui::ComboBox::from_id_salt(label)
             .selected_text(cur.clone())
@@ -271,8 +279,8 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                         edits.push(((*f).into(), v));
                     }
                 }
-                for f in ["locked", "hidden"] {
-                    let label = app.i18n.t(&format!("prop-{f}"));
+                for f in ["locked", "hidden", "flip_h", "flip_v"] {
+                    let label = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
                     if let Some(v) = prop_editor(ui, &label, &json!({"type": "boolean"}), &whole[f])
                     {
                         edits.push((f.into(), v));
@@ -292,12 +300,34 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                     let skip = FRAME_FIELDS.contains(&key.as_str())
                         || matches!(
                             key.as_str(),
-                            "doc_id" | "name" | "path" | "data_base64" | "mime"
+                            "doc_id"
+                                | "name"
+                                | "path"
+                                | "data_base64"
+                                | "mime"
+                                | "row_count"
+                                | "column_count"
+                                | "cells"
                         );
                     if skip {
                         continue;
                     }
                     let value = whole.get(key).cloned().unwrap_or(Value::Null);
+                    if key == "icon" {
+                        let names: Vec<String> = app
+                            .session
+                            .services()
+                            .renderer
+                            .icons()
+                            .into_iter()
+                            .map(|i| i.name)
+                            .collect();
+                        let s = json!({"enum": names});
+                        if let Some(v) = prop_editor(ui, "icon", &s, &value) {
+                            edits.push((key.clone(), v));
+                        }
+                        continue;
+                    }
                     let label = key.replace('_', " ");
                     if let Some(v) = prop_editor(ui, &label, s, &value) {
                         edits.push((key.clone(), v));
@@ -306,6 +336,10 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
             });
         });
 
+    if let labely_core::ElementKind::Table(t) = &e.kind {
+        table_editor(app, ui, e.id, t);
+    }
+
     for (key, value) in edits {
         let mut props = Map::new();
         props.insert(key.clone(), value);
@@ -313,6 +347,108 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
             "element.set_props",
             json!({"id": e.id, "props": props, "coalesce": format!("prop-{}-{key}", e.id.0)}),
         );
+    }
+}
+
+/// Cell texts as a grid of text fields, plus row/column/merge buttons acting on the focused
+/// cell.
+fn table_editor(
+    app: &mut LabelyApp,
+    ui: &mut Ui,
+    id: ElementId,
+    t: &labely_core::document::TableProps,
+) {
+    let (rows, cols) = (t.row_heights.len(), t.column_widths.len());
+    let (mut cr, mut cc) = app.ui.table_cell;
+    cr = cr.min(rows - 1);
+    cc = cc.min(cols - 1);
+    let mut edits: Vec<Value> = Vec::new();
+    egui::CollapsingHeader::new(app.i18n.t("props-table"))
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::ScrollArea::horizontal().id_salt("table").show(ui, |ui| {
+                egui::Grid::new("table-cells").show(ui, |ui| {
+                    for (r, row) in t.cells.iter().enumerate() {
+                        for (c, cell) in row.iter().enumerate() {
+                            let covered = t.merge_at(r, c).is_some_and(|m| (m.row, m.col) != (r, c));
+                            let mut s = cell.text.clone();
+                            let resp = ui.add_enabled(
+                                !covered,
+                                egui::TextEdit::singleline(&mut s)
+                                    .desired_width(56.0)
+                                    .hint_text(format!("{}{}", crate::app::column_name(c), r + 1)),
+                            );
+                            let resp = resp.on_hover_text(format!(
+                                "{} {}, {} {}",
+                                app.i18n.t("table-row"),
+                                r + 1,
+                                app.i18n.t("table-column"),
+                                c + 1
+                            ));
+                            if resp.has_focus() || resp.clicked() {
+                                (cr, cc) = (r, c);
+                            }
+                            if resp.changed() {
+                                edits.push(json!({"op": "set_cell", "row": r, "col": c, "text": s}));
+                            }
+                        }
+                        ui.end_row();
+                    }
+                });
+            });
+            ui.label(
+                RichText::new(format!(
+                    "{} {}, {} {}",
+                    app.i18n.t("table-row"),
+                    cr + 1,
+                    app.i18n.t("table-column"),
+                    cc + 1
+                ))
+                .weak(),
+            );
+            ui.horizontal_wrapped(|ui| {
+                let merged = t.merge_at(cr, cc).copied();
+                let buttons: [(&str, bool, Value); 8] = [
+                    ("table-insert-row", rows < 64, json!({"op": "insert_row", "at": cr + 1})),
+                    ("table-delete-row", rows > 1, json!({"op": "delete_row", "at": cr})),
+                    ("table-insert-column", cols < 64, json!({"op": "insert_column", "at": cc + 1})),
+                    ("table-delete-column", cols > 1, json!({"op": "delete_column", "at": cc})),
+                    (
+                        "table-merge-right",
+                        cc + 1 < cols,
+                        json!({"op": "merge", "row": cr, "col": cc, "rows": merged.map_or(1, |m| m.rows), "cols": merged.map_or(1, |m| m.cols) + 1}),
+                    ),
+                    (
+                        "table-merge-down",
+                        cr + 1 < rows,
+                        json!({"op": "merge", "row": cr, "col": cc, "rows": merged.map_or(1, |m| m.rows) + 1, "cols": merged.map_or(1, |m| m.cols)}),
+                    ),
+                    ("table-split", merged.is_some(), json!({"op": "split", "row": cr, "col": cc})),
+                    (
+                        "table-bold",
+                        true,
+                        json!({"op": "set_cell", "row": cr, "col": cc, "bold": !t.cells[cr][cc].bold}),
+                    ),
+                ];
+                for (key, enabled, op) in buttons {
+                    if ui
+                        .add_enabled(enabled, egui::Button::new(app.i18n.t(key)).small())
+                        .clicked()
+                    {
+                        edits.push(op);
+                    }
+                }
+            });
+        });
+    app.ui.table_cell = (cr, cc);
+    for op in edits {
+        let coalesce = (op["op"] == "set_cell" && op.get("text").is_some())
+            .then(|| format!("cell-{}-{}-{}", id.0, op["row"], op["col"]));
+        let mut p = json!({"id": id, "edit": op});
+        if let Some(c) = coalesce {
+            p["coalesce"] = json!(c);
+        }
+        app.run_reporting("element.table_edit", p);
     }
 }
 
@@ -535,16 +671,19 @@ fn serial_row(
             return;
         }
         ui.end_row();
-        ui.label(app.i18n.t("serial-start"));
-        ui.add(egui::DragValue::new(&mut s.start));
-        ui.label(app.i18n.t("serial-step"));
-        ui.add(egui::DragValue::new(&mut s.step));
-        ui.label(app.i18n.t("serial-digits"));
-        ui.add(egui::DragValue::new(&mut s.digits).range(0..=18));
-        ui.label(app.i18n.t("serial-prefix"));
-        ui.add(egui::TextEdit::singleline(&mut s.prefix).desired_width(48.0));
-        ui.label(app.i18n.t("serial-suffix"));
-        ui.add(egui::TextEdit::singleline(&mut s.suffix).desired_width(48.0));
+        let l = ui.label(app.i18n.t("serial-start")).id;
+        ui.add(egui::DragValue::new(&mut s.start)).labelled_by(l);
+        let l = ui.label(app.i18n.t("serial-step")).id;
+        ui.add(egui::DragValue::new(&mut s.step)).labelled_by(l);
+        let l = ui.label(app.i18n.t("serial-digits")).id;
+        ui.add(egui::DragValue::new(&mut s.digits).range(0..=18))
+            .labelled_by(l);
+        let l = ui.label(app.i18n.t("serial-prefix")).id;
+        ui.add(egui::TextEdit::singleline(&mut s.prefix).desired_width(48.0))
+            .labelled_by(l);
+        let l = ui.label(app.i18n.t("serial-suffix")).id;
+        ui.add(egui::TextEdit::singleline(&mut s.suffix).desired_width(48.0))
+            .labelled_by(l);
     });
     if &s != spec {
         app.run_reporting(

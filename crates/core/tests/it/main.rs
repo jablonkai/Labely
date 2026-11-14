@@ -5,6 +5,7 @@ mod batch;
 mod commands;
 mod data;
 mod device;
+mod elements;
 mod file;
 mod history;
 mod phase2;

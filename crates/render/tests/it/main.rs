@@ -48,6 +48,8 @@ impl Doc {
             rotation_deg: rot,
             locked: false,
             hidden: false,
+            flip_h: false,
+            flip_v: false,
             kind,
         });
         id
@@ -927,4 +929,219 @@ fn png_round_trip() {
     let out = render(&d.doc, 203);
     let png = LabelRenderer::new().to_png(&out.bitmap).expect("png");
     assert_eq!(read_png(&png), out.bitmap);
+}
+
+// ---------------------------------------------------------------- phase 3 elements
+
+/// Black dots in the box `[x0, x1) × [y0, y1)`.
+fn black_in(b: &Bitmap1, x0: u32, y0: u32, x1: u32, y1: u32) -> usize {
+    (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+        .filter(|&(x, y)| b.get(x, y))
+        .count()
+}
+
+#[test]
+fn flip_mirrors_inside_the_frame() {
+    // A diagonal from the top-left to the bottom-right of a 20×20 mm frame.
+    let line = || {
+        ElementKind::Line(LineProps {
+            stroke_mm: 1.0,
+            dash_mm: None,
+        })
+    };
+    let mut d = Doc::new(20.0, 20.0);
+    d.add(0.0, 0.0, 20.0, 20.0, 0.0, line());
+    let plain = render(&d.doc, 203).bitmap;
+    let n = plain.width();
+    assert!(black_in(&plain, 0, 0, 20, 20) > 0);
+    assert_eq!(black_in(&plain, n - 20, 0, n, 20), 0);
+
+    // flip_h mirrors it into a top-right to bottom-left diagonal.
+    let mut d = Doc::new(20.0, 10.0);
+    let id = d.add(0.0, 0.0, 20.0, 10.0, 0.0, line());
+    d.doc.element_mut(id).unwrap().flip_h = true;
+    let flipped = render(&d.doc, 203).bitmap;
+    let w = flipped.width();
+    assert!(black_in(&flipped, w - 20, 0, w, 15) > 0, "starts top-right");
+    assert_eq!(black_in(&flipped, 0, 0, 15, 15), 0, "top-left is empty");
+
+    // Text: flip_v moves the ink from the top half to the bottom half of the frame.
+    let mut d = Doc::new(30.0, 20.0);
+    let id = d.add(
+        0.0,
+        0.0,
+        30.0,
+        20.0,
+        0.0,
+        ElementKind::Text(text("Ab", 14.0)),
+    );
+    let up = render(&d.doc, 203).bitmap;
+    d.doc.element_mut(id).unwrap().flip_v = true;
+    let down = render(&d.doc, 203).bitmap;
+    let (w, h) = (up.width(), up.height());
+    assert!(black_in(&up, 0, 0, w, h / 2) > black_in(&up, 0, h / 2, w, h));
+    assert!(black_in(&down, 0, h / 2, w, h) > black_in(&down, 0, 0, w, h / 2));
+    assert_eq!(
+        black_in(&up, 0, 0, w, h),
+        black_in(&down, 0, 0, w, h),
+        "same ink, mirrored"
+    );
+}
+
+#[test]
+fn vertical_text_stacks_characters() {
+    let mut d = Doc::new(30.0, 30.0);
+    let mut t = text("ABC", 12.0);
+    t.direction = TextDirection::Vertical;
+    d.add(0.0, 0.0, 30.0, 30.0, 0.0, ElementKind::Text(t));
+    let b = render(&d.doc, 203).bitmap;
+    let (w, h) = (b.width(), b.height());
+    // Ink in a narrow column at the left, reaching well down the label.
+    assert_eq!(black_in(&b, w / 2, 0, w, h), 0);
+    assert!(black_in(&b, 0, h / 3, w / 2, h) > 0);
+}
+
+#[test]
+fn table_lines_skip_merged_cells() {
+    let mut t = TableProps::new(2, 2);
+    t.stroke_mm = 0.5;
+    let mut d = Doc::new(20.0, 10.0);
+    d.add(0.0, 0.0, 20.0, 10.0, 0.0, ElementKind::Table(t.clone()));
+    let open = render(&d.doc, 203).bitmap;
+    let (w, h) = (open.width(), open.height());
+    // The middle vertical line is there in both rows.
+    assert!(black_in(&open, w / 2 - 3, h / 4, w / 2 + 3, h / 4 + 1) > 0);
+    t.merges.push(CellRange {
+        row: 0,
+        col: 0,
+        rows: 1,
+        cols: 2,
+    });
+    let mut d = Doc::new(20.0, 10.0);
+    d.add(0.0, 0.0, 20.0, 10.0, 0.0, ElementKind::Table(t));
+    let merged = render(&d.doc, 203).bitmap;
+    assert_eq!(black_in(&merged, w / 2 - 3, h / 4, w / 2 + 3, h / 4 + 1), 0);
+    assert!(black_in(&merged, w / 2 - 3, h * 3 / 4, w / 2 + 3, h * 3 / 4 + 1) > 0);
+}
+
+#[test]
+fn table_text_and_inverted_cells() {
+    let mut t = TableProps::new(1, 2);
+    t.cells[0][0].text = "Hi".into();
+    t.cells[0][1].invert = true;
+    t.cells[0][1].text = "Yo".into();
+    let mut d = Doc::new(30.0, 10.0);
+    d.add(0.0, 0.0, 30.0, 10.0, 0.0, ElementKind::Table(t));
+    let out = render(&d.doc, 203);
+    let b = out.bitmap;
+    let (w, h) = (b.width(), b.height());
+    let left = black_in(&b, 4, 4, w / 2 - 4, h - 4);
+    let right = black_in(&b, w / 2 + 4, 4, w - 4, h - 4);
+    let area = ((w / 2 - 8) * (h - 8)) as usize;
+    assert!(left > 0 && left < area / 3, "dark text on white: {left}");
+    assert!(
+        right > area / 2 && right < area,
+        "white text on black: {right}/{area}"
+    );
+}
+
+#[test]
+fn icons_and_borders_draw_inside_their_frame() {
+    let r = LabelRenderer::new();
+    let icons = r.icons();
+    assert!(icons.len() >= 25);
+    assert!(
+        icons
+            .iter()
+            .any(|i| i.name == "fragile" && i.category == "handling")
+    );
+    let mut d = Doc::new(30.0, 30.0);
+    d.add(
+        5.0,
+        5.0,
+        10.0,
+        10.0,
+        0.0,
+        ElementKind::Icon(IconProps {
+            icon: "check".into(),
+            keep_aspect: true,
+            invert: false,
+        }),
+    );
+    let out = render(&d.doc, 203);
+    let b = &out.bitmap;
+    let ink = black_in(b, 0, 0, b.width(), b.height());
+    assert!(ink > 50);
+    assert_eq!(ink, black_in(b, 40, 40, 120, 120), "only inside the frame");
+    let mut d = Doc::new(30.0, 30.0);
+    d.add(
+        0.0,
+        0.0,
+        10.0,
+        10.0,
+        0.0,
+        ElementKind::Icon(IconProps {
+            icon: "nope".into(),
+            keep_aspect: true,
+            invert: false,
+        }),
+    );
+    let out = render(&d.doc, 203);
+    assert!(matches!(out.issues[0], RenderIssue::BadAsset { .. }));
+
+    for style in [
+        BorderStyle::Single,
+        BorderStyle::Double,
+        BorderStyle::ThickThin,
+        BorderStyle::Dashed,
+        BorderStyle::Dotted,
+        BorderStyle::Corners,
+        BorderStyle::Ticket,
+        BorderStyle::Scallop,
+    ] {
+        let mut d = Doc::new(30.0, 20.0);
+        d.add(
+            0.0,
+            0.0,
+            30.0,
+            20.0,
+            0.0,
+            ElementKind::Border(BorderProps {
+                style,
+                ..Default::default()
+            }),
+        );
+        let b = render(&d.doc, 203).bitmap;
+        let (w, h) = (b.width(), b.height());
+        assert!(black_in(&b, 0, 0, w, h) > 0, "{style:?} draws");
+        assert_eq!(
+            black_in(&b, w / 4, h / 4, w * 3 / 4, h * 3 / 4),
+            0,
+            "{style:?} leaves the middle empty"
+        );
+    }
+}
+
+#[test]
+fn decode_image_reads_a_rendered_qr() {
+    let mut d = Doc::new(30.0, 30.0);
+    d.add(
+        5.0,
+        5.0,
+        20.0,
+        20.0,
+        0.0,
+        code2d("labely decode", Symbology2d::Qr),
+    );
+    let r = LabelRenderer::new();
+    let out = render(&d.doc, 203);
+    let png = r.to_png(&out.bitmap).unwrap();
+    let found = r.decode_image(&png).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        (found[0].format.as_str(), found[0].text.as_str()),
+        ("qr", "labely decode")
+    );
+    assert!(r.decode_image(b"not an image").is_err());
 }

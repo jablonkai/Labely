@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 labely-core.workspace = true
 tiny-skia.workspace = true
+resvg.workspace = true
 cosmic-text.workspace = true
 rxing = { workspace = true, features = ["encoders", "decoders", "multi_barcode_readers", "full_barcode_format_support", "encoding_rs"] }
 image.workspace = true
