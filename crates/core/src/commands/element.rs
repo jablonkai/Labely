@@ -399,14 +399,16 @@ impl Command for AddImage {
 
     fn run(ctx: &mut Ctx<'_>, p: ImageParams) -> Result<AddOutput, CommandError> {
         let bytes = match (&p.path, &p.data_base64) {
-            (Some(path), None) => std::fs::read(path).map_err(|e| {
-                let err = if e.kind() == std::io::ErrorKind::NotFound {
-                    CommandError::not_found(format!("cannot read image {path}: {e}"))
-                } else {
-                    CommandError::bad_params(format!("cannot read image {path}: {e}"))
-                };
-                err.with_param("path")
-            })?,
+            (Some(path), None) => {
+                std::fs::read(ctx.check_path("path", path, false)?).map_err(|e| {
+                    let err = if e.kind() == std::io::ErrorKind::NotFound {
+                        CommandError::not_found(format!("cannot read image {path}: {e}"))
+                    } else {
+                        CommandError::bad_params(format!("cannot read image {path}: {e}"))
+                    };
+                    err.with_param("path")
+                })?
+            }
             (None, Some(b64)) => base64::engine::general_purpose::STANDARD
                 .decode(b64.trim())
                 .map_err(|e| {

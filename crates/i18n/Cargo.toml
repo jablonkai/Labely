@@ -1,0 +1,15 @@
+[package]
+name = "labely-i18n"
+description = "Labely localisation: Fluent bundles for the studio and CLI (EN, HU)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fluent-bundle = "0.16.0"
+unic-langid = "0.9.6"
+
+[lints]
+workspace = true

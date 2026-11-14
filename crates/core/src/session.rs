@@ -11,6 +11,7 @@ use serde_json::{Map, Value};
 use crate::command::{CommandError, CommandKind, Ctx};
 use crate::document::{Document, ElementId};
 use crate::envelope::Envelope;
+use crate::policy::Policy;
 use crate::registry::Registry;
 use crate::services::Services;
 
@@ -37,6 +38,8 @@ pub(crate) struct OpenDoc {
     pub(crate) saved: Option<Arc<Document>>,
     pub(crate) undo: VecDeque<HistoryStep>,
     pub(crate) redo: Vec<HistoryStep>,
+    /// Selected element ids (view state; not part of undo).
+    pub(crate) selection: Vec<ElementId>,
 }
 
 impl OpenDoc {
@@ -49,6 +52,7 @@ impl OpenDoc {
             saved,
             undo: VecDeque::new(),
             redo: Vec::new(),
+            selection: Vec::new(),
         }
     }
 
@@ -101,6 +105,7 @@ pub struct Session {
     pub(crate) batch_depth: u32,
     services: Services,
     registry: &'static Registry,
+    policy: Policy,
 }
 
 impl std::fmt::Debug for Session {
@@ -121,7 +126,53 @@ impl Session {
             batch_depth: 0,
             services,
             registry: Registry::builtin(),
+            policy: Policy::default(),
         }
+    }
+
+    /// Session with a policy (e.g. [`Policy::restricted`] for MCP).
+    pub fn with_policy(services: Services, policy: Policy) -> Self {
+        let mut s = Self::new(services);
+        s.policy = policy;
+        s
+    }
+
+    pub fn policy(&self) -> &Policy {
+        &self.policy
+    }
+
+    pub fn set_policy(&mut self, policy: Policy) {
+        self.policy = policy;
+    }
+
+    /// Selected element ids of a document (default: active) that still exist.
+    pub fn selection(&self, doc_id: Option<&str>) -> Vec<ElementId> {
+        self.open(doc_id)
+            .map(|o| {
+                o.selection
+                    .iter()
+                    .copied()
+                    .filter(|id| o.doc.element(*id).is_some())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Whether the document (default: active) has unsaved changes.
+    pub fn is_dirty(&self, doc_id: Option<&str>) -> bool {
+        self.open(doc_id).is_some_and(OpenDoc::dirty)
+    }
+
+    /// File path of the document (default: active), if it has one.
+    pub fn doc_path(&self, doc_id: Option<&str>) -> Option<&std::path::Path> {
+        self.open(doc_id).and_then(|o| o.path.as_deref())
+    }
+
+    /// Label of the step `history.undo` would revert.
+    pub fn undo_label(&self, doc_id: Option<&str>) -> Option<&str> {
+        self.open(doc_id)
+            .and_then(|o| o.undo.back())
+            .map(|s| s.label.as_str())
     }
 
     pub fn services(&self) -> &Services {
@@ -149,6 +200,12 @@ impl Session {
     pub fn doc(&self, doc_id: Option<&str>) -> Option<&Document> {
         let id = doc_id.or(self.state.active.as_deref())?;
         self.state.docs.get(id).map(|o| &*o.doc)
+    }
+
+    /// Shared handle to a document (default: active). Edits replace the `Arc`, so
+    /// `Arc::ptr_eq` tells a viewer whether it must redraw.
+    pub fn doc_arc(&self, doc_id: Option<&str>) -> Option<Arc<Document>> {
+        self.open(doc_id).map(|o| o.doc.clone())
     }
 
     pub fn can_undo(&self, doc_id: Option<&str>) -> bool {
@@ -189,6 +246,11 @@ impl Session {
             Ok(v) => v,
             Err(e) => return Envelope::failure(e),
         };
+        if id.starts_with("print.")
+            && let Err(e) = self.policy.check_print(id)
+        {
+            return Envelope::failure(e);
+        }
 
         let before = self.state.clone();
         let journal_len = self.journal.len();

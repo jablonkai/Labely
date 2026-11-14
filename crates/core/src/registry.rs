@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
-use crate::commands::{device, doc, element, history, meta, render, variable};
+use crate::commands::{device, doc, element, history, meta, render, selection, variable};
 use crate::schema::{output_schema, params_schema};
 
 type RunFn = fn(&mut Ctx<'_>, Value) -> Result<Value, CommandError>;
@@ -37,6 +37,13 @@ impl Entry {
             params_schema: params_schema::<C::Params>,
             output_schema: output_schema::<C::Output>,
         }
+    }
+
+    /// Place the command in a studio menu, optionally with a default shortcut.
+    pub const fn in_menu(mut self, menu: &'static str, shortcut: Option<&'static str>) -> Self {
+        self.meta.menu = Some(menu);
+        self.meta.shortcut = shortcut;
+        self
     }
 
     pub fn params_schema(&self) -> Value {
@@ -117,6 +124,10 @@ pub struct CommandInfo {
     pub kind: CommandKind,
     pub journal: bool,
     pub undoable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub menu: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shortcut: Option<String>,
     /// JSON Schema (2020-12, refs inlined) of the params object.
     pub params_schema: Value,
     /// JSON Schema of `result`.
@@ -136,7 +147,7 @@ impl Registry {
         Self { entries, index }
     }
 
-    /// The built-in Phase-1 command set.
+    /// The built-in command set.
     pub fn builtin() -> &'static Registry {
         static REG: OnceLock<Registry> = OnceLock::new();
         REG.get_or_init(|| Registry::new(builtin_entries()))
@@ -165,9 +176,49 @@ impl Registry {
                 kind: e.meta.kind,
                 journal: e.meta.journal,
                 undoable: e.meta.undoable,
+                menu: e.meta.menu.map(str::to_owned),
+                shortcut: e.meta.shortcut.map(str::to_owned),
                 params_schema: e.params_schema(),
                 output_schema: e.output_schema(),
             })
+            .collect()
+    }
+
+    /// sha256 (hex) of every command's id, kind and schemas, with descriptions and titles
+    /// removed. Pinned next to [`crate::API_VERSION`] by a test: a schema change needs a bump.
+    pub fn schema_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        fn strip(v: &mut Value) {
+            match v {
+                Value::Object(m) => {
+                    m.remove("description");
+                    m.remove("title");
+                    m.values_mut().for_each(strip);
+                }
+                Value::Array(a) => a.iter_mut().for_each(strip),
+                _ => {}
+            }
+        }
+        let mut all: Vec<Value> = self
+            .entries
+            .iter()
+            .map(|e| {
+                let mut v = serde_json::json!({
+                    "id": e.id,
+                    "kind": e.meta.kind,
+                    "undoable": e.meta.undoable,
+                    "params": e.params_schema(),
+                    "output": e.output_schema(),
+                });
+                strip(&mut v);
+                v
+            })
+            .collect();
+        all.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+        let bytes = serde_json::to_vec(&all).unwrap_or_default();
+        Sha256::digest(&bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
             .collect()
     }
 
@@ -237,37 +288,40 @@ fn builtin_entries() -> Vec<Entry> {
     vec![
         Entry::of::<meta::CommandList>(),
         Entry::of::<meta::CommandBatch>(),
-        Entry::of::<doc::DocNew>(),
-        Entry::of::<doc::DocOpen>(),
-        Entry::of::<doc::DocSave>(),
-        Entry::of::<doc::DocClose>(),
+        Entry::of::<doc::DocNew>().in_menu("file", Some("Ctrl+N")),
+        Entry::of::<doc::DocOpen>().in_menu("file", Some("Ctrl+O")),
+        Entry::of::<doc::DocSave>().in_menu("file", Some("Ctrl+S")),
+        Entry::of::<doc::DocClose>().in_menu("file", Some("Ctrl+W")),
         Entry::of::<doc::DocGet>(),
-        Entry::of::<doc::DocSetLabel>(),
-        Entry::of::<render::DocCheck>(),
-        Entry::of::<element::AddText>(),
-        Entry::of::<element::AddBarcode>(),
-        Entry::of::<element::AddCode2d>(),
-        Entry::of::<element::AddImage>(),
-        Entry::of::<element::AddRect>(),
-        Entry::of::<element::AddEllipse>(),
-        Entry::of::<element::AddLine>(),
+        Entry::of::<doc::DocSetLabel>().in_menu("label", None),
+        Entry::of::<render::DocCheck>().in_menu("label", Some("Ctrl+K")),
+        Entry::of::<element::AddText>().in_menu("insert", Some("T")),
+        Entry::of::<element::AddBarcode>().in_menu("insert", Some("B")),
+        Entry::of::<element::AddCode2d>().in_menu("insert", Some("Q")),
+        Entry::of::<element::AddImage>().in_menu("insert", Some("I")),
+        Entry::of::<element::AddRect>().in_menu("insert", Some("R")),
+        Entry::of::<element::AddEllipse>().in_menu("insert", Some("E")),
+        Entry::of::<element::AddLine>().in_menu("insert", Some("L")),
         Entry::of::<element::SetProps>(),
         Entry::of::<element::Move>(),
         Entry::of::<element::Resize>(),
         Entry::of::<element::Rotate>(),
-        Entry::of::<element::Delete>(),
-        Entry::of::<element::Duplicate>(),
-        Entry::of::<element::Reorder>(),
-        Entry::of::<history::Undo>(),
-        Entry::of::<history::Redo>(),
+        Entry::of::<element::Delete>().in_menu("edit", Some("Delete")),
+        Entry::of::<element::Duplicate>().in_menu("edit", Some("Ctrl+D")),
+        Entry::of::<element::Reorder>().in_menu("arrange", None),
+        Entry::of::<history::Undo>().in_menu("edit", Some("Ctrl+Z")),
+        Entry::of::<history::Redo>().in_menu("edit", Some("Ctrl+Shift+Z")),
+        Entry::of::<history::Journal>(),
+        Entry::of::<selection::SelectionSet>().in_menu("edit", None),
+        Entry::of::<selection::SelectionGet>(),
         Entry::of::<variable::VariableSet>(),
-        Entry::of::<render::RenderPreview>(),
-        Entry::of::<device::DeviceScan>(),
+        Entry::of::<render::RenderPreview>().in_menu("view", None),
+        Entry::of::<device::DeviceScan>().in_menu("print", None),
         Entry::of::<device::DeviceList>(),
         Entry::of::<device::DeviceConnect>(),
         Entry::of::<device::DeviceDisconnect>(),
         Entry::of::<device::DeviceStatusCmd>(),
-        Entry::of::<device::PrintSubmit>(),
+        Entry::of::<device::PrintSubmit>().in_menu("print", Some("Ctrl+P")),
     ]
 }
 

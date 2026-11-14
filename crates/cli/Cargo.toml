@@ -19,6 +19,9 @@ serial = ["labely-printers/serial"]
 [dependencies]
 labely-core.workspace = true
 labely-printers.workspace = true
+labely-mcp.workspace = true
+labely-i18n.workspace = true
+tokio.workspace = true
 clap.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

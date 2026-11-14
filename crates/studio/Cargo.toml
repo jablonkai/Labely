@@ -1,0 +1,38 @@
+[package]
+name = "labely-studio"
+description = "Labely desktop studio (egui)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "labely-studio"
+path = "src/main.rs"
+
+[features]
+default = ["ble", "serial"]
+ble = ["labely-printers/ble"]
+serial = ["labely-printers/serial"]
+
+[dependencies]
+labely-core.workspace = true
+labely-printers.workspace = true
+labely-mcp.workspace = true
+labely-i18n.workspace = true
+eframe = "0.37.0"
+egui = { version = "0.37.0", features = ["monochrome_emoji_fonts"] }
+rfd = "0.18.0"
+tokio.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+egui_kittest = "0.37.0"
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

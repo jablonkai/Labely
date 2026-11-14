@@ -97,3 +97,59 @@ impl Command for Redo {
         step(ctx, p.doc_id.as_deref(), false)
     }
 }
+
+#[derive(Debug, Default, serde::Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct JournalParams {
+    /// Skip the first `since` entries (for incremental reads). Default 0.
+    #[serde(default)]
+    pub since: usize,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct JournalOutput {
+    /// Number of entries recorded so far.
+    pub total: usize,
+    /// Entries from `since` on; replay them in order with `command.batch` or
+    /// `labely run --script`.
+    pub entries: Vec<JournalItem>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct JournalItem {
+    pub id: String,
+    pub params: serde_json::Value,
+}
+
+/// `history.journal`
+#[derive(Debug)]
+pub struct Journal;
+
+impl Command for Journal {
+    const ID: &'static str = "history.journal";
+    type Params = JournalParams;
+    type Output = JournalOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::query(
+            "Journal",
+            "The session's successful edit commands as [{id, params}], oldest first. The list \
+             is a script: pass it as command.batch steps or to `labely run --script` to replay.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: JournalParams) -> Result<JournalOutput, CommandError> {
+        let j = ctx.session().journal();
+        Ok(JournalOutput {
+            total: j.len(),
+            entries: j
+                .iter()
+                .skip(p.since)
+                .map(|e| JournalItem {
+                    id: e.id.clone(),
+                    params: e.params.clone(),
+                })
+                .collect(),
+        })
+    }
+}

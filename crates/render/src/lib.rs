@@ -17,7 +17,7 @@ use std::sync::{Mutex, PoisonError};
 use base64::Engine as _;
 use labely_core::document::{
     BarcodeProps, Code2dProps, DEFAULT_FONT, Dither, Element, ElementKind, HumanReadable, ImageFit,
-    ImageProps, TextFit, TextProps, VAlign,
+    ImageProps, Symbology2d, TextFit, TextProps, VAlign,
 };
 use labely_core::raster::Bitmap1;
 use labely_core::services::{
@@ -212,7 +212,16 @@ fn render_page(
     let mut gray = vec![255u8; (lw * lh) as usize];
     for el in page.elements.iter().filter(|e| !e.hidden) {
         if let Some((layer, conv)) = render_element(&mut ctx, engine, el, lw, lh)? {
-            compose(&mut bitmap, &mut gray, &layer, conv);
+            let (covered, black) = compose(&mut bitmap, &mut gray, &layer, conv);
+            if matches!(el.kind, ElementKind::Image(_)) && covered > 0 {
+                let pct = black as f64 * 100.0 / covered as f64;
+                if !(LOW_CONTRAST_PCT..=100.0 - LOW_CONTRAST_PCT).contains(&pct) {
+                    ctx.issues.push(RenderIssue::LowContrast {
+                        element_id: el.id,
+                        black_percent: (pct * 10.0).round() / 10.0,
+                    });
+                }
+            }
         }
     }
     let out = RenderOutput {
@@ -229,8 +238,12 @@ fn render_page(
     ))
 }
 
+/// Images with less than this share (in %) of black or white dots are reported as low contrast.
+const LOW_CONTRAST_PCT: f64 = 2.0;
+
 /// Source-over the layer onto the gray preview and its 1-bit conversion onto the bitmap.
-fn compose(bitmap: &mut Bitmap1, gray: &mut [u8], layer: &Pixmap, conv: Conv) {
+/// Returns (covered dots, black dots among them).
+fn compose(bitmap: &mut Bitmap1, gray: &mut [u8], layer: &Pixmap, conv: Conv) -> (u64, u64) {
     let (w, h) = (layer.width(), layer.height());
     let data = layer.data();
     let n = (w * h) as usize;
@@ -254,14 +267,18 @@ fn compose(bitmap: &mut Bitmap1, gray: &mut [u8], layer: &Pixmap, conv: Conv) {
             dither::dither_masked(&value, Some(&covered), w as usize, h as usize, m, t)
         }
     };
+    let (mut n_cov, mut n_black) = (0u64, 0u64);
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) as usize;
             if covered[i] {
                 bitmap.set(x, y, black[i]);
+                n_cov += 1;
+                n_black += u64::from(black[i]);
             }
         }
     }
+    (n_cov, n_black)
 }
 
 fn render_element(
@@ -477,6 +494,12 @@ fn barcode_layer(
     });
     let mut pm = white(w, h)?;
     let x0 = (w - n * module) / 2;
+    ctx.issues.push(RenderIssue::CodeLayout {
+        element_id: el.id,
+        module_dots: module,
+        slack_dots: x0,
+        quiet_modules: 10,
+    });
     let bar_y = if p.human_readable == HumanReadable::Above {
         th
     } else {
@@ -553,6 +576,15 @@ fn code2d_layer(
     let mut pm = white(w, h)?;
     let x0 = (w - m.width * module) / 2;
     let y0 = (h - m.height * module) / 2;
+    ctx.issues.push(RenderIssue::CodeLayout {
+        element_id: el.id,
+        module_dots: module,
+        slack_dots: x0.min(y0),
+        quiet_modules: match p.symbology {
+            Symbology2d::Qr => 4,
+            _ => 1,
+        },
+    });
     for y in 0..m.height {
         for x in 0..m.width {
             if m.get(x, y) {

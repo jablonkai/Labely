@@ -35,6 +35,7 @@ crates/
   studio/     labely-studio      egui app; lib target (for egui_kittest) + bin target
   ffi/        labely-ffi         UniFFI proc-macro bindings → Kotlin, Swift
   testkit/    labely-testkit     dev-only: golden helpers, fixture loaders, sim printers
+  i18n/       labely-i18n        Fluent bundles (EN, HU) for studio and CLI; locales embedded (ADR-0013)
 xtask/                           ci, layers, bless, schema-hash, ui-commands, i18n-check
 mobile/android/                  Kotlin + Compose shell, AppFunctions
 mobile/ios/                      SwiftUI shell, App Intents
@@ -52,7 +53,7 @@ with kittest.
 
 | Layer | Crates | May depend on |
 |---|---|---|
-| L0 | `labely-protocol`, `labely-core` | std, serde, schemars; nothing in this workspace (core and protocol are independent) |
+| L0 | `labely-protocol`, `labely-core`, `labely-i18n` | std, serde, schemars (i18n: fluent); nothing in this workspace (all three are independent) |
 | L1 | `labely-render` (→ core), `labely-transport` (no workspace deps) | L0 |
 | L2 | `labely-printers` (→ protocol, transport, render, core) | L0–L1 |
 | L3 | `labely-mcp`, `labely-ffi` | L0–L2 |
@@ -101,8 +102,12 @@ Binding: any string property may be a template "{{column}}", "{{serial}}", "{{no
 - **Command trait.** As in prior-art §4.2: `const ID`, typed `Params`/`Output` (serde + schemars
   1.x, `deny_unknown_fields`), `CommandMeta { label, menu, shortcut, kind: Query|Edit|Device|Ui,
   undoable, journal }`, `enabled`, `run`.
-- **Registration.** Commands are registered from an explicit list in `core/src/registry.rs`.
-  Frontends may add `Ui` commands; the studio adds zoom and panels.
+- **Registration.** Commands are registered from an explicit list in `core/src/registry.rs`,
+  where `Entry::in_menu(menu, shortcut)` also places them in the studio's generated menus.
+  Zoom and panel toggles are studio view state, not commands. `selection.set` is the core
+  `Ui` command (it is never undone or journaled).
+- **Policy.** `Session` carries a `Policy {file_roots, allow_print}` (ADR-0012). The MCP
+  server and the studio's agent calls use a restricted policy; the CLI does not.
 - **Single entry point.** `Session::execute(id, params: Value) -> Envelope`. It is the only
   mutation path for the studio, CLI, MCP and FFI.
 - **Envelope.**
@@ -130,7 +135,7 @@ Binding: any string property may be a template "{{column}}", "{{serial}}", "{{no
 |---|---|
 | doc | `doc.new`, `doc.open`, `doc.save`, `doc.close`, `doc.get`, `doc.set_label`, `doc.check` |
 | element | `element.add_text`, `.add_barcode`, `.add_code2d`, `.add_image`, `.add_shape`, `.add_line`, `.add_table`, `.add_date`, `.add_serial`, `.add_icon`, `.add_border`, `.set_props`, `.move`, `.resize`, `.rotate`, `.delete`, `.duplicate`, `.reorder`, `.align`, `.distribute`, `.group`, `.ungroup`, `.lock` |
-| selection / history | `selection.set`, `history.undo`, `history.redo` |
+| selection / history | `selection.set`, `selection.get`, `history.undo`, `history.redo`, `history.journal` |
 | data | `data.attach_csv`, `data.attach_xlsx`, `data.bind`, `data.preview_record`, `variable.set` |
 | template | `template.list`, `template.instantiate`, `template.save_as` |
 | render | `render.preview` (PNG of the print raster), `render.export` (PNG/PDF) |
@@ -139,7 +144,9 @@ Binding: any string property may be a template "{{column}}", "{{serial}}", "{{no
 
 ### 3.4 `doc.check` rules
 
-The command returns `[{rule, severity, element_id?, message, hint}]`:
+The command returns `[{rule, severity, element_id?, message, hint}]`. Rule ids are listed in
+[`docs/agents/tools.md`](agents/tools.md#doccheck-rules). Paper *size* versus RFID needs the
+label paper database (Phase 3); until then only the media type is compared.
 
 - text overflow or text auto-shrunk below 5 pt at the device dpi
 - element outside the printable area or margins
@@ -263,12 +270,14 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
   - **Gating:** printing from an agent is off until the user allows it in the studio, or
     headless mode runs with `--allow-print`. File access is limited to the configured roots.
 - **Studio (`labely-studio`, egui/eframe 0.37).**
-  - **State:** `LabelyApp { session, ui: UiState }`. Panels read view-models.
+  - **State:** `LabelyApp { session, ui: UiState }`. Panels read the session directly; the
+    canvas shows the exact print raster (cached per document `Arc`).
   - **Edits:** every edit goes through `app.run(id, params)`. MCP calls reach the UI thread over a
     channel with a deadline and are deferred while a gesture or dialog is open.
   - **Layout:** canvas, layers, properties, data, printer/queue panels and a command palette.
   - **Generated UI:** menus and shortcuts come from `CommandMeta`.
-  - **Tests:** egui_kittest snapshots.
+  - **Tests:** egui_kittest interaction tests through the AccessKit tree, without image
+    snapshots, because CI runners have no GPU.
 - **FFI (`labely-ffi`, UniFFI 0.32, proc-macro mode).**
   - **Object:** `LabelyEngine` with `execute(id, params_json) -> envelope_json`,
     `commands_json()`, `render_png(doc_id, opts)`, and device events through a callback

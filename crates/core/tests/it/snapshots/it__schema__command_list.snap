@@ -3,7 +3,7 @@ source: crates/core/tests/it/schema.rs
 expression: r
 ---
 {
-  "api_version": 1,
+  "api_version": 2,
   "commands": [
     {
       "description": "List every command with its kind, description and JSON Schemas for params and result. Optional `prefix` filters ids (e.g. `element.`).",
@@ -49,17 +49,34 @@ expression: r
                       "const": "device",
                       "description": "Talks to a printer; pushes no undo step and is refused inside atomic batches.",
                       "type": "string"
+                    },
+                    {
+                      "const": "ui",
+                      "description": "Changes view state only (selection, zoom, panels); never touches a document.",
+                      "type": "string"
                     }
                   ]
                 },
                 "label": {
                   "type": "string"
                 },
+                "menu": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "output_schema": {
                   "description": "JSON Schema of `result`."
                 },
                 "params_schema": {
                   "description": "JSON Schema (2020-12, refs inlined) of the params object."
+                },
+                "shortcut": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "undoable": {
                   "type": "boolean"
@@ -162,18 +179,27 @@ expression: r
                     },
                     "code": {
                       "description": "Stable error codes (prior-art §4.2 item 9).",
-                      "enum": [
-                        "unknown_command",
-                        "bad_params",
-                        "disabled",
-                        "no_document",
-                        "not_found",
-                        "device_unavailable",
-                        "device_error",
-                        "cancelled",
-                        "internal"
-                      ],
-                      "type": "string"
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "unknown_command",
+                            "bad_params",
+                            "disabled",
+                            "no_document",
+                            "not_found",
+                            "device_unavailable",
+                            "device_error",
+                            "cancelled",
+                            "internal"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "forbidden",
+                          "description": "Refused by the session policy (file roots, print gating).",
+                          "type": "string"
+                        }
+                      ]
                     },
                     "hint": {
                       "description": "What to do next.",
@@ -288,6 +314,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "New document",
+      "menu": "file",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -374,6 +401,7 @@ expression: r
         "title": "NewParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+N",
       "undoable": true
     },
     {
@@ -382,6 +410,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Open document",
+      "menu": "file",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -414,6 +443,7 @@ expression: r
         "title": "OpenParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+O",
       "undoable": false
     },
     {
@@ -422,6 +452,7 @@ expression: r
       "journal": false,
       "kind": "query",
       "label": "Save document",
+      "menu": "file",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -464,6 +495,7 @@ expression: r
         "title": "SaveParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+S",
       "undoable": false
     },
     {
@@ -472,6 +504,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Close document",
+      "menu": "file",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -509,6 +542,7 @@ expression: r
         "title": "DocIdParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+W",
       "undoable": false
     },
     {
@@ -1118,6 +1152,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Label settings",
+      "menu": "label",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -1270,11 +1305,12 @@ expression: r
       "undoable": true
     },
     {
-      "description": "Find print problems: elements outside the label, text overflow or shrinking, barcode encode failures, modules < 2 dots, codes that do not decode from the rendered raster, label wider than the model's head, density out of model range. Returns {ok, dpi, issues:[{rule, severity, element_id?, message, hint}]}.",
+      "description": "Find print problems. Rules: out_of_bounds, in_margin (with margin_mm), outside_printable, label_too_wide, dpi_mismatch, density_out_of_range, paper_mismatch (RFID media of the printer), binding_missing, binding_empty, render_failed, text_overflow, text_shrunk (< 5 pt is a warning), encode_failed, module_too_narrow (< 2 dots), quiet_zone, code_unreadable (render, decode, compare), bad_asset, font_fallback, low_contrast. Returns {ok, dpi, issues:[{rule, severity, element_id?, message, hint}]}; ok is false when any issue has severity error.",
       "id": "doc.check",
       "journal": false,
       "kind": "query",
       "label": "Check document",
+      "menu": "label",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -1343,6 +1379,14 @@ expression: r
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "address": {
+            "default": null,
+            "description": "Printer whose loaded paper (RFID) is compared with the label. Defaults to the only\nconnected printer, if exactly one is connected.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "doc_id": {
             "default": null,
             "type": [
@@ -1359,11 +1403,21 @@ expression: r
               "integer",
               "null"
             ]
+          },
+          "margin_mm": {
+            "default": null,
+            "description": "Safe margin from the label edge in mm; elements inside it are reported. Default 0.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           }
         },
         "title": "CheckParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+K",
       "undoable": false
     },
     {
@@ -1372,6 +1426,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add text",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -1573,6 +1628,7 @@ expression: r
         "title": "TextParams",
         "type": "object"
       },
+      "shortcut": "T",
       "undoable": true
     },
     {
@@ -1581,6 +1637,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add barcode",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -1704,6 +1761,7 @@ expression: r
         "title": "BarcodeParams",
         "type": "object"
       },
+      "shortcut": "B",
       "undoable": true
     },
     {
@@ -1712,6 +1770,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add 2D code",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -1822,6 +1881,7 @@ expression: r
         "title": "Code2dParams",
         "type": "object"
       },
+      "shortcut": "Q",
       "undoable": true
     },
     {
@@ -1830,6 +1890,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add image",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -1994,6 +2055,7 @@ expression: r
         "title": "ImageParams",
         "type": "object"
       },
+      "shortcut": "I",
       "undoable": true
     },
     {
@@ -2002,6 +2064,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add rectangle",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -2103,6 +2166,7 @@ expression: r
         "title": "RectParams",
         "type": "object"
       },
+      "shortcut": "R",
       "undoable": true
     },
     {
@@ -2111,6 +2175,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add ellipse",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -2203,6 +2268,7 @@ expression: r
         "title": "EllipseParams",
         "type": "object"
       },
+      "shortcut": "E",
       "undoable": true
     },
     {
@@ -2211,6 +2277,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Add line",
+      "menu": "insert",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -2309,6 +2376,7 @@ expression: r
         "title": "LineParams",
         "type": "object"
       },
+      "shortcut": "L",
       "undoable": true
     },
     {
@@ -4165,6 +4233,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Delete",
+      "menu": "edit",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -4212,6 +4281,7 @@ expression: r
         "title": "DeleteParams",
         "type": "object"
       },
+      "shortcut": "Delete",
       "undoable": true
     },
     {
@@ -4220,6 +4290,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Duplicate",
+      "menu": "edit",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -4278,6 +4349,7 @@ expression: r
         "title": "DuplicateParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+D",
       "undoable": true
     },
     {
@@ -4286,6 +4358,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Reorder",
+      "menu": "arrange",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -4360,6 +4433,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Undo",
+      "menu": "edit",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -4398,6 +4472,7 @@ expression: r
         "title": "DocIdParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+Z",
       "undoable": false
     },
     {
@@ -4406,6 +4481,7 @@ expression: r
       "journal": true,
       "kind": "edit",
       "label": "Redo",
+      "menu": "edit",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -4426,6 +4502,173 @@ expression: r
           "can_redo"
         ],
         "title": "HistoryOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DocIdParams",
+        "type": "object"
+      },
+      "shortcut": "Ctrl+Shift+Z",
+      "undoable": false
+    },
+    {
+      "description": "The session's successful edit commands as [{id, params}], oldest first. The list is a script: pass it as command.batch steps or to `labely run --script` to replay.",
+      "id": "history.journal",
+      "journal": false,
+      "kind": "query",
+      "label": "Journal",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "entries": {
+            "description": "Entries from `since` on; replay them in order with `command.batch` or\n`labely run --script`.",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "params": true
+              },
+              "required": [
+                "id",
+                "params"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "Number of entries recorded so far.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "entries"
+        ],
+        "title": "JournalOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "since": {
+            "default": 0,
+            "description": "Skip the first `since` entries (for incremental reads). Default 0.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "title": "JournalParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Set the selected elements of a document (default: active). mode: replace (default), add, remove or toggle. Not undoable.",
+      "id": "selection.set",
+      "journal": false,
+      "kind": "ui",
+      "label": "Select",
+      "menu": "edit",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "SelectionOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ids": {
+            "description": "Element ids; `[]` with mode `replace` clears the selection.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "description": "How `ids` combine with the current selection.",
+            "enum": [
+              "replace",
+              "add",
+              "remove",
+              "toggle"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "SelectParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Ids of the selected elements of a document (default: active), in selection order.",
+      "id": "selection.get",
+      "journal": false,
+      "kind": "query",
+      "label": "Get selection",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "SelectionOutput",
         "type": "object"
       },
       "params_schema": {
@@ -4511,6 +4754,7 @@ expression: r
       "journal": false,
       "kind": "query",
       "label": "Preview",
+      "menu": "view",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -4586,6 +4830,7 @@ expression: r
       "journal": false,
       "kind": "device",
       "label": "Scan for printers",
+      "menu": "print",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -5107,6 +5352,7 @@ expression: r
       "journal": false,
       "kind": "device",
       "label": "Print",
+      "menu": "print",
       "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
@@ -5197,6 +5443,7 @@ expression: r
         "title": "PrintParams",
         "type": "object"
       },
+      "shortcut": "Ctrl+P",
       "undoable": false
     }
   ],

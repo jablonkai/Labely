@@ -4,7 +4,7 @@
 //! Run with `LABELY_BLESS=1` to (re)write them.
 
 // Test helpers outside `#[test]` fns are not covered by clippy's allow-*-in-tests.
-#![allow(clippy::expect_used, clippy::panic)]
+#![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use std::path::PathBuf;
 
@@ -13,6 +13,8 @@ use labely_core::document::*;
 use labely_core::raster::Bitmap1;
 use labely_core::services::{RenderError, RenderIssue, RenderOptions, RenderOutput, Renderer};
 use labely_render::LabelRenderer;
+
+mod check;
 
 // ---------------------------------------------------------------- helpers
 

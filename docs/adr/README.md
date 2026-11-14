@@ -13,3 +13,5 @@
 | [0009](0009-localisation.md) | Localisation | proposed |
 | [0010](0010-niimbot-b21pro-protocol-choices.md) | Initial B21 Pro protocol choices | proposed |
 | [0011](0011-mobile-ai-surfaces.md) | AppFunctions / App Intents | proposed |
+| [0012](0012-session-policy.md) | Session policy: file roots, print gating | proposed |
+| [0013](0013-i18n-crate.md) | `labely-i18n` crate | proposed |

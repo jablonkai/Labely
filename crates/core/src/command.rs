@@ -20,6 +20,8 @@ pub enum CommandKind {
     Edit,
     /// Talks to a printer; pushes no undo step and is refused inside atomic batches.
     Device,
+    /// Changes view state only (selection, zoom, panels); never touches a document.
+    Ui,
 }
 
 /// Static description of a command.
@@ -34,6 +36,10 @@ pub struct CommandMeta {
     pub journal: bool,
     /// The session snapshots changed documents and pushes one undo step.
     pub undoable: bool,
+    /// Menu the studio lists the command under, e.g. `file`, `edit`, `insert`.
+    pub menu: Option<&'static str>,
+    /// Default shortcut, e.g. `Ctrl+Z` (`Ctrl` is Cmd on macOS).
+    pub shortcut: Option<&'static str>,
 }
 
 impl CommandMeta {
@@ -45,6 +51,8 @@ impl CommandMeta {
             kind: CommandKind::Query,
             journal: false,
             undoable: false,
+            menu: None,
+            shortcut: None,
         }
     }
 
@@ -56,6 +64,8 @@ impl CommandMeta {
             kind: CommandKind::Edit,
             journal: true,
             undoable: true,
+            menu: None,
+            shortcut: None,
         }
     }
 
@@ -67,7 +77,32 @@ impl CommandMeta {
             kind: CommandKind::Device,
             journal: false,
             undoable: false,
+            menu: None,
+            shortcut: None,
         }
+    }
+
+    /// View-state command: not journaled, not undoable.
+    pub const fn ui(label: &'static str, description: &'static str) -> Self {
+        Self {
+            label,
+            description,
+            kind: CommandKind::Ui,
+            journal: false,
+            undoable: false,
+            menu: None,
+            shortcut: None,
+        }
+    }
+
+    pub const fn menu(mut self, menu: &'static str) -> Self {
+        self.menu = Some(menu);
+        self
+    }
+
+    pub const fn shortcut(mut self, shortcut: &'static str) -> Self {
+        self.shortcut = Some(shortcut);
+        self
     }
 
     pub const fn journal(mut self, journal: bool) -> Self {
@@ -115,6 +150,8 @@ pub enum ErrorCode {
     DeviceUnavailable,
     DeviceError,
     Cancelled,
+    /// Refused by the session policy (file roots, print gating).
+    Forbidden,
     Internal,
 }
 
@@ -129,6 +166,7 @@ impl ErrorCode {
             Self::DeviceUnavailable => "device_unavailable",
             Self::DeviceError => "device_error",
             Self::Cancelled => "cancelled",
+            Self::Forbidden => "forbidden",
             Self::Internal => "internal",
         }
     }
@@ -297,6 +335,19 @@ impl<'a> Ctx<'a> {
             .get_mut(&id)
             .map(|o| Arc::make_mut(&mut o.doc))
             .ok_or_else(CommandError::no_document)
+    }
+
+    /// Check `path` against the session's file roots; returns it as a `PathBuf`.
+    pub fn check_path(
+        &self,
+        param: &str,
+        path: &str,
+        write: bool,
+    ) -> Result<std::path::PathBuf, CommandError> {
+        self.session
+            .policy()
+            .check_path(path, write)
+            .map_err(|e| e.with_param(param))
     }
 
     pub(crate) fn session(&mut self) -> &mut Session {

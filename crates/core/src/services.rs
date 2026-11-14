@@ -61,6 +61,19 @@ pub enum RenderIssue {
         element_id: ElementId,
         requested: String,
     },
+    /// Placement of a drawn code: blank dots between the symbol and its box on the
+    /// quiet-zone sides, and the quiet zone the symbology needs, in modules.
+    CodeLayout {
+        element_id: ElementId,
+        module_dots: u32,
+        slack_dots: u32,
+        quiet_modules: u32,
+    },
+    /// A dithered image ended up almost all white or all black.
+    LowContrast {
+        element_id: ElementId,
+        black_percent: f64,
+    },
 }
 
 /// Output of one render.
