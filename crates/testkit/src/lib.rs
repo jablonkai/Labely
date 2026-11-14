@@ -471,6 +471,7 @@ mod tests {
             hidden: false,
             flip_h: false,
             flip_v: false,
+            group: None,
             kind: ElementKind::Rect(Default::default()),
         });
         let r = FakeRenderer::new();

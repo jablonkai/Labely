@@ -247,6 +247,9 @@ pub struct Element {
     /// Mirror top–bottom inside the frame (before rotation).
     #[serde(default, skip_serializing_if = "is_false")]
     pub flip_v: bool,
+    /// Group id shared by grouped elements (`element.group`); groups are flat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<u64>,
     #[serde(flatten)]
     pub kind: ElementKind,
 }
@@ -265,6 +268,18 @@ pub enum ElementKind {
     Table(TableProps),
     Icon(IconProps),
     Border(BorderProps),
+}
+
+impl Element {
+    /// Axis-aligned bounds of the rotated frame: (min_x, min_y, max_x, max_y) in mm.
+    pub fn bounds(&self) -> (f64, f64, f64, f64) {
+        let (s, c) = self.rotation_deg.to_radians().sin_cos();
+        let (hw, hh) = (self.width_mm / 2.0, self.height_mm / 2.0);
+        let ex = (hw * c).abs() + (hh * s).abs();
+        let ey = (hw * s).abs() + (hh * c).abs();
+        let (cx, cy) = (self.x_mm + hw, self.y_mm + hh);
+        (cx - ex, cy - ey, cx + ex, cy + ey)
+    }
 }
 
 impl ElementKind {
@@ -774,6 +789,7 @@ mod tests {
             hidden: false,
             flip_h: false,
             flip_v: false,
+            group: None,
             kind: ElementKind::Text(TextProps {
                 text: "Hi".into(),
                 ..Default::default()

@@ -354,3 +354,41 @@ fn table_editing_and_code_from_image() {
         k => panic!("{k:?}"),
     }
 }
+
+#[test]
+fn group_select_and_align() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    for x in [5, 20, 35] {
+        app.run(
+            "element.add_rect",
+            json!({"x_mm": x, "y_mm": x / 5, "width_mm": 6, "height_mm": 6}),
+        );
+    }
+    let ids: Vec<_> = app
+        .session
+        .doc(None)
+        .unwrap()
+        .elements()
+        .map(|e| e.id)
+        .collect();
+    app.select(&ids[..2]);
+    let mut h = harness(app);
+    h.run();
+    h.get_by_label("Arrange").click();
+    h.run();
+    h.get_by_label_contains("Group").click();
+    h.run();
+    // Selecting one member selects the group.
+    h.state_mut().select(&ids[..1]);
+    assert_eq!(h.state().selection(), ids[..2].to_vec());
+    h.get_by_label("Arrange").click();
+    h.run();
+    h.get_by_label("Align").click();
+    h.run();
+    h.get_by_label("Top edges").click();
+    h.run();
+    let doc = h.state().session.doc(None).unwrap();
+    let ys: Vec<f64> = doc.elements().map(|e| e.y_mm).collect();
+    assert_eq!(ys, vec![1.0, 1.0, 7.0]);
+}

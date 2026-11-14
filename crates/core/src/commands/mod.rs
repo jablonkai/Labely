@@ -1,5 +1,6 @@
 //! Built-in commands. Registered in [`crate::registry`].
 
+pub mod arrange;
 pub mod data;
 pub mod decor;
 pub mod device;

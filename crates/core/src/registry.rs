@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
 use crate::commands::{
-    data, decor, device, doc, element, history, meta, render, selection, table, variable,
+    arrange, data, decor, device, doc, element, history, meta, render, selection, table, variable,
 };
 use crate::schema::{output_schema, params_schema};
 
@@ -317,6 +317,11 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<element::Delete>().in_menu("edit", Some("Delete")),
         Entry::of::<element::Duplicate>().in_menu("edit", Some("Ctrl+D")),
         Entry::of::<element::Reorder>().in_menu("arrange", None),
+        Entry::of::<arrange::Align>(),
+        Entry::of::<arrange::Distribute>(),
+        Entry::of::<arrange::Group>().in_menu("arrange", Some("Ctrl+G")),
+        Entry::of::<arrange::Ungroup>().in_menu("arrange", Some("Ctrl+Shift+G")),
+        Entry::of::<arrange::Lock>().in_menu("arrange", Some("Ctrl+L")),
         Entry::of::<history::Undo>().in_menu("edit", Some("Ctrl+Z")),
         Entry::of::<history::Redo>().in_menu("edit", Some("Ctrl+Shift+Z")),
         Entry::of::<history::Journal>(),

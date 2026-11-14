@@ -234,7 +234,26 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
         radius,
         Color32::from_black_alpha(40),
     );
-    painter.rect_filled(label, radius, Color32::WHITE);
+    let [r, g, b] = app.ui.label_color;
+    painter.rect_filled(label, radius, Color32::from_rgb(r, g, b));
+    if app.ui.show_grid && app.ui.grid_mm > 0.0 {
+        let step = app.ui.grid_mm as f32 * zoom;
+        // Thin out dense grids: draw every n-th line so lines stay ≥ 6 px apart.
+        let every = (6.0 / step).ceil().max(1.0);
+        let grid = Stroke::new(0.5, Color32::from_black_alpha(28));
+        let mut i = every;
+        while i * step < label.width() {
+            let x = label.left() + i * step;
+            painter.line_segment([pos2(x, label.top()), pos2(x, label.bottom())], grid);
+            i += every;
+        }
+        let mut i = every;
+        while i * step < label.height() {
+            let y = label.top() + i * step;
+            painter.line_segment([pos2(label.left(), y), pos2(label.right(), y)], grid);
+            i += every;
+        }
+    }
     ensure_raster(app, ui.ctx(), &doc);
     if let Some(r) = &app.raster {
         painter.image(
@@ -289,6 +308,28 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
         }
     }
 
+    if app.ui.gesture.is_some() {
+        let guide = Stroke::new(1.0, Color32::from_rgb(230, 60, 140));
+        for x in &app.ui.guides.0 {
+            let p = view.to_screen(*x, 0.0).x;
+            painter.line_segment([pos2(p, area.top()), pos2(p, area.bottom())], guide);
+        }
+        for y in &app.ui.guides.1 {
+            let p = view.to_screen(0.0, *y).y;
+            painter.line_segment([pos2(area.left(), p), pos2(area.right(), p)], guide);
+        }
+    }
+    for e in doc.elements().filter(|e| e.locked && !e.hidden) {
+        let (x, y) = Frame::of(e).center();
+        painter.text(
+            view.to_screen(x, y),
+            egui::Align2::CENTER_CENTER,
+            "🔒",
+            egui::FontId::proportional(11.0),
+            Color32::from_black_alpha(110),
+        );
+    }
+
     // Input.
     let shift = ui.input(|i| i.modifiers.shift);
     if resp.drag_started()
@@ -301,10 +342,12 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     if resp.dragged()
         && let Some(p) = resp.interact_pointer_pos()
     {
-        update_gesture(app, &view, p, shift);
+        let alt = ui.input(|i| i.modifiers.alt);
+        update_gesture(app, &view, p, shift, alt);
     }
     if resp.drag_stopped() {
         app.ui.gesture = None;
+        app.ui.guides = (Vec::new(), Vec::new());
     }
     if resp.clicked()
         && let Some(p) = resp.interact_pointer_pos()
@@ -386,6 +429,7 @@ fn start_gesture(
             sel = vec![target];
         }
         app.select(&sel);
+        sel = app.selection();
     }
     let originals: Vec<_> = sel
         .iter()
@@ -396,10 +440,12 @@ fn start_gesture(
     if originals.is_empty() {
         return;
     }
+    let bounds = union_bounds(doc, originals.iter().map(|o| o.0));
     let key = app.next_key("move");
     app.ui.gesture = Some(Gesture::Move {
         start: p,
         originals,
+        bounds,
         key,
     });
 }
@@ -409,7 +455,73 @@ fn tidy(v: f64) -> f64 {
     (v * 10.0).round() / 10.0
 }
 
-fn update_gesture(app: &mut LabelyApp, view: &View, p: Pos2, shift: bool) {
+/// Union of the elements' rotated bounding boxes, mm.
+fn union_bounds(doc: &Document, ids: impl Iterator<Item = ElementId>) -> (f64, f64, f64, f64) {
+    ids.filter_map(|id| doc.element(id))
+        .map(labely_core::Element::bounds)
+        .fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |a, b| {
+            (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3))
+        })
+}
+
+/// A snapped drag offset and the guide lines it snapped to.
+#[derive(Debug, PartialEq)]
+pub struct Snapped {
+    pub dx: f64,
+    pub dy: f64,
+    pub xs: Vec<f64>,
+    pub ys: Vec<f64>,
+}
+
+/// Snap a drag of `bounds` by (dx, dy): edges and centres go to the label's edges and centre
+/// and to other elements' edges and centres within `thr` mm; otherwise the left/top edge goes
+/// to the `grid` when one is shown.
+pub fn snap(
+    doc: &Document,
+    moving: &[ElementId],
+    bounds: (f64, f64, f64, f64),
+    dx: f64,
+    dy: f64,
+    thr: f64,
+    grid: Option<f64>,
+) -> Snapped {
+    let (w, h) = (doc.label.width_mm, doc.label.height_mm);
+    let mut cx = vec![0.0, w / 2.0, w];
+    let mut cy = vec![0.0, h / 2.0, h];
+    for e in doc
+        .elements()
+        .filter(|e| !e.hidden && !moving.contains(&e.id))
+    {
+        let b = e.bounds();
+        cx.extend([b.0, (b.0 + b.2) / 2.0, b.2]);
+        cy.extend([b.1, (b.1 + b.3) / 2.0, b.3]);
+    }
+    let axis = |lo: f64, hi: f64, d: f64, cands: &[f64]| -> (f64, Option<f64>) {
+        let mine = [lo + d, (lo + hi) / 2.0 + d, hi + d];
+        let best = cands
+            .iter()
+            .flat_map(|c| mine.iter().map(move |m| (c - m, *c)))
+            .filter(|(off, _)| off.abs() <= thr)
+            .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()));
+        match best {
+            Some((off, line)) => (d + off, Some(line)),
+            None => match grid {
+                Some(g) if g > 0.0 => (((lo + d) / g).round() * g - lo, None),
+                _ => (d, None),
+            },
+        }
+    };
+    let (dx, gx) = axis(bounds.0, bounds.2, dx, &cx);
+    let (dy, gy) = axis(bounds.1, bounds.3, dy, &cy);
+    Snapped {
+        dx,
+        dy,
+        xs: gx.into_iter().collect(),
+        ys: gy.into_iter().collect(),
+    }
+}
+
+fn update_gesture(app: &mut LabelyApp, view: &View, p: Pos2, shift: bool, alt: bool) {
     let Some(g) = app.ui.gesture.clone() else {
         return;
     };
@@ -417,13 +529,35 @@ fn update_gesture(app: &mut LabelyApp, view: &View, p: Pos2, shift: bool) {
         Gesture::Move {
             start,
             originals,
+            bounds,
             key,
         } => {
             let d = (p - start) / view.zoom;
+            let (mut dx, mut dy) = (f64::from(d.x), f64::from(d.y));
+            app.ui.guides = (Vec::new(), Vec::new());
+            // Alt drags freely.
+            if app.ui.snap
+                && !alt
+                && let Some(doc) = app.session.doc(None)
+            {
+                let moving: Vec<ElementId> = originals.iter().map(|o| o.0).collect();
+                let grid = app.ui.show_grid.then_some(app.ui.grid_mm);
+                let s = snap(
+                    doc,
+                    &moving,
+                    bounds,
+                    dx,
+                    dy,
+                    6.0 / f64::from(view.zoom),
+                    grid,
+                );
+                (dx, dy) = (s.dx, s.dy);
+                app.ui.guides = (s.xs, s.ys);
+            }
             for (id, x0, y0) in originals {
                 app.run(
                     "element.move",
-                    json!({"id": id, "x_mm": tidy(x0 + f64::from(d.x)), "y_mm": tidy(y0 + f64::from(d.y)), "coalesce": key}),
+                    json!({"id": id, "x_mm": tidy(x0 + dx), "y_mm": tidy(y0 + dy), "coalesce": key}),
                 );
             }
         }
@@ -485,6 +619,33 @@ mod tests {
         let r = f.resized((1, 1), 15.0, 35.0);
         let after = r.to_world(-r.w / 2.0, -r.h / 2.0);
         assert!((fixed.0 - after.0).abs() < 1e-9 && (fixed.1 - after.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn snapping_prefers_nearby_lines_then_grid() {
+        let mut s = labely_core::Session::new(labely_printers::default_services());
+        s.execute("doc.new", json!({"width_mm": 40, "height_mm": 30}));
+        s.execute(
+            "element.add_rect",
+            json!({"x_mm": 10, "y_mm": 10, "width_mm": 4, "height_mm": 4}),
+        );
+        s.execute(
+            "element.add_rect",
+            json!({"x_mm": 30, "y_mm": 2, "width_mm": 5, "height_mm": 5}),
+        );
+        let doc = s.doc(None).unwrap();
+        let me = [ElementId(1)];
+        let b = (10.0, 10.0, 14.0, 14.0);
+        // Right edge 14 + 15.7 = 29.7 snaps to the other's left edge at 30.
+        let r = snap(doc, &me, b, 15.7, 0.0, 0.5, None);
+        assert!((r.dx - 16.0).abs() < 1e-9 && r.xs == vec![30.0], "{r:?}");
+        // Centre 12 + 7.9 = 19.9 snaps to the label centre 20 (y untouched: 10+0.2 → 10.2).
+        let r = snap(doc, &me, b, 7.9, 0.2, 0.5, None);
+        assert!((r.dx - 8.0).abs() < 1e-9 && r.ys.is_empty());
+        // Nothing near: the grid rounds the left/top edge.
+        let r = snap(doc, &me, b, 3.3, 3.3, 0.1, Some(1.0));
+        assert!((r.dx - 3.0).abs() < 1e-9 && (r.dy - 3.0).abs() < 1e-9);
+        assert_eq!(snap(doc, &me, b, 3.3, 3.3, 0.1, None).dx, 3.3);
     }
 
     #[test]

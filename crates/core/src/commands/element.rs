@@ -194,6 +194,7 @@ pub(crate) fn add(
         hidden: false,
         flip_h: false,
         flip_v: false,
+        group: None,
         kind,
     };
     validate_element(&e)?;
@@ -964,6 +965,7 @@ impl Command for Duplicate {
         copy.x_mm += dx;
         copy.y_mm += dy;
         copy.locked = false;
+        copy.group = None;
         let page = page.unwrap_or(0);
         if let Some(pg) = doc.pages.get_mut(page) {
             pg.elements.push(copy);
