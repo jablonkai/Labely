@@ -108,6 +108,24 @@ pub trait Renderer: Send + Sync {
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode>;
     /// Encode a 1-bit bitmap as PNG.
     fn to_png(&self, bitmap: &Bitmap1) -> Result<Vec<u8>, RenderError>;
+    /// Names of the built-in icons, with their category.
+    fn icons(&self) -> Vec<IconInfo> {
+        Vec::new()
+    }
+    /// Decode every barcode and 2D code in an image file's bytes (PNG, JPEG, BMP, WebP).
+    fn decode_image(&self, bytes: &[u8]) -> Result<Vec<DecodedCode>, RenderError> {
+        let _ = bytes;
+        Err(RenderError::Other(
+            "image decoding is not supported".to_owned(),
+        ))
+    }
+}
+
+/// One built-in icon.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct IconInfo {
+    pub name: String,
+    pub category: String,
 }
 
 /// Printer model facts that commands need (subset of the registry entry).

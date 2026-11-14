@@ -241,6 +241,12 @@ pub struct Element {
     pub locked: bool,
     #[serde(default)]
     pub hidden: bool,
+    /// Mirror left–right inside the frame (before rotation).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub flip_h: bool,
+    /// Mirror top–bottom inside the frame (before rotation).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub flip_v: bool,
     #[serde(flatten)]
     pub kind: ElementKind,
 }
@@ -256,6 +262,9 @@ pub enum ElementKind {
     Rect(ShapeProps),
     Ellipse(ShapeProps),
     Line(LineProps),
+    Table(TableProps),
+    Icon(IconProps),
+    Border(BorderProps),
 }
 
 impl ElementKind {
@@ -269,6 +278,9 @@ impl ElementKind {
             Self::Rect(_) => "rect",
             Self::Ellipse(_) => "ellipse",
             Self::Line(_) => "line",
+            Self::Table(_) => "table",
+            Self::Icon(_) => "icon",
+            Self::Border(_) => "border",
         }
     }
 }
@@ -333,6 +345,23 @@ pub struct TextProps {
     /// White text on black.
     #[serde(default)]
     pub invert: bool,
+    /// Horizontal, or vertical: one character per row, top to bottom.
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub direction: TextDirection,
+}
+
+/// Text flow. Text turned 90° is `rotation_deg: 90`; curved text is planned for Phase 6.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TextDirection {
+    #[default]
+    Horizontal,
+    /// Characters stacked top to bottom; each source line is separated by a blank row.
+    Vertical,
+}
+
+fn is_default<T: Default + PartialEq>(v: &T) -> bool {
+    *v == T::default()
 }
 
 /// Default bundled font family.
@@ -346,6 +375,9 @@ fn default_font_size() -> f64 {
 }
 fn one() -> f64 {
     1.0
+}
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 fn yes() -> bool {
     true
@@ -367,6 +399,7 @@ impl Default for TextProps {
             wrap: true,
             fit: TextFit::None,
             invert: false,
+            direction: TextDirection::Horizontal,
         }
     }
 }
@@ -526,6 +559,201 @@ fn default_stroke() -> f64 {
     0.3
 }
 
+/// Most rows or columns in a table.
+pub const MAX_TABLE_DIM: usize = 64;
+
+/// A grid that fills its frame. Column widths and row heights are relative weights, so resizing
+/// the element scales the table.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TableProps {
+    /// Relative column widths (weights > 0).
+    pub column_widths: Vec<f64>,
+    /// Relative row heights (weights > 0).
+    pub row_heights: Vec<f64>,
+    /// Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.
+    pub cells: Vec<Vec<TableCell>>,
+    /// Merged cell ranges; the top-left cell's content fills the range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub merges: Vec<CellRange>,
+    /// Grid line width in mm; 0 hides the lines.
+    #[serde(default = "default_stroke")]
+    pub stroke_mm: f64,
+    #[serde(default = "default_font")]
+    pub font_family: String,
+    /// Default cell font size; text shrinks to fit its cell.
+    #[serde(default = "default_table_font")]
+    pub font_size_pt: f64,
+    /// Default cell alignment.
+    #[serde(default = "center")]
+    pub align: HAlign,
+}
+
+fn default_table_font() -> f64 {
+    8.0
+}
+fn center() -> HAlign {
+    HAlign::Center
+}
+
+impl TableProps {
+    /// `rows × cols` empty cells with equal sizes.
+    pub fn new(rows: usize, cols: usize) -> Self {
+        Self {
+            column_widths: vec![1.0; cols],
+            row_heights: vec![1.0; rows],
+            cells: vec![vec![TableCell::default(); cols]; rows],
+            merges: Vec::new(),
+            stroke_mm: default_stroke(),
+            font_family: default_font(),
+            font_size_pt: default_table_font(),
+            align: HAlign::Center,
+        }
+    }
+
+    /// The merge covering `(row, col)`, if any.
+    pub fn merge_at(&self, row: usize, col: usize) -> Option<&CellRange> {
+        self.merges.iter().find(|m| m.contains(row, col))
+    }
+
+    /// Check sizes, weights and merges; `Err` names the problem.
+    pub fn validate(&self) -> Result<(), String> {
+        let (rows, cols) = (self.row_heights.len(), self.column_widths.len());
+        if rows == 0 || cols == 0 || rows > MAX_TABLE_DIM || cols > MAX_TABLE_DIM {
+            return Err(format!(
+                "a table needs 1–{MAX_TABLE_DIM} rows and columns, got {rows}×{cols}"
+            ));
+        }
+        if let Some(w) = self
+            .column_widths
+            .iter()
+            .chain(&self.row_heights)
+            .find(|w| !(w.is_finite() && **w > 0.0))
+        {
+            return Err(format!(
+                "row heights and column widths must be > 0, got {w}"
+            ));
+        }
+        if self.cells.len() != rows || self.cells.iter().any(|r| r.len() != cols) {
+            return Err(format!("`cells` must be {rows} rows of {cols} cells"));
+        }
+        for (i, m) in self.merges.iter().enumerate() {
+            if m.rows == 0 || m.cols == 0 || m.rows * m.cols < 2 {
+                return Err(format!("merge {i} must span at least two cells"));
+            }
+            if m.row + m.rows > rows || m.col + m.cols > cols {
+                return Err(format!("merge {i} extends outside the {rows}×{cols} table"));
+            }
+            if self.merges[..i].iter().any(|o| o.overlaps(m)) {
+                return Err(format!("merge {i} overlaps another merge"));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// One table cell. Style fields override the table defaults.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TableCell {
+    /// Cell text; may contain `{{name}}` bindings and newlines.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bold: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub align: Option<HAlign>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size_pt: Option<f64>,
+    /// White text on a black cell.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub invert: bool,
+}
+
+/// A rectangular block of cells, 0-based.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CellRange {
+    pub row: usize,
+    pub col: usize,
+    pub rows: usize,
+    pub cols: usize,
+}
+
+impl CellRange {
+    pub fn contains(&self, row: usize, col: usize) -> bool {
+        (self.row..self.row + self.rows).contains(&row)
+            && (self.col..self.col + self.cols).contains(&col)
+    }
+
+    pub fn overlaps(&self, o: &CellRange) -> bool {
+        self.row < o.row + o.rows
+            && o.row < self.row + self.rows
+            && self.col < o.col + o.cols
+            && o.col < self.col + self.cols
+    }
+}
+
+/// A built-in icon from the bundled set (`labely-render` lists the names).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct IconProps {
+    /// Icon name, e.g. `fragile`, `keep_dry`, `this_way_up`, `recycle`.
+    pub icon: String,
+    /// Keep the icon's aspect ratio inside the frame (default true).
+    #[serde(default = "yes")]
+    pub keep_aspect: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub invert: bool,
+}
+
+/// Decorative frame styles.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BorderStyle {
+    #[default]
+    Single,
+    Double,
+    /// A thick outer line and a thin inner line.
+    ThickThin,
+    Dashed,
+    Dotted,
+    /// Corner brackets only.
+    Corners,
+    /// Concave (ticket-style) corners.
+    Ticket,
+    /// Scalloped edge.
+    Scallop,
+}
+
+/// A frame drawn just inside the element's box.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BorderProps {
+    #[serde(default)]
+    pub style: BorderStyle,
+    /// Line width in mm.
+    #[serde(default = "default_border_stroke")]
+    pub stroke_mm: f64,
+    /// Corner radius in mm (single, double, thick_thin, dashed, dotted).
+    #[serde(default)]
+    pub corner_radius_mm: f64,
+}
+
+fn default_border_stroke() -> f64 {
+    0.5
+}
+
+impl Default for BorderProps {
+    fn default() -> Self {
+        Self {
+            style: BorderStyle::Single,
+            stroke_mm: default_border_stroke(),
+            corner_radius_mm: 0.0,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -544,6 +772,8 @@ mod tests {
             rotation_deg: 0.0,
             locked: false,
             hidden: false,
+            flip_h: false,
+            flip_v: false,
             kind: ElementKind::Text(TextProps {
                 text: "Hi".into(),
                 ..Default::default()

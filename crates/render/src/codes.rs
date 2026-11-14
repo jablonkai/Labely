@@ -144,6 +144,28 @@ pub(crate) fn decode(bitmap: &Bitmap1) -> Vec<DecodedCode> {
             }
         }
     }
+    decode_luma(luma, w, h)
+}
+
+/// Decode an image file (PNG, JPEG, BMP, WebP); a white margin is added around it.
+pub(crate) fn decode_image(bytes: &[u8]) -> Result<Vec<DecodedCode>, String> {
+    let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
+    let img = if img.width().max(img.height()) > 2400 {
+        img.resize(2400, 2400, image::imageops::FilterType::Triangle)
+    } else {
+        img
+    };
+    let g = img.to_luma8();
+    let m = 16;
+    let (w, h) = (g.width() + 2 * m, g.height() + 2 * m);
+    let mut luma = vec![255u8; (w * h) as usize];
+    for (x, y, p) in g.enumerate_pixels() {
+        luma[((y + m) * w + x + m) as usize] = p.0[0];
+    }
+    Ok(decode_luma(luma, w, h))
+}
+
+fn decode_luma(luma: Vec<u8>, w: u32, h: u32) -> Vec<DecodedCode> {
     let Ok(source) = Luma8LuminanceSource::new(luma, w, h) else {
         return Vec::new();
     };

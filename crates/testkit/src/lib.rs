@@ -163,6 +163,29 @@ impl Renderer for FakeRenderer {
     fn to_png(&self, bitmap: &Bitmap1) -> Result<Vec<u8>, RenderError> {
         Ok(png_1bit(bitmap))
     }
+
+    fn icons(&self) -> Vec<labely_core::services::IconInfo> {
+        [("check", "symbols"), ("fragile", "handling")]
+            .into_iter()
+            .map(|(n, c)| labely_core::services::IconInfo {
+                name: n.to_owned(),
+                category: c.to_owned(),
+            })
+            .collect()
+    }
+
+    /// "Decodes" UTF-8 bytes of the form `format:text` (one code per line).
+    fn decode_image(&self, bytes: &[u8]) -> Result<Vec<DecodedCode>, RenderError> {
+        let s =
+            std::str::from_utf8(bytes).map_err(|_| RenderError::Other("not an image".into()))?;
+        Ok(s.lines()
+            .filter_map(|l| l.split_once(':'))
+            .map(|(f, t)| DecodedCode {
+                format: f.to_owned(),
+                text: t.to_owned(),
+            })
+            .collect())
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -446,6 +469,8 @@ mod tests {
             rotation_deg: 0.0,
             locked: false,
             hidden: false,
+            flip_h: false,
+            flip_v: false,
             kind: ElementKind::Rect(Default::default()),
         });
         let r = FakeRenderer::new();

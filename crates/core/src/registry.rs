@@ -9,7 +9,9 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
-use crate::commands::{data, device, doc, element, history, meta, render, selection, variable};
+use crate::commands::{
+    data, decor, device, doc, element, history, meta, render, selection, table, variable,
+};
 use crate::schema::{output_schema, params_schema};
 
 type RunFn = fn(&mut Ctx<'_>, Value) -> Result<Value, CommandError>;
@@ -302,6 +304,12 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<element::AddRect>().in_menu("insert", Some("R")),
         Entry::of::<element::AddEllipse>().in_menu("insert", Some("E")),
         Entry::of::<element::AddLine>().in_menu("insert", Some("L")),
+        Entry::of::<table::AddTable>().in_menu("insert", None),
+        Entry::of::<decor::AddIcon>().in_menu("insert", None),
+        Entry::of::<decor::AddBorder>().in_menu("insert", None),
+        Entry::of::<table::TableEdit>(),
+        Entry::of::<decor::IconList>(),
+        Entry::of::<decor::CodeDecode>(),
         Entry::of::<element::SetProps>(),
         Entry::of::<element::Move>(),
         Entry::of::<element::Resize>(),

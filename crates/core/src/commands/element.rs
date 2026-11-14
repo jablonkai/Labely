@@ -22,6 +22,8 @@ pub const FRAME_KEYS: &[&str] = &[
     "rotation_deg",
     "locked",
     "hidden",
+    "flip_h",
+    "flip_v",
 ];
 
 /// Largest embeddable image, bytes.
@@ -68,13 +70,15 @@ macro_rules! add_params {
     };
 }
 
-struct Frame {
-    x_mm: f64,
-    y_mm: f64,
-    width_mm: f64,
-    height_mm: f64,
-    rotation_deg: f64,
-    name: Option<String>,
+pub(crate) use add_params;
+
+pub(crate) struct Frame {
+    pub(crate) x_mm: f64,
+    pub(crate) y_mm: f64,
+    pub(crate) width_mm: f64,
+    pub(crate) height_mm: f64,
+    pub(crate) rotation_deg: f64,
+    pub(crate) name: Option<String>,
 }
 
 /// Validate frame and props of an element.
@@ -140,6 +144,26 @@ pub(crate) fn validate_element(e: &Element) -> Result<(), CommandError> {
                 positive("dash_mm", g)?;
             }
         }
+        ElementKind::Table(t) => {
+            non_negative("stroke_mm", t.stroke_mm)?;
+            positive("font_size_pt", t.font_size_pt)?;
+            t.validate()
+                .map_err(|m| CommandError::bad_params(m).with_param("cells"))?;
+            if let Some(s) = t.cells.iter().flatten().find_map(|c| c.font_size_pt) {
+                positive("font_size_pt", s)?;
+            }
+        }
+        ElementKind::Icon(i) => {
+            if i.icon.trim().is_empty() {
+                return Err(CommandError::bad_params("`icon` must name an icon")
+                    .with_param("icon")
+                    .with_hint("run icon.list for the names"));
+            }
+        }
+        ElementKind::Border(b) => {
+            positive("stroke_mm", b.stroke_mm)?;
+            non_negative("corner_radius_mm", b.corner_radius_mm)?;
+        }
     }
     Ok(())
 }
@@ -150,7 +174,7 @@ pub struct AddOutput {
     pub id: ElementId,
 }
 
-fn add(
+pub(crate) fn add(
     ctx: &mut Ctx<'_>,
     doc_id: Option<&str>,
     frame: Frame,
@@ -168,6 +192,8 @@ fn add(
         rotation_deg: frame.rotation_deg.rem_euclid(360.0),
         locked: false,
         hidden: false,
+        flip_h: false,
+        flip_v: false,
         kind,
     };
     validate_element(&e)?;
@@ -217,6 +243,9 @@ add_params!(TextParams {
     /// White text on black.
     #[serde(default)]
     invert: Option<bool>,
+    /// `horizontal` (default) or `vertical` (characters stacked top to bottom).
+    #[serde(default)]
+    direction: Option<TextDirection>,
 });
 
 /// `element.add_text`
@@ -232,7 +261,8 @@ impl Command for AddText {
         CommandMeta::edit(
             "Add text",
             "Add a text box. Frame in mm (x_mm, y_mm = top-left; width_mm, height_mm), \
-             rotation_deg clockwise; font_size_pt in points. `{{name}}` binds a variable. \
+             rotation_deg clockwise; font_size_pt in points. `{{name}}` binds a data column, \
+             serial or variable; `{{now:%d.%m.%Y}}` or `{{now+30d}}` prints the date. \
              Returns {id}.",
         )
     }
@@ -244,7 +274,7 @@ impl Command for AddText {
             ..Default::default()
         };
         set_opt!(t, p: font_family, font_size_pt, bold, italic, underline, align, valign,
-            line_spacing, letter_spacing_mm, wrap, fit, invert);
+            line_spacing, letter_spacing_mm, wrap, fit, invert, direction);
         add(ctx, p.doc_id.as_deref(), frame, ElementKind::Text(t))
     }
 }
@@ -592,6 +622,9 @@ fn kind_keys(kind: &ElementKind) -> Vec<String> {
         ElementKind::Image(_) => property_names::<ImageProps>(),
         ElementKind::Rect(_) | ElementKind::Ellipse(_) => property_names::<ShapeProps>(),
         ElementKind::Line(_) => property_names::<LineProps>(),
+        ElementKind::Table(_) => property_names::<TableProps>(),
+        ElementKind::Icon(_) => property_names::<IconProps>(),
+        ElementKind::Border(_) => property_names::<BorderProps>(),
     }
 }
 
@@ -615,6 +648,9 @@ fn check_kind_props(kind: &ElementKind, v: Value) -> Option<CommandError> {
         ElementKind::Image(_) => try_as::<ImageProps>(v),
         ElementKind::Rect(_) | ElementKind::Ellipse(_) => try_as::<ShapeProps>(v),
         ElementKind::Line(_) => try_as::<LineProps>(v),
+        ElementKind::Table(_) => try_as::<TableProps>(v),
+        ElementKind::Icon(_) => try_as::<IconProps>(v),
+        ElementKind::Border(_) => try_as::<BorderProps>(v),
     }
 }
 
@@ -625,7 +661,7 @@ pub struct SetPropsParams {
     pub doc_id: Option<String>,
     pub id: ElementId,
     /// Partial element JSON: frame fields (name, x_mm, y_mm, width_mm, height_mm,
-    /// rotation_deg, locked, hidden) and the element type's props (e.g. text, font_size_pt,
+    /// rotation_deg, locked, hidden, flip_h, flip_v) and the element type's props (e.g. text, font_size_pt,
     /// data, symbology, stroke_mm). `null` resets a field to its default.
     pub props: Map<String, Value>,
 }

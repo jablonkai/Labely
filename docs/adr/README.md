@@ -16,3 +16,5 @@
 | [0012](0012-session-policy.md) | Session policy: file roots, print gating | proposed |
 | [0013](0013-i18n-crate.md) | `labely-i18n` crate | proposed |
 | [0014](0014-data-sources-and-serials.md) | Data sources and serial numbers | proposed |
+| [0015](0015-date-bindings-flip-vertical-text.md) | Date bindings, flip, vertical text | proposed |
+| [0016](0016-tables-icons-borders.md) | Tables, icons, borders, reading codes from images | proposed |

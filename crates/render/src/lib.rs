@@ -9,6 +9,7 @@
 
 mod codes;
 mod dither;
+mod icons;
 mod shapes;
 mod text;
 
@@ -17,7 +18,7 @@ use std::sync::{Mutex, PoisonError};
 use base64::Engine as _;
 use labely_core::document::{
     BarcodeProps, Code2dProps, DEFAULT_FONT, Dither, Element, ElementKind, HumanReadable, ImageFit,
-    ImageProps, Symbology2d, TextFit, TextProps, VAlign,
+    ImageProps, Symbology2d, TableProps, TextDirection, TextFit, TextProps, VAlign,
 };
 use labely_core::raster::Bitmap1;
 use labely_core::services::{
@@ -108,6 +109,20 @@ impl Renderer for LabelRenderer {
 
     fn to_png(&self, bitmap: &Bitmap1) -> Result<Vec<u8>, RenderError> {
         bitmap_to_png(bitmap)
+    }
+
+    fn icons(&self) -> Vec<labely_core::services::IconInfo> {
+        icons::ICONS
+            .iter()
+            .map(|(name, category, _)| labely_core::services::IconInfo {
+                name: (*name).to_owned(),
+                category: (*category).to_owned(),
+            })
+            .collect()
+    }
+
+    fn decode_image(&self, bytes: &[u8]) -> Result<Vec<DecodedCode>, RenderError> {
+        codes::decode_image(bytes).map_err(RenderError::Other)
     }
 }
 
@@ -299,13 +314,22 @@ fn render_element(
     } else {
         0.0
     };
+    let (sx, sy) = (
+        if el.flip_h { -1.0 } else { 1.0 },
+        if el.flip_v { -1.0 } else { 1.0 },
+    );
     let ts = |w: f32, h: f32| {
-        let t = Transform::from_translate(x0 as f32, y0 as f32);
-        if rot == 0.0 {
-            t
-        } else {
-            t.pre_rotate_at(rot, w / 2.0, h / 2.0)
+        let mut t = Transform::from_translate(x0 as f32, y0 as f32);
+        if rot != 0.0 {
+            t = t.pre_rotate_at(rot, w / 2.0, h / 2.0);
         }
+        if sx < 0.0 || sy < 0.0 {
+            t = t
+                .pre_translate(w / 2.0, h / 2.0)
+                .pre_scale(sx, sy)
+                .pre_translate(-w / 2.0, -h / 2.0);
+        }
+        t
     };
     let mut layer = pixmap(lw, lh)?;
     if let ElementKind::Line(p) = &el.kind {
@@ -331,6 +355,26 @@ fn render_element(
             return Ok(Some((layer, Conv::Threshold)));
         }
         ElementKind::Line(_) => return Ok(None),
+        ElementKind::Border(p) => {
+            shapes::draw_border(&mut layer, p, w as f32, h as f32, dpm, frame_ts);
+            return Ok(Some((layer, Conv::Threshold)));
+        }
+        ElementKind::Table(p) => Some((table_layer(ctx, engine, el, p, w, h)?, Conv::Threshold)),
+        ElementKind::Icon(p) => match icons::render(&p.icon, w, h, p.keep_aspect) {
+            Some(mut pm) => {
+                if p.invert {
+                    invert_alpha(&mut pm);
+                }
+                Some((pm, Conv::Threshold))
+            }
+            None => {
+                ctx.issues.push(RenderIssue::BadAsset {
+                    element_id: el.id,
+                    message: format!("unknown icon `{}`", p.icon),
+                });
+                None
+            }
+        },
         ElementKind::Text(p) => Some((text_layer(ctx, engine, el, p, w, h)?, Conv::Threshold)),
         ElementKind::Barcode(p) => {
             barcode_layer(ctx, engine, el, p, w, h)?.map(|l| (l, Conv::Threshold))
@@ -381,6 +425,24 @@ fn text_layer(
     h: u32,
 ) -> Result<Pixmap, RenderError> {
     let s = ctx.subst(&p.text);
+    let s = match p.direction {
+        TextDirection::Horizontal => s,
+        TextDirection::Vertical => text::vertical(&s),
+    };
+    draw_text(ctx, engine, el, p, &s, w, h)
+}
+
+/// Lay out and draw already-substituted text `s` with `p`'s style into a `w`×`h` pixmap.
+fn draw_text(
+    ctx: &mut Ctx<'_>,
+    engine: &mut TextEngine,
+    el: &Element,
+    p: &TextProps,
+    s: &str,
+    w: u32,
+    h: u32,
+) -> Result<Pixmap, RenderError> {
+    let s = s.to_owned();
     let mut st = text_style(engine, ctx, el, p);
     let (bw, bh) = (w as f32, h as f32);
     let fits = |l: &text::Laid| l.width <= bw + 0.5 && l.height <= bh + 0.5;
@@ -425,6 +487,161 @@ fn text_layer(
             put(&mut pm, i, *c, 255);
         } else {
             put(&mut pm, i, 0, *c);
+        }
+    }
+    Ok(pm)
+}
+
+/// Opaque black where the pixmap is transparent and transparent where it is inked.
+fn invert_alpha(pm: &mut Pixmap) {
+    for px in pm.data_mut().chunks_mut(4) {
+        let a = 255 - px[3];
+        px.copy_from_slice(&[0, 0, 0, a]);
+    }
+}
+
+/// Cumulative edges in dots for relative `weights` spread over `total` dots.
+fn edges(weights: &[f64], total: u32) -> Vec<u32> {
+    let sum: f64 = weights.iter().sum::<f64>().max(f64::MIN_POSITIVE);
+    let mut acc = 0.0;
+    let mut out = vec![0];
+    for w in weights {
+        acc += w;
+        out.push(((acc / sum) * f64::from(total)).round() as u32);
+    }
+    out
+}
+
+/// A table: grid lines (skipping lines inside merges) and shrink-to-fit cell text.
+fn table_layer(
+    ctx: &mut Ctx<'_>,
+    engine: &mut TextEngine,
+    el: &Element,
+    p: &TableProps,
+    w: u32,
+    h: u32,
+) -> Result<Pixmap, RenderError> {
+    let mut pm = pixmap(w, h)?;
+    if p.validate().is_err() {
+        ctx.issues.push(RenderIssue::BadAsset {
+            element_id: el.id,
+            message: "the table's cells, sizes or merges are inconsistent".to_owned(),
+        });
+        return Ok(pm);
+    }
+    let dpm = ctx.dpi as f32 / 25.4;
+    let s = if p.stroke_mm > 0.0 {
+        (p.stroke_mm as f32 * dpm).round().max(1.0)
+    } else {
+        0.0
+    };
+    // Lines are centred on the edges but kept inside the frame.
+    let si = s as u32;
+    let xs = edges(&p.column_widths, w.saturating_sub(si));
+    let ys = edges(&p.row_heights, h.saturating_sub(si));
+    let (rows, cols) = (p.row_heights.len(), p.column_widths.len());
+    let same = |r1: usize, c1: usize, r2: usize, c2: usize| match p.merge_at(r1, c1) {
+        Some(m) => m.contains(r2, c2),
+        None => false,
+    };
+    let pad = (0.4 * dpm).round() as u32 + si;
+    for r in 0..rows {
+        for c in 0..cols {
+            if p.merge_at(r, c).is_some_and(|m| (m.row, m.col) != (r, c)) {
+                continue;
+            }
+            let (r2, c2) = p
+                .merge_at(r, c)
+                .map_or((r + 1, c + 1), |m| (m.row + m.rows, m.col + m.cols));
+            let (x0, y0, x1, y1) = (xs[c], ys[r], xs[c2], ys[r2]);
+            let cell = &p.cells[r][c];
+            if cell.invert {
+                fill_black(&mut pm, x0, y0, x1 - x0 + si, y1 - y0 + si);
+            }
+            let text = ctx.subst(&cell.text);
+            if text.is_empty() {
+                continue;
+            }
+            let (cw, ch) = (
+                (x1 - x0).saturating_sub(pad + si / 2),
+                (y1 - y0).saturating_sub(si),
+            );
+            if cw < 2 || ch < 2 {
+                continue;
+            }
+            let tp = TextProps {
+                text: String::new(),
+                font_family: p.font_family.clone(),
+                font_size_pt: cell.font_size_pt.unwrap_or(p.font_size_pt),
+                bold: cell.bold,
+                align: cell.align.unwrap_or(p.align),
+                valign: VAlign::Middle,
+                fit: TextFit::Shrink,
+                invert: false,
+                ..Default::default()
+            };
+            let layer = draw_text(ctx, engine, el, &tp, &text, cw, ch)?;
+            let paint = PixmapPaint::default();
+            if cell.invert {
+                // White text: punch the glyphs out of the black cell.
+                let mut white = layer;
+                for px in white.data_mut().chunks_mut(4) {
+                    let a = px[3];
+                    px.copy_from_slice(&[a, a, a, a]);
+                }
+                pm.draw_pixmap(
+                    (x0 + pad / 2 + si / 2) as i32,
+                    (y0 + si) as i32,
+                    white.as_ref(),
+                    &paint,
+                    Transform::identity(),
+                    None,
+                );
+            } else {
+                pm.draw_pixmap(
+                    (x0 + pad / 2 + si / 2) as i32,
+                    (y0 + si) as i32,
+                    layer.as_ref(),
+                    &paint,
+                    Transform::identity(),
+                    None,
+                );
+            }
+        }
+    }
+    if s > 0.0 {
+        let id = Transform::identity();
+        let sf = s;
+        // Vertical lines, row by row so merged cells stay open.
+        for (c, &x) in xs.iter().enumerate() {
+            for r in 0..rows {
+                let inner = c > 0 && c < cols && same(r, c - 1, r, c);
+                if !inner {
+                    shapes::bar(
+                        &mut pm,
+                        x as f32,
+                        ys[r] as f32,
+                        x as f32 + sf,
+                        ys[r + 1] as f32 + sf,
+                        id,
+                    );
+                }
+            }
+        }
+        for (r, &y) in ys.iter().enumerate() {
+            for c in 0..cols {
+                let inner = r > 0 && r < rows && same(r - 1, c, r, c);
+                if !inner {
+                    shapes::bar(
+                        &mut pm,
+                        xs[c] as f32,
+                        y as f32,
+                        xs[c + 1] as f32 + sf,
+                        y as f32 + sf,
+                        id,
+                    );
+                }
+            }
         }
     }
     Ok(pm)
