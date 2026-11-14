@@ -1,0 +1,470 @@
+//! The `.labely` document model (ADR-0008). Units are millimetres; ids are stable.
+//!
+//! JSON shape is part of the public format: every change needs a `FORMAT_VERSION` bump
+//! and a migration.
+
+use std::collections::BTreeMap;
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// Current `.labely` format version.
+pub const FORMAT_VERSION: u32 = 1;
+
+/// Stable element id, unique within a document.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(transparent)]
+pub struct ElementId(pub u64);
+
+/// A label document.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Document {
+    pub format_version: u32,
+    pub name: String,
+    pub label: LabelSpec,
+    /// Pages; Phase 1 documents have exactly one.
+    pub pages: Vec<Page>,
+    /// Embedded assets keyed by lowercase hex sha256 of the bytes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub assets: BTreeMap<String, Asset>,
+    /// Free variables usable as `{{name}}` in string properties.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub variables: BTreeMap<String, String>,
+    /// Next id to hand out.
+    pub next_id: u64,
+}
+
+impl Document {
+    /// New empty document with one page.
+    pub fn new(name: impl Into<String>, label: LabelSpec) -> Self {
+        Self {
+            format_version: FORMAT_VERSION,
+            name: name.into(),
+            label,
+            pages: vec![Page::default()],
+            assets: BTreeMap::new(),
+            variables: BTreeMap::new(),
+            next_id: 1,
+        }
+    }
+
+    /// Allocate a fresh element id.
+    pub fn alloc_id(&mut self) -> ElementId {
+        let id = ElementId(self.next_id);
+        self.next_id += 1;
+        id
+    }
+
+    /// Iterate all elements on all pages.
+    pub fn elements(&self) -> impl Iterator<Item = &Element> {
+        self.pages.iter().flat_map(|p| p.elements.iter())
+    }
+
+    pub fn element(&self, id: ElementId) -> Option<&Element> {
+        self.elements().find(|e| e.id == id)
+    }
+
+    pub fn element_mut(&mut self, id: ElementId) -> Option<&mut Element> {
+        self.pages
+            .iter_mut()
+            .flat_map(|p| p.elements.iter_mut())
+            .find(|e| e.id == id)
+    }
+}
+
+/// Physical label stock.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LabelSpec {
+    /// Width across the printhead, mm.
+    pub width_mm: f64,
+    /// Length along the feed, mm.
+    pub height_mm: f64,
+    #[serde(default)]
+    pub corner_radius_mm: f64,
+    #[serde(default)]
+    pub media: MediaType,
+    /// Registry id of the intended printer model, e.g. `niimbot.b21_pro`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printer_model: Option<String>,
+    /// Preferred density; the model default is used when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub density: Option<u8>,
+}
+
+impl Default for LabelSpec {
+    fn default() -> Self {
+        Self {
+            width_mm: 50.0,
+            height_mm: 30.0,
+            corner_radius_mm: 0.0,
+            media: MediaType::Gap,
+            printer_model: None,
+            density: None,
+        }
+    }
+}
+
+/// Media type of the label stock.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaType {
+    #[default]
+    Gap,
+    BlackMark,
+    Continuous,
+    Transparent,
+}
+
+/// One printed page.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Page {
+    /// Z-order: later elements draw on top.
+    pub elements: Vec<Element>,
+}
+
+/// Embedded binary asset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Asset {
+    pub mime: String,
+    /// Standard base64 of the bytes.
+    pub data_base64: String,
+}
+
+/// A positioned element. The frame is the unrotated box; rotation is about its centre.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Element {
+    pub id: ElementId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub x_mm: f64,
+    pub y_mm: f64,
+    pub width_mm: f64,
+    pub height_mm: f64,
+    #[serde(default)]
+    pub rotation_deg: f64,
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub hidden: bool,
+    #[serde(flatten)]
+    pub kind: ElementKind,
+}
+
+/// Element payload, tagged by `"type"`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ElementKind {
+    Text(TextProps),
+    Barcode(BarcodeProps),
+    Code2d(Code2dProps),
+    Image(ImageProps),
+    Rect(ShapeProps),
+    Ellipse(ShapeProps),
+    Line(LineProps),
+}
+
+impl ElementKind {
+    /// Stable type name as used in JSON.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::Text(_) => "text",
+            Self::Barcode(_) => "barcode",
+            Self::Code2d(_) => "code2d",
+            Self::Image(_) => "image",
+            Self::Rect(_) => "rect",
+            Self::Ellipse(_) => "ellipse",
+            Self::Line(_) => "line",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VAlign {
+    #[default]
+    Top,
+    Middle,
+    Bottom,
+}
+
+/// How text reacts when it does not fit its box.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TextFit {
+    /// Keep the size; overflow is reported by `doc.check`.
+    #[default]
+    None,
+    /// Shrink the font until the text fits.
+    Shrink,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TextProps {
+    /// Text; may contain `{{variable}}` bindings and newlines.
+    pub text: String,
+    #[serde(default = "default_font")]
+    pub font_family: String,
+    #[serde(default = "default_font_size")]
+    pub font_size_pt: f64,
+    #[serde(default)]
+    pub bold: bool,
+    #[serde(default)]
+    pub italic: bool,
+    #[serde(default)]
+    pub underline: bool,
+    #[serde(default)]
+    pub align: HAlign,
+    #[serde(default)]
+    pub valign: VAlign,
+    /// Line height multiplier.
+    #[serde(default = "one")]
+    pub line_spacing: f64,
+    #[serde(default)]
+    pub letter_spacing_mm: f64,
+    #[serde(default = "yes")]
+    pub wrap: bool,
+    #[serde(default)]
+    pub fit: TextFit,
+    /// White text on black.
+    #[serde(default)]
+    pub invert: bool,
+}
+
+/// Default bundled font family.
+pub const DEFAULT_FONT: &str = "Noto Sans";
+
+fn default_font() -> String {
+    DEFAULT_FONT.to_owned()
+}
+fn default_font_size() -> f64 {
+    12.0
+}
+fn one() -> f64 {
+    1.0
+}
+fn yes() -> bool {
+    true
+}
+
+impl Default for TextProps {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            font_family: default_font(),
+            font_size_pt: default_font_size(),
+            bold: false,
+            italic: false,
+            underline: false,
+            align: HAlign::Left,
+            valign: VAlign::Top,
+            line_spacing: 1.0,
+            letter_spacing_mm: 0.0,
+            wrap: true,
+            fit: TextFit::None,
+            invert: false,
+        }
+    }
+}
+
+/// 1D symbologies.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Symbology1d {
+    #[default]
+    Code128,
+    Code39,
+    Code93,
+    Ean13,
+    Ean8,
+    UpcA,
+    UpcE,
+    Itf,
+    Codabar,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HumanReadable {
+    None,
+    #[default]
+    Below,
+    Above,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BarcodeProps {
+    pub data: String,
+    #[serde(default)]
+    pub symbology: Symbology1d,
+    #[serde(default)]
+    pub human_readable: HumanReadable,
+    #[serde(default = "default_hr_size")]
+    pub text_size_pt: f64,
+}
+
+fn default_hr_size() -> f64 {
+    8.0
+}
+
+/// 2D symbologies.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Symbology2d {
+    #[default]
+    Qr,
+    DataMatrix,
+    Pdf417,
+    Aztec,
+}
+
+/// QR error-correction level.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum EccLevel {
+    L,
+    #[default]
+    M,
+    Q,
+    H,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Code2dProps {
+    pub data: String,
+    #[serde(default)]
+    pub symbology: Symbology2d,
+    #[serde(default)]
+    pub ecc: EccLevel,
+}
+
+/// 1-bit conversion for images.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Dither {
+    Threshold,
+    #[default]
+    FloydSteinberg,
+    Atkinson,
+    Bayer,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageFit {
+    #[default]
+    Contain,
+    Cover,
+    Stretch,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ImageProps {
+    /// Key into [`Document::assets`].
+    pub asset: String,
+    #[serde(default)]
+    pub fit: ImageFit,
+    #[serde(default)]
+    pub dither: Dither,
+    /// 0–255 cut-off for `threshold` and the gray point for dithering.
+    #[serde(default = "default_threshold")]
+    pub threshold: u8,
+    /// -1.0 … 1.0
+    #[serde(default)]
+    pub brightness: f64,
+    /// -1.0 … 1.0
+    #[serde(default)]
+    pub contrast: f64,
+    #[serde(default)]
+    pub invert: bool,
+}
+
+fn default_threshold() -> u8 {
+    128
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ShapeProps {
+    #[serde(default = "default_stroke")]
+    pub stroke_mm: f64,
+    #[serde(default)]
+    pub fill: bool,
+    /// Rect only.
+    #[serde(default)]
+    pub corner_radius_mm: f64,
+}
+
+impl Default for ShapeProps {
+    fn default() -> Self {
+        Self {
+            stroke_mm: default_stroke(),
+            fill: false,
+            corner_radius_mm: 0.0,
+        }
+    }
+}
+
+/// A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LineProps {
+    #[serde(default = "default_stroke")]
+    pub stroke_mm: f64,
+    /// Dash and gap length in mm; solid when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dash_mm: Option<[f64; 2]>,
+}
+
+fn default_stroke() -> f64 {
+    0.3
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn element_json_is_flat_and_tagged() {
+        let mut d = Document::new("t", LabelSpec::default());
+        let id = d.alloc_id();
+        d.pages[0].elements.push(Element {
+            id,
+            name: None,
+            x_mm: 1.0,
+            y_mm: 2.0,
+            width_mm: 10.0,
+            height_mm: 5.0,
+            rotation_deg: 0.0,
+            locked: false,
+            hidden: false,
+            kind: ElementKind::Text(TextProps {
+                text: "Hi".into(),
+                ..Default::default()
+            }),
+        });
+        let v = serde_json::to_value(&d).unwrap();
+        let e = &v["pages"][0]["elements"][0];
+        assert_eq!(e["type"], "text");
+        assert_eq!(e["text"], "Hi");
+        let back: Document = serde_json::from_value(v).unwrap();
+        assert_eq!(back, d);
+    }
+}

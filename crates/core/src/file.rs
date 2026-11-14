@@ -1,0 +1,95 @@
+//! `.labely` load/save: pretty JSON with a `format_version` gate.
+
+use std::path::{Path, PathBuf};
+
+use serde_json::Value;
+use thiserror::Error;
+
+use crate::document::{Document, FORMAT_VERSION};
+
+/// File extension of the native format.
+pub const EXTENSION: &str = "labely";
+
+#[derive(Debug, Error)]
+pub enum FileError {
+    #[error("cannot read {path}: {source}")]
+    Read {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("cannot write {path}: {source}")]
+    Write {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("not a valid .labely document: {0}")]
+    Parse(String),
+    #[error(
+        "document format_version {found} is newer than this Labely supports ({supported}); upgrade Labely to open it"
+    )]
+    TooNew { found: u64, supported: u32 },
+}
+
+/// Parse a `.labely` JSON string.
+pub fn from_json(text: &str) -> Result<Document, FileError> {
+    let v: Value = serde_json::from_str(text).map_err(|e| FileError::Parse(e.to_string()))?;
+    let found = v
+        .get("format_version")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| FileError::Parse("missing or invalid `format_version`".to_owned()))?;
+    if found > u64::from(FORMAT_VERSION) {
+        return Err(FileError::TooNew {
+            found,
+            supported: FORMAT_VERSION,
+        });
+    }
+    // Version 1 is the only version so far; migrations go here.
+    serde_path_to_error::deserialize(v).map_err(|e| {
+        let path = e.path().to_string();
+        FileError::Parse(format!("at `{path}`: {}", e.into_inner()))
+    })
+}
+
+/// Serialise to pretty JSON with a trailing newline.
+pub fn to_json(doc: &Document) -> Result<String, FileError> {
+    let mut s = serde_json::to_string_pretty(doc).map_err(|e| FileError::Parse(e.to_string()))?;
+    s.push('\n');
+    Ok(s)
+}
+
+pub fn load(path: &Path) -> Result<Document, FileError> {
+    let text = std::fs::read_to_string(path).map_err(|source| FileError::Read {
+        path: path.to_owned(),
+        source,
+    })?;
+    from_json(&text)
+}
+
+/// Save; returns the number of bytes written.
+pub fn save(doc: &Document, path: &Path) -> Result<usize, FileError> {
+    let text = to_json(doc)?;
+    std::fs::write(path, &text).map_err(|source| FileError::Write {
+        path: path.to_owned(),
+        source,
+    })?;
+    Ok(text.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::LabelSpec;
+
+    #[test]
+    fn roundtrip_and_version_gate() {
+        let d = Document::new("x", LabelSpec::default());
+        let s = to_json(&d).unwrap();
+        assert!(s.contains("\n  \"format_version\": 1"));
+        assert_eq!(from_json(&s).unwrap(), d);
+        let newer = s.replace("\"format_version\": 1", "\"format_version\": 99");
+        let e = from_json(&newer).unwrap_err();
+        assert!(matches!(e, FileError::TooNew { found: 99, .. }), "{e}");
+        assert!(e.to_string().contains("upgrade Labely"));
+        assert!(matches!(from_json("{}"), Err(FileError::Parse(_))));
+    }
+}

@@ -1,0 +1,32 @@
+[package]
+name = "labely-transport"
+description = "Byte transports for label printers: BLE, USB serial, in-memory, FFI callback"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+ble = ["dep:btleplug", "dep:tokio", "dep:futures"]
+serial = ["dep:serialport"]
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+btleplug = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+serialport = { workspace = true, optional = true }
+
+[[example]]
+name = "ble_scan"
+required-features = ["ble"]
+
+[[example]]
+name = "serial_list"
+required-features = ["serial"]
+
+[lints]
+workspace = true

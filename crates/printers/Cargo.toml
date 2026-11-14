@@ -1,0 +1,30 @@
+[package]
+name = "labely-printers"
+description = "Printer drivers, model registry, device hub and FakePrinter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+ble = ["labely-transport/ble"]
+serial = ["labely-transport/serial"]
+
+[dependencies]
+labely-core.workspace = true
+labely-protocol.workspace = true
+labely-transport.workspace = true
+labely-render.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+png.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

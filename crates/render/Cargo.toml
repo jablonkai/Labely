@@ -1,0 +1,25 @@
+[package]
+name = "labely-render"
+description = "Labely rasteriser: document to 1-bit bitmap at printer dpi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+labely-core.workspace = true
+tiny-skia.workspace = true
+cosmic-text.workspace = true
+rxing = { workspace = true, features = ["encoders", "decoders", "multi_barcode_readers", "full_barcode_format_support", "encoding_rs"] }
+image.workspace = true
+base64.workspace = true
+# 1-bit PNG output (same version image already pulls in).
+png.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

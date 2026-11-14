@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/labely/labely"
+
+[workspace.dependencies]
+labely-protocol = { path = "crates/protocol" }
+labely-core = { path = "crates/core" }
+labely-render = { path = "crates/render" }
+labely-transport = { path = "crates/transport" }
+labely-printers = { path = "crates/printers" }
+labely-testkit = { path = "crates/testkit" }
+
+serde = { version = "1.0.229", features = ["derive", "rc"] }
+serde_json = "1.0.154"
+schemars = "1.2.3"
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tiny-skia = "0.12.0"
+cosmic-text = "0.19.0"
+rxing = { version = "0.9.4", default-features = false }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
+btleplug = "0.13.5"
+serialport = "4.10.1"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+futures = "0.3.34"
+clap = { version = "4.6.7", features = ["derive"] }
+base64 = "0.23.1"
+sha2 = "0.11.1"
+insta = { version = "1.49.0", features = ["json"] }
+proptest = "1.12.0"
+tempfile = "3.27.0"
+png = "0.18.1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+dbg_macro = "deny"
+
+[profile.dev.package."*"]
+opt-level = 2

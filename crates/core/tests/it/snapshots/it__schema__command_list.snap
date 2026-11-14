@@ -1,0 +1,5207 @@
+---
+source: crates/core/tests/it/schema.rs
+expression: r
+---
+{
+  "api_version": 1,
+  "commands": [
+    {
+      "description": "List every command with its kind, description and JSON Schemas for params and result. Optional `prefix` filters ids (e.g. `element.`).",
+      "id": "command.list",
+      "journal": false,
+      "kind": "query",
+      "label": "List commands",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "api_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "commands": {
+            "items": {
+              "description": "Listing entry returned by `command.list`.",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "journal": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "description": "What a command does; decides undo and batch behaviour.",
+                  "oneOf": [
+                    {
+                      "const": "query",
+                      "description": "Reads state; pushes no undo step.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "edit",
+                      "description": "Changes a document; one undo step when `undoable`.",
+                      "type": "string"
+                    },
+                    {
+                      "const": "device",
+                      "description": "Talks to a printer; pushes no undo step and is refused inside atomic batches.",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "output_schema": {
+                  "description": "JSON Schema of `result`."
+                },
+                "params_schema": {
+                  "description": "JSON Schema (2020-12, refs inlined) of the params object."
+                },
+                "undoable": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "description",
+                "kind",
+                "journal",
+                "undoable",
+                "params_schema",
+                "output_schema"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "envelope_params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Params accepted by every command in addition to its own.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "api_version",
+          "commands",
+          "envelope_params"
+        ],
+        "title": "ListOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "prefix": {
+            "default": null,
+            "description": "Only list ids starting with this prefix, e.g. `element.`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ListParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Run several commands as one. Params: steps [{id, params}], atomic (default true: all or nothing, one undo step), stop_on_error (default true), label, terse. A param string that is exactly `$N`, `$N.path` or `$last.path` takes a value from an earlier step's result, e.g. `$0.id` or `$1.created.0`; `$$` escapes a literal `$`. Max 128 steps.",
+      "id": "command.batch",
+      "journal": false,
+      "kind": "edit",
+      "label": "Run batch",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "completed": {
+            "description": "Steps that succeeded.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created": {
+            "description": "Elements created by all steps.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "failed": {
+            "description": "Steps that failed (only non-zero when `atomic` is false).",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "error": {
+                  "description": "A command failure; serialised as the envelope's `error` object.",
+                  "properties": {
+                    "accepted": {
+                      "description": "Accepted values or nearest valid ids.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "code": {
+                      "description": "Stable error codes (prior-art §4.2 item 9).",
+                      "enum": [
+                        "unknown_command",
+                        "bad_params",
+                        "disabled",
+                        "no_document",
+                        "not_found",
+                        "device_unavailable",
+                        "device_error",
+                        "cancelled",
+                        "internal"
+                      ],
+                      "type": "string"
+                    },
+                    "hint": {
+                      "description": "What to do next.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "param": {
+                      "description": "Offending param path, e.g. `width_mm` or `props.font_size_pt`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": true
+              },
+              "required": [
+                "ok"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "completed",
+          "failed",
+          "results",
+          "created"
+        ],
+        "title": "BatchOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "atomic": {
+            "default": true,
+            "description": "All or nothing (default true): any failure restores the state from before the batch,\nand success is one undo step. `print.*`, `device.*`, `doc.open`, `doc.close`,\n`history.*` and nested batches are refused.",
+            "type": "boolean"
+          },
+          "label": {
+            "default": null,
+            "description": "Undo step label (default `command.batch`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "steps": {
+            "description": "Steps to run in order (max 128).",
+            "items": {
+              "additionalProperties": false,
+              "description": "One step: a command id and its params.",
+              "properties": {
+                "id": {
+                  "description": "Command id, e.g. `element.add_text`.",
+                  "type": "string"
+                },
+                "params": {
+                  "default": null,
+                  "description": "Params object. A string that is exactly `$N`, `$N.path` or `$last.path` is replaced by a\nvalue from an earlier step's result (`$0.id`, `$1.created.0`); `$$…` is a literal `$…`."
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "stop_on_error": {
+            "default": true,
+            "description": "Stop at the first failed step (default true; always true when atomic).",
+            "type": "boolean"
+          },
+          "terse": {
+            "default": false,
+            "description": "Omit per-step `result` from the reply.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "BatchParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Create an empty label document and make it active. Sizes in mm (width across the printhead, height along the feed). Returns {doc_id}.",
+      "id": "doc.new",
+      "journal": true,
+      "kind": "edit",
+      "label": "New document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "doc_id": {
+            "description": "Id of the document, usable as `doc_id` in other commands.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_id"
+        ],
+        "title": "DocIdOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "corner_radius_mm": {
+            "default": null,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "density": {
+            "default": null,
+            "description": "Print density; the model default is used when absent.",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Label length along the feed, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "media": {
+            "default": null,
+            "description": "Label stock (default `gap`).",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Document name (default `Untitled`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "printer_model": {
+            "default": null,
+            "description": "Printer model id, e.g. `niimbot.b21_pro`; sets the preview/check dpi.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Label width across the printhead, mm.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "NewParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Open a `.labely` file as a new document and make it active. Returns {doc_id, name}.",
+      "id": "doc.open",
+      "journal": true,
+      "kind": "edit",
+      "label": "Open document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "doc_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_id",
+          "name"
+        ],
+        "title": "OpenOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "description": "Path of a `.labely` file.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "OpenParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Write the document as pretty `.labely` JSON. `path` defaults to the file it was opened from or last saved to.",
+      "id": "doc.save",
+      "journal": false,
+      "kind": "query",
+      "label": "Save document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "bytes"
+        ],
+        "title": "SaveOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "description": "Target path; defaults to where the document was opened or last saved.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "SaveParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Close a document (default: active) and drop its history. Unsaved changes are lost; a warning says so.",
+      "id": "doc.close",
+      "journal": true,
+      "kind": "edit",
+      "label": "Close document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "active": {
+            "description": "The new active document, if any remain open.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "closed",
+          "active"
+        ],
+        "title": "CloseOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DocIdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Return the full document JSON (units mm, elements with ids) plus doc_id, path, dirty and undo/redo availability.",
+      "id": "doc.get",
+      "journal": false,
+      "kind": "query",
+      "label": "Get document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "can_redo": {
+            "type": "boolean"
+          },
+          "can_undo": {
+            "type": "boolean"
+          },
+          "dirty": {
+            "description": "Changed since the last open/save (always true for never-saved documents).",
+            "type": "boolean"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "document": {
+            "additionalProperties": false,
+            "description": "The full `.labely` document. Units are mm.",
+            "properties": {
+              "assets": {
+                "additionalProperties": {
+                  "additionalProperties": false,
+                  "description": "Embedded binary asset.",
+                  "properties": {
+                    "data_base64": {
+                      "description": "Standard base64 of the bytes.",
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mime",
+                    "data_base64"
+                  ],
+                  "type": "object"
+                },
+                "description": "Embedded assets keyed by lowercase hex sha256 of the bytes.",
+                "type": "object"
+              },
+              "format_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "label": {
+                "additionalProperties": false,
+                "description": "Physical label stock.",
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "density": {
+                    "description": "Preferred density; the model default is used when absent.",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "height_mm": {
+                    "description": "Length along the feed, mm.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "media": {
+                    "default": "gap",
+                    "description": "Media type of the label stock.",
+                    "enum": [
+                      "gap",
+                      "black_mark",
+                      "continuous",
+                      "transparent"
+                    ],
+                    "type": "string"
+                  },
+                  "printer_model": {
+                    "description": "Registry id of the intended printer model, e.g. `niimbot.b21_pro`.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "width_mm": {
+                    "description": "Width across the printhead, mm.",
+                    "format": "double",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "width_mm",
+                  "height_mm",
+                  "corner_radius_mm",
+                  "media"
+                ],
+                "type": "object"
+              },
+              "name": {
+                "type": "string"
+              },
+              "next_id": {
+                "description": "Next id to hand out.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "pages": {
+                "description": "Pages; Phase 1 documents have exactly one.",
+                "items": {
+                  "additionalProperties": false,
+                  "description": "One printed page.",
+                  "properties": {
+                    "elements": {
+                      "description": "Z-order: later elements draw on top.",
+                      "items": {
+                        "description": "A positioned element. The frame is the unrotated box; rotation is about its centre.",
+                        "oneOf": [
+                          {
+                            "properties": {
+                              "align": {
+                                "default": "left",
+                                "enum": [
+                                  "left",
+                                  "center",
+                                  "right"
+                                ],
+                                "type": "string"
+                              },
+                              "bold": {
+                                "default": false,
+                                "type": "boolean"
+                              },
+                              "fit": {
+                                "default": "none",
+                                "description": "How text reacts when it does not fit its box.",
+                                "oneOf": [
+                                  {
+                                    "const": "none",
+                                    "description": "Keep the size; overflow is reported by `doc.check`.",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "shrink",
+                                    "description": "Shrink the font until the text fits.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "font_family": {
+                                "default": "Noto Sans",
+                                "type": "string"
+                              },
+                              "font_size_pt": {
+                                "default": 12.0,
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "invert": {
+                                "default": false,
+                                "description": "White text on black.",
+                                "type": "boolean"
+                              },
+                              "italic": {
+                                "default": false,
+                                "type": "boolean"
+                              },
+                              "letter_spacing_mm": {
+                                "default": 0.0,
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "line_spacing": {
+                                "default": 1.0,
+                                "description": "Line height multiplier.",
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "text": {
+                                "description": "Text; may contain `{{variable}}` bindings and newlines.",
+                                "type": "string"
+                              },
+                              "type": {
+                                "const": "text",
+                                "type": "string"
+                              },
+                              "underline": {
+                                "default": false,
+                                "type": "boolean"
+                              },
+                              "valign": {
+                                "default": "top",
+                                "enum": [
+                                  "top",
+                                  "middle",
+                                  "bottom"
+                                ],
+                                "type": "string"
+                              },
+                              "wrap": {
+                                "default": true,
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "text",
+                              "font_family",
+                              "font_size_pt",
+                              "bold",
+                              "italic",
+                              "underline",
+                              "align",
+                              "valign",
+                              "line_spacing",
+                              "letter_spacing_mm",
+                              "wrap",
+                              "fit",
+                              "invert"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "data": {
+                                "type": "string"
+                              },
+                              "human_readable": {
+                                "default": "below",
+                                "enum": [
+                                  "none",
+                                  "below",
+                                  "above"
+                                ],
+                                "type": "string"
+                              },
+                              "symbology": {
+                                "default": "code128",
+                                "description": "1D symbologies.",
+                                "enum": [
+                                  "code128",
+                                  "code39",
+                                  "code93",
+                                  "ean13",
+                                  "ean8",
+                                  "upc_a",
+                                  "upc_e",
+                                  "itf",
+                                  "codabar"
+                                ],
+                                "type": "string"
+                              },
+                              "text_size_pt": {
+                                "default": 8.0,
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "type": {
+                                "const": "barcode",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "data",
+                              "symbology",
+                              "human_readable",
+                              "text_size_pt"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "data": {
+                                "type": "string"
+                              },
+                              "ecc": {
+                                "default": "M",
+                                "description": "QR error-correction level.",
+                                "enum": [
+                                  "L",
+                                  "M",
+                                  "Q",
+                                  "H"
+                                ],
+                                "type": "string"
+                              },
+                              "symbology": {
+                                "default": "qr",
+                                "description": "2D symbologies.",
+                                "enum": [
+                                  "qr",
+                                  "data_matrix",
+                                  "pdf417",
+                                  "aztec"
+                                ],
+                                "type": "string"
+                              },
+                              "type": {
+                                "const": "code2d",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "data",
+                              "symbology",
+                              "ecc"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "asset": {
+                                "description": "Key into [`Document::assets`].",
+                                "type": "string"
+                              },
+                              "brightness": {
+                                "default": 0.0,
+                                "description": "-1.0 … 1.0",
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "contrast": {
+                                "default": 0.0,
+                                "description": "-1.0 … 1.0",
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "dither": {
+                                "default": "floyd_steinberg",
+                                "description": "1-bit conversion for images.",
+                                "enum": [
+                                  "threshold",
+                                  "floyd_steinberg",
+                                  "atkinson",
+                                  "bayer"
+                                ],
+                                "type": "string"
+                              },
+                              "fit": {
+                                "default": "contain",
+                                "enum": [
+                                  "contain",
+                                  "cover",
+                                  "stretch"
+                                ],
+                                "type": "string"
+                              },
+                              "invert": {
+                                "default": false,
+                                "type": "boolean"
+                              },
+                              "threshold": {
+                                "default": 128,
+                                "description": "0–255 cut-off for `threshold` and the gray point for dithering.",
+                                "format": "uint8",
+                                "maximum": 255,
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "type": {
+                                "const": "image",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "asset",
+                              "fit",
+                              "dither",
+                              "threshold",
+                              "brightness",
+                              "contrast",
+                              "invert"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "corner_radius_mm": {
+                                "default": 0.0,
+                                "description": "Rect only.",
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "fill": {
+                                "default": false,
+                                "type": "boolean"
+                              },
+                              "stroke_mm": {
+                                "default": 0.3,
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "type": {
+                                "const": "rect",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "stroke_mm",
+                              "fill",
+                              "corner_radius_mm"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "corner_radius_mm": {
+                                "default": 0.0,
+                                "description": "Rect only.",
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "fill": {
+                                "default": false,
+                                "type": "boolean"
+                              },
+                              "stroke_mm": {
+                                "default": 0.3,
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "type": {
+                                "const": "ellipse",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "stroke_mm",
+                              "fill",
+                              "corner_radius_mm"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "description": "A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.",
+                            "properties": {
+                              "dash_mm": {
+                                "description": "Dash and gap length in mm; solid when absent.",
+                                "items": {
+                                  "format": "double",
+                                  "type": "number"
+                                },
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "type": [
+                                  "array",
+                                  "null"
+                                ]
+                              },
+                              "stroke_mm": {
+                                "default": 0.3,
+                                "format": "double",
+                                "type": "number"
+                              },
+                              "type": {
+                                "const": "line",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "stroke_mm"
+                            ],
+                            "type": "object"
+                          }
+                        ],
+                        "properties": {
+                          "height_mm": {
+                            "format": "double",
+                            "type": "number"
+                          },
+                          "hidden": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "description": "Stable element id, unique within a document.",
+                            "format": "uint64",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "locked": {
+                            "default": false,
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "rotation_deg": {
+                            "default": 0.0,
+                            "format": "double",
+                            "type": "number"
+                          },
+                          "width_mm": {
+                            "format": "double",
+                            "type": "number"
+                          },
+                          "x_mm": {
+                            "format": "double",
+                            "type": "number"
+                          },
+                          "y_mm": {
+                            "format": "double",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "x_mm",
+                          "y_mm",
+                          "width_mm",
+                          "height_mm",
+                          "rotation_deg",
+                          "locked",
+                          "hidden"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "elements"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "variables": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Free variables usable as `{{name}}` in string properties.",
+                "type": "object"
+              }
+            },
+            "required": [
+              "format_version",
+              "name",
+              "label",
+              "pages",
+              "next_id"
+            ],
+            "type": "object"
+          },
+          "path": {
+            "description": "File the document was opened from or last saved to.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "doc_id",
+          "path",
+          "dirty",
+          "can_undo",
+          "can_redo",
+          "document"
+        ],
+        "title": "GetOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DocIdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Change label stock settings; only the given fields change. Sizes in mm. printer_model \"\" and density 0 clear those fields.",
+      "id": "doc.set_label",
+      "journal": true,
+      "kind": "edit",
+      "label": "Label settings",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "additionalProperties": false,
+            "description": "Physical label stock.",
+            "properties": {
+              "corner_radius_mm": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "density": {
+                "description": "Preferred density; the model default is used when absent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "height_mm": {
+                "description": "Length along the feed, mm.",
+                "format": "double",
+                "type": "number"
+              },
+              "media": {
+                "default": "gap",
+                "description": "Media type of the label stock.",
+                "enum": [
+                  "gap",
+                  "black_mark",
+                  "continuous",
+                  "transparent"
+                ],
+                "type": "string"
+              },
+              "printer_model": {
+                "description": "Registry id of the intended printer model, e.g. `niimbot.b21_pro`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "width_mm": {
+                "description": "Width across the printhead, mm.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "width_mm",
+              "height_mm",
+              "corner_radius_mm",
+              "media"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "SetLabelOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "corner_radius_mm": {
+            "default": null,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "density": {
+            "default": null,
+            "description": "Print density; 0 clears it (model default).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "default": null,
+            "description": "Label length along the feed, mm.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "media": {
+            "default": null,
+            "description": "Media type of the label stock.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Document name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "printer_model": {
+            "default": null,
+            "description": "Printer model id; empty string clears it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "default": null,
+            "description": "Label width across the printhead, mm.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "title": "SetLabelParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Find print problems: elements outside the label, text overflow or shrinking, barcode encode failures, modules < 2 dots, codes that do not decode from the rendered raster, label wider than the model's head, density out of model range. Returns {ok, dpi, issues:[{rule, severity, element_id?, message, hint}]}.",
+      "id": "doc.check",
+      "journal": false,
+      "kind": "query",
+      "label": "Check document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "dpi": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "description": "One `doc.check` finding.",
+              "properties": {
+                "element_id": {
+                  "description": "Stable element id, unique within a document.",
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "hint": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "rule": {
+                  "description": "Rule id, e.g. `out_of_bounds`, `text_overflow`, `code_unreadable`.",
+                  "type": "string"
+                },
+                "severity": {
+                  "description": "How serious a check finding is.",
+                  "enum": [
+                    "info",
+                    "warning",
+                    "error"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rule",
+                "severity",
+                "message",
+                "hint"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ok": {
+            "description": "True when there are no `error` issues.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "dpi",
+          "issues"
+        ],
+        "title": "CheckOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dpi": {
+            "default": null,
+            "description": "Check resolution in dpi; defaults to the label's printer model dpi, else 203.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "CheckParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Add a text box. Frame in mm (x_mm, y_mm = top-left; width_mm, height_mm), rotation_deg clockwise; font_size_pt in points. `{{name}}` binds a variable. Returns {id}.",
+      "id": "element.add_text",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add text",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "align": {
+            "default": null,
+            "enum": [
+              "left",
+              "center",
+              "right",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bold": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fit": {
+            "anyOf": [
+              {
+                "description": "How text reacts when it does not fit its box.",
+                "oneOf": [
+                  {
+                    "const": "none",
+                    "description": "Keep the size; overflow is reported by `doc.check`.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "shrink",
+                    "description": "Shrink the font until the text fits.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "`none` (default; overflow reported by doc.check) or `shrink`."
+          },
+          "font_family": {
+            "default": null,
+            "description": "Font family (default `Noto Sans`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "font_size_pt": {
+            "default": null,
+            "description": "Font size in points (default 12).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "invert": {
+            "default": null,
+            "description": "White text on black.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "italic": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "letter_spacing_mm": {
+            "default": null,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "line_spacing": {
+            "default": null,
+            "description": "Line height multiplier (default 1.0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "Text; may contain `{{variable}}` bindings and newlines.",
+            "type": "string"
+          },
+          "underline": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "valign": {
+            "default": null,
+            "enum": [
+              "top",
+              "middle",
+              "bottom",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "wrap": {
+            "default": null,
+            "description": "Wrap at the frame width (default true).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm",
+          "text"
+        ],
+        "title": "TextParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Add a 1D barcode. Frame in mm; text_size_pt in points. Returns {id}.",
+      "id": "element.add_barcode",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add barcode",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "description": "Data to encode; may contain `{{variable}}` bindings.",
+            "type": "string"
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "human_readable": {
+            "default": null,
+            "description": "Human-readable text position (default `below`).",
+            "enum": [
+              "none",
+              "below",
+              "above",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "symbology": {
+            "default": null,
+            "description": "1D symbology (default `code128`).",
+            "enum": [
+              "code128",
+              "code39",
+              "code93",
+              "ean13",
+              "ean8",
+              "upc_a",
+              "upc_e",
+              "itf",
+              "codabar",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text_size_pt": {
+            "default": null,
+            "description": "Human-readable text size in points (default 8).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm",
+          "data"
+        ],
+        "title": "BarcodeParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Add a QR / DataMatrix / PDF417 / Aztec code. Frame in mm. Returns {id}.",
+      "id": "element.add_code2d",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add 2D code",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "description": "Data to encode; may contain `{{variable}}` bindings.",
+            "type": "string"
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ecc": {
+            "default": null,
+            "description": "QR error correction L, M (default), Q or H.",
+            "enum": [
+              "L",
+              "M",
+              "Q",
+              "H",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "symbology": {
+            "default": null,
+            "description": "2D symbology (default `qr`).",
+            "enum": [
+              "qr",
+              "data_matrix",
+              "pdf417",
+              "aztec",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm",
+          "data"
+        ],
+        "title": "Code2dParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Embed an image (path or data_base64) as a content-addressed asset (sha256 hex) and place it. Frame in mm. Returns {id}.",
+      "id": "element.add_image",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add image",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "brightness": {
+            "default": null,
+            "description": "-1.0 … 1.0",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "contrast": {
+            "default": null,
+            "description": "-1.0 … 1.0",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "data_base64": {
+            "default": null,
+            "description": "Standard base64 of the image bytes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dither": {
+            "default": null,
+            "description": "1-bit conversion (default `floyd_steinberg`).",
+            "enum": [
+              "threshold",
+              "floyd_steinberg",
+              "atkinson",
+              "bayer",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fit": {
+            "default": null,
+            "description": "`contain` (default), `cover` or `stretch`.",
+            "enum": [
+              "contain",
+              "cover",
+              "stretch",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "invert": {
+            "default": null,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "mime": {
+            "default": null,
+            "description": "MIME type; sniffed from the bytes when absent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "description": "Image file to embed (PNG, JPEG, BMP, WebP). Exactly one of `path` / `data_base64`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "threshold": {
+            "default": null,
+            "description": "0–255 cut-off (default 128).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "ImageParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Add a rectangle. Frame and stroke in mm. Returns {id}.",
+      "id": "element.add_rect",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add rectangle",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "corner_radius_mm": {
+            "default": null,
+            "description": "Corner radius, mm.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fill": {
+            "default": null,
+            "description": "Fill black.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "stroke_mm": {
+            "default": null,
+            "description": "Outline width, mm (default 0.3; 0 = no outline).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "RectParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Add an ellipse inscribed in the frame. Frame and stroke in mm. Returns {id}.",
+      "id": "element.add_ellipse",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add ellipse",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fill": {
+            "default": null,
+            "description": "Fill black.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "stroke_mm": {
+            "default": null,
+            "description": "Outline width, mm (default 0.3; 0 = no outline).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "EllipseParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Add a line from (x_mm, y_mm) to (x_mm + width_mm, y_mm + height_mm); one of width_mm/height_mm may be 0. Stroke in mm. Returns {id}.",
+      "id": "element.add_line",
+      "journal": true,
+      "kind": "edit",
+      "label": "Add line",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "dash_mm": {
+            "default": null,
+            "description": "Dash and gap length in mm; solid when absent.",
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "name": {
+            "default": null,
+            "description": "Optional element name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotation_deg": {
+            "default": null,
+            "description": "Clockwise rotation about the frame centre, degrees (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "stroke_mm": {
+            "default": null,
+            "description": "Line width, mm (default 0.3).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "width_mm": {
+            "description": "Frame width, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "x_mm": {
+            "description": "Left edge of the unrotated frame, mm from the label's left edge.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "Top edge of the unrotated frame, mm from the label's top edge.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x_mm",
+          "y_mm",
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "LineParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Merge partial props into an element: frame fields in mm/degrees and the type's own props. Unknown keys and type mismatches are rejected; `type` and `id` cannot change. Returns {element}.",
+      "id": "element.set_props",
+      "journal": true,
+      "kind": "edit",
+      "label": "Set properties",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "element": {
+            "description": "The element after the change.",
+            "oneOf": [
+              {
+                "properties": {
+                  "align": {
+                    "default": "left",
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  "bold": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "fit": {
+                    "default": "none",
+                    "description": "How text reacts when it does not fit its box.",
+                    "oneOf": [
+                      {
+                        "const": "none",
+                        "description": "Keep the size; overflow is reported by `doc.check`.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "shrink",
+                        "description": "Shrink the font until the text fits.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "font_family": {
+                    "default": "Noto Sans",
+                    "type": "string"
+                  },
+                  "font_size_pt": {
+                    "default": 12.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "invert": {
+                    "default": false,
+                    "description": "White text on black.",
+                    "type": "boolean"
+                  },
+                  "italic": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "letter_spacing_mm": {
+                    "default": 0.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "line_spacing": {
+                    "default": 1.0,
+                    "description": "Line height multiplier.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "text": {
+                    "description": "Text; may contain `{{variable}}` bindings and newlines.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "underline": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "valign": {
+                    "default": "top",
+                    "enum": [
+                      "top",
+                      "middle",
+                      "bottom"
+                    ],
+                    "type": "string"
+                  },
+                  "wrap": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "text",
+                  "font_family",
+                  "font_size_pt",
+                  "bold",
+                  "italic",
+                  "underline",
+                  "align",
+                  "valign",
+                  "line_spacing",
+                  "letter_spacing_mm",
+                  "wrap",
+                  "fit",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "human_readable": {
+                    "default": "below",
+                    "enum": [
+                      "none",
+                      "below",
+                      "above"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "code128",
+                    "description": "1D symbologies.",
+                    "enum": [
+                      "code128",
+                      "code39",
+                      "code93",
+                      "ean13",
+                      "ean8",
+                      "upc_a",
+                      "upc_e",
+                      "itf",
+                      "codabar"
+                    ],
+                    "type": "string"
+                  },
+                  "text_size_pt": {
+                    "default": 8.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "barcode",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "human_readable",
+                  "text_size_pt"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "ecc": {
+                    "default": "M",
+                    "description": "QR error-correction level.",
+                    "enum": [
+                      "L",
+                      "M",
+                      "Q",
+                      "H"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "qr",
+                    "description": "2D symbologies.",
+                    "enum": [
+                      "qr",
+                      "data_matrix",
+                      "pdf417",
+                      "aztec"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "code2d",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "ecc"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "asset": {
+                    "description": "Key into [`Document::assets`].",
+                    "type": "string"
+                  },
+                  "brightness": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "contrast": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "dither": {
+                    "default": "floyd_steinberg",
+                    "description": "1-bit conversion for images.",
+                    "enum": [
+                      "threshold",
+                      "floyd_steinberg",
+                      "atkinson",
+                      "bayer"
+                    ],
+                    "type": "string"
+                  },
+                  "fit": {
+                    "default": "contain",
+                    "enum": [
+                      "contain",
+                      "cover",
+                      "stretch"
+                    ],
+                    "type": "string"
+                  },
+                  "invert": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "threshold": {
+                    "default": 128,
+                    "description": "0–255 cut-off for `threshold` and the gray point for dithering.",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": {
+                    "const": "image",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "asset",
+                  "fit",
+                  "dither",
+                  "threshold",
+                  "brightness",
+                  "contrast",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "rect",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "ellipse",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.",
+                "properties": {
+                  "dash_mm": {
+                    "description": "Dash and gap length in mm; solid when absent.",
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "line",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm"
+                ],
+                "type": "object"
+              }
+            ],
+            "properties": {
+              "height_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "hidden": {
+                "default": false,
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Stable element id, unique within a document.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "locked": {
+                "default": false,
+                "type": "boolean"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rotation_deg": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "width_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "x_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "y_mm": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "x_mm",
+              "y_mm",
+              "width_mm",
+              "height_mm",
+              "rotation_deg",
+              "locked",
+              "hidden"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "element"
+        ],
+        "title": "ElementOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "props": {
+            "additionalProperties": true,
+            "description": "Partial element JSON: frame fields (name, x_mm, y_mm, width_mm, height_mm,\nrotation_deg, locked, hidden) and the element type's props (e.g. text, font_size_pt,\ndata, symbology, stroke_mm). `null` resets a field to its default.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "props"
+        ],
+        "title": "SetPropsParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Move an element so its unrotated frame's top-left is at (x_mm, y_mm), absolute mm.",
+      "id": "element.move",
+      "journal": true,
+      "kind": "edit",
+      "label": "Move",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "element": {
+            "description": "The element after the change.",
+            "oneOf": [
+              {
+                "properties": {
+                  "align": {
+                    "default": "left",
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  "bold": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "fit": {
+                    "default": "none",
+                    "description": "How text reacts when it does not fit its box.",
+                    "oneOf": [
+                      {
+                        "const": "none",
+                        "description": "Keep the size; overflow is reported by `doc.check`.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "shrink",
+                        "description": "Shrink the font until the text fits.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "font_family": {
+                    "default": "Noto Sans",
+                    "type": "string"
+                  },
+                  "font_size_pt": {
+                    "default": 12.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "invert": {
+                    "default": false,
+                    "description": "White text on black.",
+                    "type": "boolean"
+                  },
+                  "italic": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "letter_spacing_mm": {
+                    "default": 0.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "line_spacing": {
+                    "default": 1.0,
+                    "description": "Line height multiplier.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "text": {
+                    "description": "Text; may contain `{{variable}}` bindings and newlines.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "underline": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "valign": {
+                    "default": "top",
+                    "enum": [
+                      "top",
+                      "middle",
+                      "bottom"
+                    ],
+                    "type": "string"
+                  },
+                  "wrap": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "text",
+                  "font_family",
+                  "font_size_pt",
+                  "bold",
+                  "italic",
+                  "underline",
+                  "align",
+                  "valign",
+                  "line_spacing",
+                  "letter_spacing_mm",
+                  "wrap",
+                  "fit",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "human_readable": {
+                    "default": "below",
+                    "enum": [
+                      "none",
+                      "below",
+                      "above"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "code128",
+                    "description": "1D symbologies.",
+                    "enum": [
+                      "code128",
+                      "code39",
+                      "code93",
+                      "ean13",
+                      "ean8",
+                      "upc_a",
+                      "upc_e",
+                      "itf",
+                      "codabar"
+                    ],
+                    "type": "string"
+                  },
+                  "text_size_pt": {
+                    "default": 8.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "barcode",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "human_readable",
+                  "text_size_pt"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "ecc": {
+                    "default": "M",
+                    "description": "QR error-correction level.",
+                    "enum": [
+                      "L",
+                      "M",
+                      "Q",
+                      "H"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "qr",
+                    "description": "2D symbologies.",
+                    "enum": [
+                      "qr",
+                      "data_matrix",
+                      "pdf417",
+                      "aztec"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "code2d",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "ecc"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "asset": {
+                    "description": "Key into [`Document::assets`].",
+                    "type": "string"
+                  },
+                  "brightness": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "contrast": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "dither": {
+                    "default": "floyd_steinberg",
+                    "description": "1-bit conversion for images.",
+                    "enum": [
+                      "threshold",
+                      "floyd_steinberg",
+                      "atkinson",
+                      "bayer"
+                    ],
+                    "type": "string"
+                  },
+                  "fit": {
+                    "default": "contain",
+                    "enum": [
+                      "contain",
+                      "cover",
+                      "stretch"
+                    ],
+                    "type": "string"
+                  },
+                  "invert": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "threshold": {
+                    "default": 128,
+                    "description": "0–255 cut-off for `threshold` and the gray point for dithering.",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": {
+                    "const": "image",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "asset",
+                  "fit",
+                  "dither",
+                  "threshold",
+                  "brightness",
+                  "contrast",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "rect",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "ellipse",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.",
+                "properties": {
+                  "dash_mm": {
+                    "description": "Dash and gap length in mm; solid when absent.",
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "line",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm"
+                ],
+                "type": "object"
+              }
+            ],
+            "properties": {
+              "height_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "hidden": {
+                "default": false,
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Stable element id, unique within a document.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "locked": {
+                "default": false,
+                "type": "boolean"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rotation_deg": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "width_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "x_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "y_mm": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "x_mm",
+              "y_mm",
+              "width_mm",
+              "height_mm",
+              "rotation_deg",
+              "locked",
+              "hidden"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "element"
+        ],
+        "title": "ElementOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "x_mm": {
+            "description": "New left edge, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "y_mm": {
+            "description": "New top edge, mm.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "x_mm",
+          "y_mm"
+        ],
+        "title": "MoveParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Set an element's frame size in mm, keeping its top-left corner.",
+      "id": "element.resize",
+      "journal": true,
+      "kind": "edit",
+      "label": "Resize",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "element": {
+            "description": "The element after the change.",
+            "oneOf": [
+              {
+                "properties": {
+                  "align": {
+                    "default": "left",
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  "bold": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "fit": {
+                    "default": "none",
+                    "description": "How text reacts when it does not fit its box.",
+                    "oneOf": [
+                      {
+                        "const": "none",
+                        "description": "Keep the size; overflow is reported by `doc.check`.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "shrink",
+                        "description": "Shrink the font until the text fits.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "font_family": {
+                    "default": "Noto Sans",
+                    "type": "string"
+                  },
+                  "font_size_pt": {
+                    "default": 12.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "invert": {
+                    "default": false,
+                    "description": "White text on black.",
+                    "type": "boolean"
+                  },
+                  "italic": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "letter_spacing_mm": {
+                    "default": 0.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "line_spacing": {
+                    "default": 1.0,
+                    "description": "Line height multiplier.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "text": {
+                    "description": "Text; may contain `{{variable}}` bindings and newlines.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "underline": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "valign": {
+                    "default": "top",
+                    "enum": [
+                      "top",
+                      "middle",
+                      "bottom"
+                    ],
+                    "type": "string"
+                  },
+                  "wrap": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "text",
+                  "font_family",
+                  "font_size_pt",
+                  "bold",
+                  "italic",
+                  "underline",
+                  "align",
+                  "valign",
+                  "line_spacing",
+                  "letter_spacing_mm",
+                  "wrap",
+                  "fit",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "human_readable": {
+                    "default": "below",
+                    "enum": [
+                      "none",
+                      "below",
+                      "above"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "code128",
+                    "description": "1D symbologies.",
+                    "enum": [
+                      "code128",
+                      "code39",
+                      "code93",
+                      "ean13",
+                      "ean8",
+                      "upc_a",
+                      "upc_e",
+                      "itf",
+                      "codabar"
+                    ],
+                    "type": "string"
+                  },
+                  "text_size_pt": {
+                    "default": 8.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "barcode",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "human_readable",
+                  "text_size_pt"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "ecc": {
+                    "default": "M",
+                    "description": "QR error-correction level.",
+                    "enum": [
+                      "L",
+                      "M",
+                      "Q",
+                      "H"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "qr",
+                    "description": "2D symbologies.",
+                    "enum": [
+                      "qr",
+                      "data_matrix",
+                      "pdf417",
+                      "aztec"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "code2d",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "ecc"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "asset": {
+                    "description": "Key into [`Document::assets`].",
+                    "type": "string"
+                  },
+                  "brightness": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "contrast": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "dither": {
+                    "default": "floyd_steinberg",
+                    "description": "1-bit conversion for images.",
+                    "enum": [
+                      "threshold",
+                      "floyd_steinberg",
+                      "atkinson",
+                      "bayer"
+                    ],
+                    "type": "string"
+                  },
+                  "fit": {
+                    "default": "contain",
+                    "enum": [
+                      "contain",
+                      "cover",
+                      "stretch"
+                    ],
+                    "type": "string"
+                  },
+                  "invert": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "threshold": {
+                    "default": 128,
+                    "description": "0–255 cut-off for `threshold` and the gray point for dithering.",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": {
+                    "const": "image",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "asset",
+                  "fit",
+                  "dither",
+                  "threshold",
+                  "brightness",
+                  "contrast",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "rect",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "ellipse",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.",
+                "properties": {
+                  "dash_mm": {
+                    "description": "Dash and gap length in mm; solid when absent.",
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "line",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm"
+                ],
+                "type": "object"
+              }
+            ],
+            "properties": {
+              "height_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "hidden": {
+                "default": false,
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Stable element id, unique within a document.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "locked": {
+                "default": false,
+                "type": "boolean"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rotation_deg": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "width_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "x_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "y_mm": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "x_mm",
+              "y_mm",
+              "width_mm",
+              "height_mm",
+              "rotation_deg",
+              "locked",
+              "hidden"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "element"
+        ],
+        "title": "ElementOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "New frame height, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "width_mm": {
+            "description": "New frame width, mm.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "ResizeParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Set an element's absolute clockwise rotation in degrees about its frame centre.",
+      "id": "element.rotate",
+      "journal": true,
+      "kind": "edit",
+      "label": "Rotate",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "element": {
+            "description": "The element after the change.",
+            "oneOf": [
+              {
+                "properties": {
+                  "align": {
+                    "default": "left",
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  "bold": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "fit": {
+                    "default": "none",
+                    "description": "How text reacts when it does not fit its box.",
+                    "oneOf": [
+                      {
+                        "const": "none",
+                        "description": "Keep the size; overflow is reported by `doc.check`.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "shrink",
+                        "description": "Shrink the font until the text fits.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "font_family": {
+                    "default": "Noto Sans",
+                    "type": "string"
+                  },
+                  "font_size_pt": {
+                    "default": 12.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "invert": {
+                    "default": false,
+                    "description": "White text on black.",
+                    "type": "boolean"
+                  },
+                  "italic": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "letter_spacing_mm": {
+                    "default": 0.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "line_spacing": {
+                    "default": 1.0,
+                    "description": "Line height multiplier.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "text": {
+                    "description": "Text; may contain `{{variable}}` bindings and newlines.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "text",
+                    "type": "string"
+                  },
+                  "underline": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "valign": {
+                    "default": "top",
+                    "enum": [
+                      "top",
+                      "middle",
+                      "bottom"
+                    ],
+                    "type": "string"
+                  },
+                  "wrap": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "text",
+                  "font_family",
+                  "font_size_pt",
+                  "bold",
+                  "italic",
+                  "underline",
+                  "align",
+                  "valign",
+                  "line_spacing",
+                  "letter_spacing_mm",
+                  "wrap",
+                  "fit",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "human_readable": {
+                    "default": "below",
+                    "enum": [
+                      "none",
+                      "below",
+                      "above"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "code128",
+                    "description": "1D symbologies.",
+                    "enum": [
+                      "code128",
+                      "code39",
+                      "code93",
+                      "ean13",
+                      "ean8",
+                      "upc_a",
+                      "upc_e",
+                      "itf",
+                      "codabar"
+                    ],
+                    "type": "string"
+                  },
+                  "text_size_pt": {
+                    "default": 8.0,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "barcode",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "human_readable",
+                  "text_size_pt"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "data": {
+                    "type": "string"
+                  },
+                  "ecc": {
+                    "default": "M",
+                    "description": "QR error-correction level.",
+                    "enum": [
+                      "L",
+                      "M",
+                      "Q",
+                      "H"
+                    ],
+                    "type": "string"
+                  },
+                  "symbology": {
+                    "default": "qr",
+                    "description": "2D symbologies.",
+                    "enum": [
+                      "qr",
+                      "data_matrix",
+                      "pdf417",
+                      "aztec"
+                    ],
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "code2d",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "data",
+                  "symbology",
+                  "ecc"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "asset": {
+                    "description": "Key into [`Document::assets`].",
+                    "type": "string"
+                  },
+                  "brightness": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "contrast": {
+                    "default": 0.0,
+                    "description": "-1.0 … 1.0",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "dither": {
+                    "default": "floyd_steinberg",
+                    "description": "1-bit conversion for images.",
+                    "enum": [
+                      "threshold",
+                      "floyd_steinberg",
+                      "atkinson",
+                      "bayer"
+                    ],
+                    "type": "string"
+                  },
+                  "fit": {
+                    "default": "contain",
+                    "enum": [
+                      "contain",
+                      "cover",
+                      "stretch"
+                    ],
+                    "type": "string"
+                  },
+                  "invert": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "threshold": {
+                    "default": 128,
+                    "description": "0–255 cut-off for `threshold` and the gray point for dithering.",
+                    "format": "uint8",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "type": {
+                    "const": "image",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "asset",
+                  "fit",
+                  "dither",
+                  "threshold",
+                  "brightness",
+                  "contrast",
+                  "invert"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "rect",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "corner_radius_mm": {
+                    "default": 0.0,
+                    "description": "Rect only.",
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "fill": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "ellipse",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm",
+                  "fill",
+                  "corner_radius_mm"
+                ],
+                "type": "object"
+              },
+              {
+                "description": "A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.",
+                "properties": {
+                  "dash_mm": {
+                    "description": "Dash and gap length in mm; solid when absent.",
+                    "items": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "stroke_mm": {
+                    "default": 0.3,
+                    "format": "double",
+                    "type": "number"
+                  },
+                  "type": {
+                    "const": "line",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "stroke_mm"
+                ],
+                "type": "object"
+              }
+            ],
+            "properties": {
+              "height_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "hidden": {
+                "default": false,
+                "type": "boolean"
+              },
+              "id": {
+                "description": "Stable element id, unique within a document.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "locked": {
+                "default": false,
+                "type": "boolean"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rotation_deg": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "width_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "x_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "y_mm": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "x_mm",
+              "y_mm",
+              "width_mm",
+              "height_mm",
+              "rotation_deg",
+              "locked",
+              "hidden"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "element"
+        ],
+        "title": "ElementOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rotation_deg": {
+            "description": "Absolute clockwise rotation about the frame centre, degrees; normalised to 0–360.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "rotation_deg"
+        ],
+        "title": "RotateParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Delete elements by id. Fails without changes if any id is unknown or locked.",
+      "id": "element.delete",
+      "journal": true,
+      "kind": "edit",
+      "label": "Delete",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "deleted": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeleteOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ids": {
+            "description": "Ids of the elements to delete (all must exist).",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "DeleteParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Copy an element on top of the z-order, offset by dx_mm/dy_mm (default 2 mm each). Returns {id} of the copy.",
+      "id": "element.duplicate",
+      "journal": true,
+      "kind": "edit",
+      "label": "Duplicate",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dx_mm": {
+            "default": null,
+            "description": "Horizontal offset of the copy, mm (default 2).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "dy_mm": {
+            "default": null,
+            "description": "Vertical offset of the copy, mm (default 2).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "DuplicateParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Change z-order: front, back, forward (one up) or backward (one down).",
+      "id": "element.reorder",
+      "journal": true,
+      "kind": "edit",
+      "label": "Reorder",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "index": {
+            "description": "New z-index on the page (0 = bottom).",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "title": "ReorderOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to": {
+            "description": "Z-order target.",
+            "oneOf": [
+              {
+                "const": "front",
+                "description": "On top of everything.",
+                "type": "string"
+              },
+              {
+                "const": "back",
+                "description": "Below everything.",
+                "type": "string"
+              },
+              {
+                "const": "forward",
+                "description": "One step up.",
+                "type": "string"
+              },
+              {
+                "const": "backward",
+                "description": "One step down.",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "to"
+        ],
+        "title": "ReorderParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Undo the last edit step of a document (default: active).",
+      "id": "history.undo",
+      "journal": true,
+      "kind": "edit",
+      "label": "Undo",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "can_redo": {
+            "type": "boolean"
+          },
+          "can_undo": {
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Label of the step that was undone/redone (the command id or batch label).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "can_undo",
+          "can_redo"
+        ],
+        "title": "HistoryOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DocIdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Redo the last undone step of a document (default: active).",
+      "id": "history.redo",
+      "journal": true,
+      "kind": "edit",
+      "label": "Redo",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "can_redo": {
+            "type": "boolean"
+          },
+          "can_undo": {
+            "type": "boolean"
+          },
+          "label": {
+            "description": "Label of the step that was undone/redone (the command id or batch label).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "can_undo",
+          "can_redo"
+        ],
+        "title": "HistoryOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "description": "Document id; defaults to the active document.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DocIdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Set a document variable; `{{name}}` in text, barcode and 2D-code data is replaced by its value when rendering and printing.",
+      "id": "variable.set",
+      "journal": true,
+      "kind": "edit",
+      "label": "Set variable",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "previous": {
+            "description": "Previous value, if the variable existed.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "previous"
+        ],
+        "title": "SetOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "Variable name, used as `{{name}}` in text and code data.",
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "SetParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Render a page to the exact 1-bit print raster and return it as base64 PNG with its size in dots. dpi defaults to the label's printer model (else 203). Variables are substituted.",
+      "id": "render.preview",
+      "journal": false,
+      "kind": "query",
+      "label": "Preview",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "dpi": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "height_dots": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "png_base64": {
+            "description": "PNG of the 1-bit print raster, standard base64.",
+            "type": "string"
+          },
+          "width_dots": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "png_base64",
+          "width_dots",
+          "height_dots",
+          "dpi"
+        ],
+        "title": "PreviewOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dpi": {
+            "default": null,
+            "description": "Resolution in dots per inch; defaults to the label's printer model dpi, else 203.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "page": {
+            "default": null,
+            "description": "0-based page index (default 0).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "PreviewParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Discover printers for timeout_ms milliseconds (default 5000). Returns {devices} with addresses usable in device.connect.",
+      "id": "device.scan",
+      "journal": false,
+      "kind": "device",
+      "label": "Scan for printers",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "devices": {
+            "items": {
+              "description": "A known printer (discovered, connected or virtual).",
+              "properties": {
+                "address": {
+                  "description": "Address usable with `device.connect`: `ble:<id>`, `usb:<port>`, `fake:<dir>`.",
+                  "type": "string"
+                },
+                "connected": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "description": "Printer model facts that commands need (subset of the registry entry).",
+                  "properties": {
+                    "density_default": {
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "density_max": {
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "density_min": {
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "dpi": {
+                      "format": "uint32",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "head_dots": {
+                      "format": "uint32",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "max_width_mm": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "media": {
+                      "items": {
+                        "description": "Media type of the label stock.",
+                        "enum": [
+                          "gap",
+                          "black_mark",
+                          "continuous",
+                          "transparent"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "dpi",
+                    "head_dots",
+                    "max_width_mm",
+                    "density_min",
+                    "density_max",
+                    "density_default",
+                    "media"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "name",
+                "connected"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "devices"
+        ],
+        "title": "DevicesOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "timeout_ms": {
+            "default": null,
+            "description": "How long to scan, milliseconds (default 5000, max 60000).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "ScanParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "List currently connected printers.",
+      "id": "device.list",
+      "journal": false,
+      "kind": "device",
+      "label": "Connected printers",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "devices": {
+            "items": {
+              "description": "A known printer (discovered, connected or virtual).",
+              "properties": {
+                "address": {
+                  "description": "Address usable with `device.connect`: `ble:<id>`, `usb:<port>`, `fake:<dir>`.",
+                  "type": "string"
+                },
+                "connected": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "description": "Printer model facts that commands need (subset of the registry entry).",
+                  "properties": {
+                    "density_default": {
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "density_max": {
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "density_min": {
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "dpi": {
+                      "format": "uint32",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "head_dots": {
+                      "format": "uint32",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "max_width_mm": {
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "media": {
+                      "items": {
+                        "description": "Media type of the label stock.",
+                        "enum": [
+                          "gap",
+                          "black_mark",
+                          "continuous",
+                          "transparent"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "dpi",
+                    "head_dots",
+                    "max_width_mm",
+                    "density_min",
+                    "density_max",
+                    "density_default",
+                    "media"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "name",
+                "connected"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "devices"
+        ],
+        "title": "DevicesOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Connect to a printer by address (from device.scan). Returns the device with its model.",
+      "id": "device.connect",
+      "journal": false,
+      "kind": "device",
+      "label": "Connect printer",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A known printer (discovered, connected or virtual).",
+        "properties": {
+          "address": {
+            "description": "Address usable with `device.connect`: `ble:<id>`, `usb:<port>`, `fake:<dir>`.",
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "model": {
+            "description": "Printer model facts that commands need (subset of the registry entry).",
+            "properties": {
+              "density_default": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "density_max": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "density_min": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "dpi": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "head_dots": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "max_width_mm": {
+                "format": "double",
+                "type": "number"
+              },
+              "media": {
+                "items": {
+                  "description": "Media type of the label stock.",
+                  "enum": [
+                    "gap",
+                    "black_mark",
+                    "continuous",
+                    "transparent"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "dpi",
+              "head_dots",
+              "max_width_mm",
+              "density_min",
+              "density_max",
+              "density_default",
+              "media"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "name",
+          "connected"
+        ],
+        "title": "DeviceInfo",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address from device.scan, e.g. `ble:…` or `usb:…`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "title": "ConnectParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Disconnect a printer (default: the single connected one).",
+      "id": "device.disconnect",
+      "journal": false,
+      "kind": "device",
+      "label": "Disconnect printer",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "title": "DisconnectOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Device address, e.g. `ble:…`, `usb:…`; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "AddressParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Read battery %, lid, paper presence and RFID paper info (default: the single connected printer).",
+      "id": "device.status",
+      "journal": false,
+      "kind": "device",
+      "label": "Printer status",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "status": {
+            "description": "Live device status.",
+            "properties": {
+              "battery_percent": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "lid_closed": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "paper": {
+                "description": "Label stock reported by the printer (RFID).",
+                "properties": {
+                  "barcode": {
+                    "type": "string"
+                  },
+                  "media": {
+                    "description": "Media type of the label stock.",
+                    "enum": [
+                      "gap",
+                      "black_mark",
+                      "continuous",
+                      "transparent",
+                      null
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "serial": {
+                    "type": "string"
+                  },
+                  "total": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "used": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "barcode",
+                  "serial",
+                  "total",
+                  "used"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "paper_present": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "battery_percent",
+              "lid_closed",
+              "paper_present",
+              "paper"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "address",
+          "status"
+        ],
+        "title": "StatusOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Device address, e.g. `ble:…`, `usb:…`; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "AddressParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Render every page at the connected model's dpi (variables substituted) and print it. copies 1–999 (default 1); density defaults to the label's, else the model's. Blocks until done. Run doc.check first.",
+      "id": "print.submit",
+      "journal": false,
+      "kind": "device",
+      "label": "Print",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "copies": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "density": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "dpi": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "duration_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pages_printed": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "address",
+          "pages_printed",
+          "duration_ms",
+          "copies",
+          "density",
+          "dpi"
+        ],
+        "title": "PrintOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Printer address; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "copies": {
+            "default": null,
+            "description": "Number of copies, 1–999 (default 1).",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "density": {
+            "default": null,
+            "description": "Print density; defaults to the label's density, else the model default.",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "PrintParams",
+        "type": "object"
+      },
+      "undoable": false
+    }
+  ],
+  "envelope_params": {
+    "coalesce": "string key; consecutive edits with the same key form one undo step",
+    "terse": "boolean; true drops `result` from the envelope"
+  }
+}

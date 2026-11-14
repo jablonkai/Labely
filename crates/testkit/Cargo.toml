@@ -1,0 +1,15 @@
+[package]
+name = "labely-testkit"
+description = "Dev-only fakes for Labely: deterministic renderer, fake device hub, test sessions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+labely-core.workspace = true
+
+[lints]
+workspace = true

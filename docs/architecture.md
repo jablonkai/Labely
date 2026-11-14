@@ -28,8 +28,8 @@ crates/
   protocol/   labely-protocol    pure encode/decode, no I/O, no async (NIIMBOT first; later ESC/POS, TSPL, ZPL, Phomemo…)
   core/       labely-core        document model, command registry, Session, undo/redo, batch, templates, data merge, check rules
   render/     labely-render      Document → grayscale → 1-bit Bitmap1 (text, barcodes, 2D codes, images, shapes, dithering)
-  transport/  labely-transport   Transport trait; ble (btleplug), serial/usb, sim, callback (FFI)
-  printers/   labely-printers    Driver trait, model registry (data files), DeviceHub, print queue, FakePrinter
+  transport/  labely-transport   Transport trait; ble (btleplug), serial/usb, memory, callback (FFI)
+  printers/   labely-printers    Driver trait, model registry (data files), DeviceHub, FakePrinter, NIIMBOT simulator
   mcp/        labely-mcp         rmcp server handler; Streamable HTTP (studio) + stdio (headless/bridge)
   cli/        labely-cli         binary `labely`
   studio/     labely-studio      egui app; lib target (for egui_kittest) + bin target
@@ -155,8 +155,8 @@ The command returns `[{rule, severity, element_id?, message, hint}]`:
 - **Pipeline.** Document plus record → layout in mm → rasterise to 8-bit gray at the model dpi
   (`tiny-skia`) → per-element conversion to 1-bit (threshold, Floyd–Steinberg, Atkinson,
   ordered/Bayer) → `Bitmap1`.
-- **Bitmap1 orientation.** Rotation to the model's print direction happens last, so `Bitmap1`
-  already matches the head (rows along the head width; [protocol.md §7.1](protocol.md)).
+- **Bitmap1 orientation.** `Bitmap1` is in label orientation. The printer driver rotates it for
+  the model's print direction and fits it to the head ([protocol.md §7.1](protocol.md)).
 - **Text.** `cosmic-text` (shaping, fallback, wrapping, auto-shrink). Bundled OFL fonts make
   goldens deterministic, and system fonts are optional. Vertical and curved text are added in
   Phase 3.
@@ -209,17 +209,19 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
   `include_str!` and extendable by user files. One entry is one model:
   ```json
   { "id": "niimbot.b21_pro", "vendor": "niimbot", "name": "B21 Pro", "match": {"model_codes": [785], "ble_name_prefix": ["B21"]},
-    "driver": "niimbot", "variant": "print_task_v4", "dpi": 300, "head_dots": 591, "max_width_mm": 50,
+    "driver": "niimbot", "task": "d110m_v4", "dpi": 300, "head_dots": 591, "max_width_mm": 50,
     "print_direction": "top", "density": {"min":1,"max":5,"default":3}, "label_types": ["gap","black_mark","continuous","transparent"],
     "rfid": true, "transports": ["ble","usb"] }
   ```
-  The model code (PrinterInfo 0x40, type 8) is authoritative and the BLE name only filters scans ([printers.md](printers.md#how-models-are-identified)). The exact `variant` names are fixed in Phase 1 against hardware.
+  The model code (PrinterInfo 0x40, type 8) is authoritative and the BLE name only filters scans ([printers.md](printers.md#how-models-are-identified)). `task` is one of `d110`, `b1`, `d110m_v4` or `auto` (picked from the protocol version); other variants listed in protocol.md §5.2 are recorded but not yet implemented.
 - **FakePrinter.** A `driver: "fake"` model writes each page as `<out>/<job>-<page>.png` plus a
   `job.json` (density, copies, label type). It is the default in tests, the CLI `--printer
   fake:<dir>` and demo mode.
-- **Sim transport.** A stateful NIIMBOT protocol simulator: it answers handshake, status and RFID,
-  and reassembles the raster. Driver tests run real byte streams without hardware. Captured
-  vendor traces (`fixtures/`) are replayed against encoders and decoders.
+- **Simulator.** `labely-printers::sim` is a stateful NIIMBOT protocol simulator on top of
+  `labely-transport::memory`. It answers handshake, status and RFID, models the B21 Pro
+  quirks, and reassembles the raster, so driver tests run real byte streams without hardware
+  (`sim:<model id>` address). It lives in `printers`, not `transport`, because it needs the
+  protocol crate. Captured vendor traces (`fixtures/`) are replayed against encoders and decoders.
 - **Queue and multiple printers.** The `DeviceHub` keeps one `PrinterSession` per connected
   printer. Each session has a FIFO queue with per-job progress events (`device.*` notifications,
   forwarded over MCP as progress). Batches over data records are expanded lazily, one record at a

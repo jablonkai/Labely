@@ -1,0 +1,28 @@
+{
+  "format_version": 1,
+  "name": "Hello B21 Pro",
+  "label": {
+    "width_mm": 50.0,
+    "height_mm": 30.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro",
+    "density": 3
+  },
+  "pages": [
+    {
+      "elements": [
+        { "id": 1, "type": "rect", "x_mm": 1.0, "y_mm": 1.0, "width_mm": 48.0, "height_mm": 28.0,
+          "stroke_mm": 0.4, "corner_radius_mm": 1.5 },
+        { "id": 2, "type": "text", "x_mm": 3.0, "y_mm": 2.5, "width_mm": 44.0, "height_mm": 7.0,
+          "text": "Labely árvíztűrő", "font_size_pt": 14.0, "bold": true, "align": "center", "fit": "shrink" },
+        { "id": 3, "type": "barcode", "x_mm": 3.0, "y_mm": 11.0, "width_mm": 28.0, "height_mm": 15.0,
+          "data": "LABELY-0001", "symbology": "code128" },
+        { "id": 4, "type": "code2d", "x_mm": 33.0, "y_mm": 11.0, "width_mm": 14.0, "height_mm": 14.0,
+          "data": "https://example.org/labely", "symbology": "qr" },
+        { "id": 5, "type": "line", "x_mm": 3.0, "y_mm": 10.0, "width_mm": 44.0, "height_mm": 0.0,
+          "stroke_mm": 0.3, "dash_mm": [1.0, 0.6] }
+      ]
+    }
+  ],
+  "next_id": 6
+}

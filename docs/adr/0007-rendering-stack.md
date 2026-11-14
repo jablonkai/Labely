@@ -10,7 +10,7 @@
   snapped to whole dots.
 - **Images.** image 0.25 and imageproc 0.27.
 - **1-bit conversion.** Done per element, with threshold, Floyd–Steinberg, Atkinson or Bayer.
-- **Output.** `Bitmap1`, already rotated to the model's print direction.
+- **Output.** `Bitmap1` in label orientation. Drivers rotate it for the model's print direction.
 - **Determinism.** Rendering must be byte-identical for the same input. Goldens use only bundled
   OFL fonts.
 - **Readability check.** The `doc.check` round-trip decodes codes with the same rxing build that
