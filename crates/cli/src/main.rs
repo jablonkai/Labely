@@ -41,6 +41,28 @@ enum Cmd {
         /// Save the document after running (to FILE, or this path).
         #[arg(long)]
         save: Option<Option<PathBuf>>,
+        /// Write the session journal (a replayable script) to this file.
+        #[arg(long)]
+        journal: Option<PathBuf>,
+    },
+    /// MCP server on stdio. Forwards to a running studio when one is listening (bridge),
+    /// otherwise serves an in-process session (headless).
+    Mcp {
+        /// Always serve in-process, even if a studio is running.
+        #[arg(long, conflicts_with = "connect")]
+        headless: bool,
+        /// Only bridge to a running studio; fail if none is listening.
+        #[arg(long)]
+        connect: bool,
+        /// Headless: let agents print (otherwise print.* is refused).
+        #[arg(long)]
+        allow_print: bool,
+        /// Headless: directory agents may read and write (repeatable; default: current dir).
+        #[arg(long = "root")]
+        roots: Vec<PathBuf>,
+        /// Studio connection file (default: <app-data>/mcp-connection.json).
+        #[arg(long)]
+        connection: Option<PathBuf>,
     },
     /// Render a document to PNG.
     Render {
@@ -84,6 +106,7 @@ enum Cmd {
 struct Ctx {
     session: Session,
     json: bool,
+    i18n: labely_i18n::I18n,
 }
 
 impl Ctx {
@@ -94,13 +117,14 @@ impl Ctx {
             Ok(env)
         } else {
             let e = &env["error"];
+            let code = e["code"].as_str().unwrap_or("internal");
             let mut msg = format!(
-                "{} ({id}): {}",
-                e["code"].as_str().unwrap_or("error"),
+                "{} [{code}] ({id}): {}",
+                self.i18n.error_title(code),
                 e["message"].as_str().unwrap_or("")
             );
             if let Some(h) = e["hint"].as_str() {
-                msg.push_str(&format!("\nhint: {h}"));
+                msg.push_str(&format!("\n{}: {h}", self.i18n.t("cli-hint")));
             }
             if self.json {
                 println!("{}", serde_json::to_string_pretty(&env)?);
@@ -123,7 +147,8 @@ impl Ctx {
             println!("{}", serde_json::to_string_pretty(r)?);
             for w in env["warnings"].as_array().into_iter().flatten() {
                 eprintln!(
-                    "warning: {}",
+                    "{}: {}",
+                    self.i18n.t("cli-warning"),
                     w.as_str().map_or_else(|| w.to_string(), str::to_owned)
                 );
             }
@@ -136,6 +161,7 @@ fn run(cli: Cli) -> Result<()> {
     let mut ctx = Ctx {
         session: Session::new(labely_printers::default_services()),
         json: cli.json,
+        i18n: labely_i18n::I18n::new(labely_i18n::Lang::detect()),
     };
     match cli.cmd {
         Cmd::Commands => {
@@ -161,6 +187,7 @@ fn run(cli: Cli) -> Result<()> {
             params,
             script,
             save,
+            journal,
         } => {
             if let Some(f) = &file {
                 ctx.open(f)?;
@@ -183,7 +210,20 @@ fn run(cli: Cli) -> Result<()> {
                     .context("--save needs a path when no FILE is open")?;
                 ctx.exec("doc.save", json!({ "path": path }))?;
             }
+            if let Some(out) = journal {
+                let env = ctx.exec("history.journal", json!({}))?;
+                let entries = &env["result"]["entries"];
+                std::fs::write(&out, serde_json::to_vec_pretty(entries)?)
+                    .with_context(|| format!("writing {}", out.display()))?;
+            }
         }
+        Cmd::Mcp {
+            headless,
+            connect,
+            allow_print,
+            roots,
+            connection,
+        } => mcp(headless, connect, allow_print, roots, connection)?,
         Cmd::Render { file, output, dpi } => {
             ctx.open(&file)?;
             let mut p = json!({});
@@ -256,6 +296,55 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn mcp(
+    headless: bool,
+    connect: bool,
+    allow_print: bool,
+    roots: Vec<PathBuf>,
+    connection: Option<PathBuf>,
+) -> Result<()> {
+    use labely_mcp::{LabelyMcp, LocalExecutor, connection as conn};
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    rt.block_on(async move {
+        if !headless {
+            let path = connection.unwrap_or_else(conn::default_path);
+            match conn::read(&path)? {
+                Some(info) => match labely_mcp::bridge::run(&info).await {
+                    Ok(()) => return Ok(()),
+                    Err(e) if connect => return Err(e.into()),
+                    Err(e) => {
+                        let i18n = labely_i18n::I18n::new(labely_i18n::Lang::detect());
+                        let err = e.to_string();
+                        let text = i18n.t_args(
+                            "cli-mcp-fallback",
+                            &[("error", labely_i18n::Arg::Str(&err))],
+                        );
+                        eprintln!("labely mcp: {text}");
+                    }
+                },
+                None if connect => bail!(
+                    "no running studio: {} does not exist (start the studio with MCP enabled)",
+                    path.display()
+                ),
+                None => {}
+            }
+        }
+        let roots = if roots.is_empty() {
+            vec![std::env::current_dir()?]
+        } else {
+            roots
+        };
+        let mut policy = labely_core::Policy::restricted(roots);
+        policy.allow_print = allow_print;
+        let session = Session::with_policy(labely_printers::default_services(), policy);
+        let server = LabelyMcp::new(std::sync::Arc::new(LocalExecutor::new(session)));
+        labely_mcp::serve_stdio(server).await?;
+        Ok(())
+    })
 }
 
 fn main() -> ExitCode {

@@ -23,3 +23,7 @@ workspace = true
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
+
+[dev-dependencies]
+labely-testkit.workspace = true
+serde_json.workspace = true

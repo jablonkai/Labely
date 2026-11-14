@@ -1,4 +1,4 @@
-//! Phase-1 commands. Registered in [`crate::registry`].
+//! Built-in commands. Registered in [`crate::registry`].
 
 pub mod device;
 pub mod doc;
@@ -6,6 +6,7 @@ pub mod element;
 pub mod history;
 pub mod meta;
 pub mod render;
+pub mod selection;
 pub mod variable;
 
 use std::collections::BTreeMap;

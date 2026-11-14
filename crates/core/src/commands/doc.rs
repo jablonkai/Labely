@@ -1,7 +1,5 @@
 //! `doc.*` commands (except `doc.check`, in `render`).
 
-use std::path::PathBuf;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -127,7 +125,7 @@ impl Command for DocOpen {
     }
 
     fn run(ctx: &mut Ctx<'_>, p: OpenParams) -> Result<OpenOutput, CommandError> {
-        let path = PathBuf::from(&p.path);
+        let path = ctx.check_path("path", &p.path, false)?;
         let doc = file::load(&path).map_err(file_error)?;
         let name = doc.name.clone();
         let doc_id = ctx.session().state.add_doc(OpenDoc::new(doc, Some(path)));
@@ -170,14 +168,10 @@ impl Command for DocSave {
 
     fn run(ctx: &mut Ctx<'_>, p: SaveParams) -> Result<SaveOutput, CommandError> {
         let id = ctx.doc_id(p.doc_id.as_deref())?;
-        let state = &mut ctx.session().state;
-        let open = state
-            .docs
-            .get_mut(&id)
-            .ok_or_else(CommandError::no_document)?;
-        let path = match (p.path, &open.path) {
-            (Some(p), _) => PathBuf::from(p),
-            (None, Some(p)) => p.clone(),
+        let stored = ctx.session.state.docs.get(&id).and_then(|o| o.path.clone());
+        let path = match (p.path, stored) {
+            (Some(p), _) => ctx.check_path("path", &p, true)?,
+            (None, Some(p)) => ctx.check_path("path", &p.to_string_lossy(), true)?,
             (None, None) => {
                 return Err(
                     CommandError::bad_params("this document has never been saved")
@@ -186,6 +180,12 @@ impl Command for DocSave {
                 );
             }
         };
+        let open = ctx
+            .session()
+            .state
+            .docs
+            .get_mut(&id)
+            .ok_or_else(CommandError::no_document)?;
         let bytes = file::save(&open.doc, &path).map_err(file_error)?;
         open.saved = Some(open.doc.clone());
         open.path = Some(path.clone());

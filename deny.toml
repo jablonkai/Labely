@@ -4,6 +4,8 @@ allow = [
   "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause",
   "ISC", "Zlib", "Unicode-3.0", "Unicode-DFS-2016", "MPL-2.0", "OFL-1.1", "CC0-1.0",
   "BSL-1.0", "0BSD", "CDLA-Permissive-2.0",
+  # egui's bundled Ubuntu-Light UI font (epaint_default_fonts); free to use and redistribute.
+  "Ubuntu-font-1.0",
 ]
 confidence-threshold = 0.9
 

@@ -8,6 +8,7 @@ pub mod commands;
 pub mod document;
 pub mod envelope;
 pub mod file;
+pub mod policy;
 pub mod raster;
 pub mod registry;
 pub mod schema;
@@ -18,10 +19,11 @@ pub mod steps;
 pub use command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
 pub use document::{Document, Element, ElementId, ElementKind, LabelSpec};
 pub use envelope::Envelope;
+pub use policy::Policy;
 pub use raster::Bitmap1;
 pub use registry::{CommandInfo, Registry};
 pub use services::{DeviceHub, Renderer, Services};
 pub use session::{JournalEntry, Session};
 
 /// Command API version; bump when any command schema changes incompatibly.
-pub const API_VERSION: u32 = 1;
+pub const API_VERSION: u32 = 2;

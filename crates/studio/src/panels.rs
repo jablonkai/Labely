@@ -1,0 +1,573 @@
+//! Side panels: layers, properties (generated from the command schemas), check results,
+//! printers, the status bar, the welcome screen and the print-raster preview.
+
+use egui::{Color32, Context, RichText, Ui};
+use labely_core::{Element, ElementId, Registry};
+use labely_i18n::Arg;
+use serde_json::{Map, Value, json};
+
+use crate::app::LabelyApp;
+use crate::menu;
+
+/// Element type → the command that creates it (its params schema describes the props).
+fn add_command(kind: &str) -> &'static str {
+    match kind {
+        "text" => "element.add_text",
+        "barcode" => "element.add_barcode",
+        "code2d" => "element.add_code2d",
+        "image" => "element.add_image",
+        "rect" => "element.add_rect",
+        "ellipse" => "element.add_ellipse",
+        _ => "element.add_line",
+    }
+}
+
+fn element_title(app: &LabelyApp, e: &Element) -> String {
+    let kind = e.kind.type_name();
+    let base = app.i18n.t(&format!("kind-{kind}"));
+    if let Some(n) = e.name.as_deref().filter(|n| !n.is_empty()) {
+        return n.to_owned();
+    }
+    let v = serde_json::to_value(&e.kind).unwrap_or_default();
+    let snippet = v
+        .get("text")
+        .or_else(|| v.get("data"))
+        .and_then(Value::as_str)
+        .map(|s| {
+            s.lines()
+                .next()
+                .unwrap_or("")
+                .chars()
+                .take(24)
+                .collect::<String>()
+        });
+    match snippet {
+        Some(s) if !s.is_empty() => format!("{base}: {s}"),
+        _ => format!("{base} #{}", e.id.0),
+    }
+}
+
+/// Layers, top of the stack first.
+pub fn layers(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.heading(app.i18n.t("panel-layers"));
+    let Some(doc) = app.session.doc_arc(None) else {
+        return;
+    };
+    let selection = app.selection();
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        for e in doc.elements().collect::<Vec<_>>().into_iter().rev() {
+            ui.horizontal(|ui| {
+                let eye = if e.hidden { "—" } else { "👁" };
+                if ui
+                    .small_button(eye)
+                    .on_hover_text(app.i18n.t("layer-toggle-visible"))
+                    .clicked()
+                {
+                    app.run_reporting(
+                        "element.set_props",
+                        json!({"id": e.id, "props": {"hidden": !e.hidden}}),
+                    );
+                }
+                let lock = if e.locked { "🔒" } else { "🔓" };
+                if ui
+                    .small_button(lock)
+                    .on_hover_text(app.i18n.t("layer-toggle-lock"))
+                    .clicked()
+                {
+                    app.run_reporting(
+                        "element.set_props",
+                        json!({"id": e.id, "props": {"locked": !e.locked}}),
+                    );
+                }
+                let selected = selection.contains(&e.id);
+                let r = ui.selectable_label(selected, element_title(app, e));
+                if r.clicked() {
+                    if ui.input(|i| i.modifiers.shift || i.modifiers.command) {
+                        app.run("selection.set", json!({"ids": [e.id], "mode": "toggle"}));
+                    } else {
+                        app.select(&[e.id]);
+                    }
+                }
+                r.context_menu(|ui| {
+                    for (to, key) in [
+                        ("front", "layer-front"),
+                        ("forward", "layer-forward"),
+                        ("backward", "layer-backward"),
+                        ("back", "layer-back"),
+                    ] {
+                        if ui.button(app.i18n.t(key)).clicked() {
+                            app.run_reporting("element.reorder", json!({"id": e.id, "to": to}));
+                            ui.close();
+                        }
+                    }
+                });
+            });
+        }
+    });
+}
+
+/// Enum choices of a schema node: `enum` or `oneOf`/`anyOf` of consts.
+fn enum_values(schema: &Value) -> Option<Vec<String>> {
+    if let Some(Value::Array(a)) = schema.get("enum") {
+        return Some(
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect(),
+        );
+    }
+    for key in ["oneOf", "anyOf"] {
+        if let Some(Value::Array(alts)) = schema.get(key) {
+            let mut out = Vec::new();
+            for alt in alts {
+                if let Some(c) = alt.get("const").and_then(Value::as_str) {
+                    out.push(c.to_owned());
+                } else if let Some(vs) = enum_values(alt) {
+                    out.extend(vs);
+                } else if alt.get("type") == Some(&json!("null")) {
+                    continue;
+                } else {
+                    return None;
+                }
+            }
+            if !out.is_empty() {
+                return Some(out);
+            }
+        }
+    }
+    None
+}
+
+/// Primary JSON type of a schema node, ignoring `null`.
+fn schema_type(schema: &Value) -> Option<&str> {
+    match schema.get("type") {
+        Some(Value::String(s)) => Some(s.as_str()),
+        Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).find(|t| *t != "null"),
+        _ => None,
+    }
+}
+
+/// One property editor row. Returns a new value when edited.
+fn prop_editor(ui: &mut Ui, label: &str, schema: &Value, value: &Value) -> Option<Value> {
+    let lbl = ui
+        .label(label)
+        .on_hover_text(
+            schema
+                .get("description")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
+        )
+        .id;
+    let out = if let Some(choices) = enum_values(schema) {
+        let mut cur = value.as_str().unwrap_or("").to_owned();
+        let before = cur.clone();
+        egui::ComboBox::from_id_salt(label)
+            .selected_text(cur.clone())
+            .show_ui(ui, |ui| {
+                for c in &choices {
+                    ui.selectable_value(&mut cur, c.clone(), c);
+                }
+            })
+            .response
+            .labelled_by(lbl);
+        (cur != before).then(|| json!(cur))
+    } else {
+        match (schema_type(schema), value) {
+            (Some("boolean"), _) => {
+                let mut b = value.as_bool().unwrap_or(false);
+                ui.checkbox(&mut b, "")
+                    .labelled_by(lbl)
+                    .changed()
+                    .then(|| json!(b))
+            }
+            (Some("number"), _) => {
+                let mut n = value.as_f64().unwrap_or(0.0);
+                ui.add(egui::DragValue::new(&mut n).speed(0.1).max_decimals(2))
+                    .labelled_by(lbl)
+                    .changed()
+                    .then(|| json!(n))
+            }
+            (Some("integer"), _) => {
+                let mut n = value.as_i64().unwrap_or(0);
+                ui.add(egui::DragValue::new(&mut n))
+                    .labelled_by(lbl)
+                    .changed()
+                    .then(|| json!(n))
+            }
+            (Some("string"), _) | (None, Value::String(_)) => {
+                let mut s = value.as_str().unwrap_or("").to_owned();
+                let multiline = label == "text";
+                let r = if multiline {
+                    ui.add(egui::TextEdit::multiline(&mut s).desired_rows(2))
+                } else {
+                    ui.text_edit_singleline(&mut s)
+                };
+                r.labelled_by(lbl).changed().then(|| json!(s))
+            }
+            _ => {
+                ui.label(RichText::new(value.to_string()).weak());
+                None
+            }
+        }
+    };
+    ui.end_row();
+    out
+}
+
+const FRAME_FIELDS: &[&str] = &["x_mm", "y_mm", "width_mm", "height_mm", "rotation_deg"];
+
+/// Properties of the single selected element, or of the label when nothing is selected.
+pub fn properties(app: &mut LabelyApp, ui: &mut Ui) {
+    let Some(doc) = app.session.doc_arc(None) else {
+        return;
+    };
+    let selection = app.selection();
+    egui::ScrollArea::vertical().show(ui, |ui| match selection.as_slice() {
+        [] => label_properties(app, ui, &doc),
+        [id] => {
+            if let Some(e) = doc.element(*id) {
+                element_properties(app, ui, e);
+            }
+        }
+        many => {
+            ui.heading(app.i18n.t("panel-properties"));
+            ui.label(
+                app.i18n
+                    .t_args("props-multiple", &[("count", Arg::Num(many.len() as f64))]),
+            );
+        }
+    });
+}
+
+fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
+    let kind = e.kind.type_name();
+    ui.heading(app.i18n.t(&format!("kind-{kind}")));
+    let schema = Registry::builtin()
+        .get(add_command(kind))
+        .map(|c| c.params_schema())
+        .unwrap_or_default();
+    let props_schema = schema
+        .get("properties")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let whole = serde_json::to_value(e).unwrap_or_default();
+    let mut edits: Vec<(String, Value)> = Vec::new();
+
+    egui::CollapsingHeader::new(app.i18n.t("props-frame"))
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::Grid::new("frame").num_columns(2).show(ui, |ui| {
+                let name_schema = json!({"type": "string"});
+                let name = whole.get("name").cloned().unwrap_or(json!(""));
+                if let Some(v) = prop_editor(ui, &app.i18n.t("prop-name"), &name_schema, &name) {
+                    edits.push(("name".into(), v));
+                }
+                for f in FRAME_FIELDS {
+                    let s = props_schema
+                        .get(*f)
+                        .cloned()
+                        .unwrap_or(json!({"type": "number"}));
+                    let label = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
+                    if let Some(v) = prop_editor(ui, &label, &s, &whole[*f]) {
+                        edits.push(((*f).into(), v));
+                    }
+                }
+                for f in ["locked", "hidden"] {
+                    let label = app.i18n.t(&format!("prop-{f}"));
+                    if let Some(v) = prop_editor(ui, &label, &json!({"type": "boolean"}), &whole[f])
+                    {
+                        edits.push((f.into(), v));
+                    }
+                }
+            });
+        });
+
+    egui::CollapsingHeader::new(app.i18n.t("props-content"))
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::Grid::new("content").num_columns(2).show(ui, |ui| {
+                let Some(obj) = props_schema.as_object() else {
+                    return;
+                };
+                for (key, s) in obj {
+                    let skip = FRAME_FIELDS.contains(&key.as_str())
+                        || matches!(
+                            key.as_str(),
+                            "doc_id" | "name" | "path" | "data_base64" | "mime"
+                        );
+                    if skip {
+                        continue;
+                    }
+                    let value = whole.get(key).cloned().unwrap_or(Value::Null);
+                    let label = key.replace('_', " ");
+                    if let Some(v) = prop_editor(ui, &label, s, &value) {
+                        edits.push((key.clone(), v));
+                    }
+                }
+            });
+        });
+
+    for (key, value) in edits {
+        let mut props = Map::new();
+        props.insert(key.clone(), value);
+        app.run_reporting(
+            "element.set_props",
+            json!({"id": e.id, "props": props, "coalesce": format!("prop-{}-{key}", e.id.0)}),
+        );
+    }
+}
+
+fn label_properties(app: &mut LabelyApp, ui: &mut Ui, doc: &labely_core::Document) {
+    ui.heading(app.i18n.t("props-label"));
+    let schema = Registry::builtin()
+        .get("doc.set_label")
+        .map(|c| c.params_schema())
+        .unwrap_or_default();
+    let props = schema.get("properties").cloned().unwrap_or_default();
+    let label = serde_json::to_value(&doc.label).unwrap_or_default();
+    let models = app.session.services().devices.models();
+    let mut edits: Vec<(String, Value)> = Vec::new();
+    egui::Grid::new("label").num_columns(2).show(ui, |ui| {
+        if let Some(v) = prop_editor(
+            ui,
+            &app.i18n.t("prop-name"),
+            &json!({"type": "string"}),
+            &json!(doc.name),
+        ) {
+            edits.push(("name".into(), v));
+        }
+        for f in [
+            "width_mm",
+            "height_mm",
+            "corner_radius_mm",
+            "media",
+            "density",
+        ] {
+            let s = props.get(f).cloned().unwrap_or(json!({"type": "number"}));
+            let text = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
+            if let Some(v) = prop_editor(ui, &text, &s, &label[f]) {
+                edits.push((f.into(), v));
+            }
+        }
+        let lbl = ui.label(app.i18n.t("prop-printer-model")).id;
+        let current = doc.label.printer_model.clone().unwrap_or_default();
+        let mut pick = current.clone();
+        let shown = models
+            .iter()
+            .find(|m| m.id == current)
+            .map_or_else(|| app.i18n.t("model-none"), |m| m.name.clone());
+        egui::ComboBox::from_id_salt("printer_model")
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                for m in &models {
+                    ui.selectable_value(
+                        &mut pick,
+                        m.id.clone(),
+                        format!("{} ({} dpi)", m.name, m.dpi),
+                    );
+                }
+            })
+            .response
+            .labelled_by(lbl);
+        if pick != current {
+            edits.push(("printer_model".into(), json!(pick)));
+        }
+        ui.end_row();
+    });
+    for (key, value) in edits {
+        let mut p = Map::new();
+        p.insert(key.clone(), value);
+        p.insert("coalesce".into(), json!(format!("label-{key}")));
+        if app.run_reporting("doc.set_label", Value::Object(p)).ok {
+            app.ui.fit_pending |= key.ends_with("_mm");
+        }
+    }
+}
+
+/// Bottom tools: check results and printers.
+pub fn tools(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.columns(
+        usize::from(app.ui.show_check) + usize::from(app.ui.show_printers),
+        |cols| {
+            let mut i = 0;
+            if app.ui.show_check {
+                check_panel(app, &mut cols[i]);
+                i += 1;
+            }
+            if app.ui.show_printers {
+                printers_panel(app, &mut cols[i]);
+            }
+        },
+    );
+}
+
+fn check_panel(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.horizontal(|ui| {
+        ui.heading(app.i18n.t("panel-check"));
+        if ui.button(app.i18n.t("action-run-check")).clicked() {
+            menu::invoke(app, "doc.check");
+        }
+    });
+    let Some(check) = app.ui.check.clone() else {
+        ui.label(app.i18n.t("check-not-run"));
+        return;
+    };
+    let issues = check["issues"].as_array().cloned().unwrap_or_default();
+    if issues.is_empty() {
+        ui.colored_label(Color32::from_rgb(40, 150, 70), app.i18n.t("check-clean"));
+    }
+    egui::ScrollArea::vertical()
+        .id_salt("check")
+        .show(ui, |ui| {
+            for issue in issues {
+                let (sym, color) = match issue["severity"].as_str() {
+                    Some("error") => ("⛔", Color32::from_rgb(200, 50, 50)),
+                    Some("warning") => ("⚠", Color32::from_rgb(200, 140, 0)),
+                    _ => ("ℹ", ui.visuals().weak_text_color()),
+                };
+                let text = format!(
+                    "{sym} {}: {}",
+                    issue["rule"].as_str().unwrap_or(""),
+                    issue["message"].as_str().unwrap_or("")
+                );
+                let r = ui
+                    .add(
+                        egui::Label::new(RichText::new(text).color(color))
+                            .sense(egui::Sense::click()),
+                    )
+                    .on_hover_text(issue["hint"].as_str().unwrap_or(""));
+                if r.clicked()
+                    && let Some(id) = issue["element_id"].as_u64()
+                {
+                    app.select(&[ElementId(id)]);
+                }
+            }
+        });
+}
+
+fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.horizontal(|ui| {
+        ui.heading(app.i18n.t("panel-printers"));
+        if ui.button(app.i18n.t("action-scan")).clicked() {
+            menu::scan(app);
+        }
+    });
+    let connected = app.session.services().devices.connected();
+    egui::ScrollArea::vertical()
+        .id_salt("printers")
+        .show(ui, |ui| {
+            for d in &connected {
+                ui.horizontal(|ui| {
+                    ui.label(format!("🖶 {} — {}", d.name, d.address));
+                    if ui.small_button(app.i18n.t("action-status")).clicked() {
+                        let env = app.run_reporting("device.status", json!({"address": d.address}));
+                        if let Some(r) = env.result {
+                            app.set_status(r["status"].to_string(), false);
+                        }
+                    }
+                    if ui.small_button(app.i18n.t("action-disconnect")).clicked() {
+                        app.run_reporting("device.disconnect", json!({"address": d.address}));
+                    }
+                });
+            }
+            for d in app.ui.scanned.clone() {
+                let address = d["address"].as_str().unwrap_or("").to_owned();
+                if connected.iter().any(|c| c.address == address) {
+                    continue;
+                }
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} — {address}", d["name"].as_str().unwrap_or("?")));
+                    if ui.small_button(app.i18n.t("action-connect")).clicked() {
+                        app.run_reporting("device.connect", json!({"address": address}));
+                    }
+                });
+            }
+            if connected.is_empty() && app.ui.scanned.is_empty() {
+                ui.label(RichText::new(app.i18n.t("printers-none")).weak());
+            }
+        });
+}
+
+/// Status bar: document, zoom, MCP state, last message.
+pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.horizontal(|ui| {
+        if let Some(doc) = app.session.doc(None) {
+            let n = doc.elements().count();
+            ui.label(
+                app.i18n
+                    .t_args("status-elements", &[("count", Arg::Num(n as f64))]),
+            );
+            ui.separator();
+            ui.label(format!("{:.0}%", app.ui.zoom / 8.0 * 100.0));
+            ui.separator();
+        }
+        match &app.mcp {
+            Some(h) => {
+                ui.label(format!("MCP • {}", h.url.trim_start_matches("http://")))
+                    .on_hover_text(app.i18n.t("mcp-on-hint"));
+                ui.checkbox(
+                    &mut app.ui.allow_agent_print,
+                    app.i18n.t("action-allow-agent-print"),
+                );
+                if let Some(last) = app.ui.agent_log.back() {
+                    ui.label(RichText::new(format!("⚙ {last}")).weak());
+                }
+            }
+            None => {
+                ui.label(RichText::new(app.i18n.t("mcp-off")).weak());
+            }
+        }
+        if let Some(s) = &app.ui.status
+            && s.at.elapsed().as_secs() < 8
+        {
+            ui.separator();
+            let color = if s.error {
+                Color32::from_rgb(200, 60, 60)
+            } else {
+                ui.visuals().text_color()
+            };
+            ui.colored_label(color, &s.text);
+        }
+    });
+}
+
+/// Shown when no document is open.
+pub fn welcome(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.vertical_centered(|ui| {
+        ui.add_space(ui.available_height() / 3.0);
+        ui.heading("Labely");
+        ui.label(app.i18n.t("welcome-text"));
+        ui.add_space(12.0);
+        if ui
+            .button(menu::command_label(&app.i18n, "doc.new"))
+            .clicked()
+        {
+            menu::invoke(app, "doc.new");
+        }
+        if ui
+            .button(menu::command_label(&app.i18n, "doc.open"))
+            .clicked()
+        {
+            menu::invoke(app, "doc.open");
+        }
+    });
+}
+
+/// The print raster at one screen point per dot.
+pub fn preview_window(app: &mut LabelyApp, ctx: &Context) {
+    let mut open = app.ui.show_preview;
+    egui::Window::new(app.i18n.t("panel-preview"))
+        .open(&mut open)
+        .resizable(true)
+        .show(ctx, |ui| {
+            if let Some(r) = &app.raster {
+                ui.label(format!("{}×{} dots, {} dpi", r.size[0], r.size[1], r.dpi));
+                egui::ScrollArea::both().show(ui, |ui| {
+                    ui.image((
+                        r.texture.id(),
+                        egui::vec2(r.size[0] as f32, r.size[1] as f32),
+                    ));
+                });
+            }
+        });
+    app.ui.show_preview = open;
+}

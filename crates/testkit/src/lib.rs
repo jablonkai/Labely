@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use labely_core::commands::interpolate;
 use labely_core::document::{Document, ElementKind, MediaType, TextFit};
 use labely_core::services::{
-    DecodedCode, DeviceError, DeviceHub, DeviceInfo, DeviceStatus, ModelInfo, PrintReport,
-    PrintRequest, RenderError, RenderIssue, RenderOptions, RenderOutput, Renderer, Services,
+    DecodedCode, DeviceError, DeviceHub, DeviceInfo, DeviceStatus, ModelInfo, PaperInfo,
+    PrintReport, PrintRequest, RenderError, RenderIssue, RenderOptions, RenderOutput, Renderer,
+    Services,
 };
 use labely_core::{Bitmap1, Session};
 
@@ -267,6 +268,7 @@ struct HubState {
     connected: bool,
     prints: Vec<(String, PrintRequest)>,
     fail_next_print: Option<DeviceError>,
+    paper: Option<PaperInfo>,
 }
 
 /// One fake printer at [`FAKE_ADDRESS`]; records every [`PrintRequest`].
@@ -283,6 +285,11 @@ impl FakeDeviceHub {
     /// Jobs printed so far, with their address.
     pub fn prints(&self) -> Vec<(String, PrintRequest)> {
         lock(&self.state).prints.clone()
+    }
+
+    /// Paper reported by `status` (RFID).
+    pub fn set_paper(&self, paper: Option<PaperInfo>) {
+        lock(&self.state).paper = paper;
     }
 
     /// Make the next `print` fail with `err`.
@@ -350,7 +357,7 @@ impl DeviceHub for FakeDeviceHub {
             battery_percent: Some(100),
             lid_closed: Some(true),
             paper_present: Some(true),
-            paper: None,
+            paper: lock(&self.state).paper.clone(),
         })
     }
 

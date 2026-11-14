@@ -4,7 +4,7 @@ use base64::Engine;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{DEFAULT_DPI, check_dpi, doc_model, interpolate, render_options};
+use super::{DEFAULT_DPI, check_dpi, check_mm, doc_model, interpolate, render_options};
 use crate::command::{Command, CommandError, CommandMeta, Ctx};
 use crate::document::{Document, Element, ElementId, ElementKind};
 use crate::services::{RenderError, RenderIssue};
@@ -139,6 +139,22 @@ pub struct CheckParams {
     /// Check resolution in dpi; defaults to the label's printer model dpi, else 203.
     #[serde(default)]
     pub dpi: Option<u32>,
+    /// Safe margin from the label edge in mm; elements inside it are reported. Default 0.
+    #[serde(default)]
+    pub margin_mm: Option<f64>,
+    /// Printer whose loaded paper (RFID) is compared with the label. Defaults to the only
+    /// connected printer, if exactly one is connected.
+    #[serde(default)]
+    pub address: Option<String>,
+}
+
+/// Inputs of [`check_document`] besides the document.
+#[derive(Debug, Clone, Default)]
+pub struct CheckOptions {
+    pub dpi: u32,
+    pub margin_mm: f64,
+    /// Paper the printer reported, if known.
+    pub paper: Option<crate::services::PaperInfo>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -159,11 +175,125 @@ fn rotated_bounds(e: &Element) -> (f64, f64, f64, f64) {
     (cx - ex, cy - ey, cx + ex, cy + ey)
 }
 
-/// Run all Phase-1 rules on `doc` at `dpi`.
-pub fn check_document(ctx: &Ctx<'_>, doc: &Document, dpi: u32) -> Vec<CheckIssue> {
+fn overlaps(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {
+    a.0 < b.2 && b.0 < a.2 && a.1 < b.3 && b.1 < a.3
+}
+
+/// Run all rules of architecture §3.4 on `doc`.
+pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<CheckIssue> {
     const EPS: f64 = 0.01;
+    let dpi = o.dpi;
     let mut issues = Vec::new();
     let label = &doc.label;
+    let visible: Vec<&Element> = doc.elements().filter(|e| !e.hidden).collect();
+    let model = doc_model(ctx, doc);
+
+    if o.margin_mm > 0.0 {
+        let m = o.margin_mm;
+        for e in &visible {
+            let (x0, y0, x1, y1) = rotated_bounds(e);
+            let inside_label = x0 >= -EPS
+                && y0 >= -EPS
+                && x1 <= label.width_mm + EPS
+                && y1 <= label.height_mm + EPS;
+            if inside_label
+                && (x0 < m - EPS
+                    || y0 < m - EPS
+                    || x1 > label.width_mm - m + EPS
+                    || y1 > label.height_mm - m + EPS)
+            {
+                issues.push(CheckIssue::new(
+                    "in_margin",
+                    Severity::Warning,
+                    Some(e.id),
+                    format!("element {} is within the {m} mm margin", e.id.0),
+                    "move it further from the label edge",
+                ));
+            }
+        }
+    }
+
+    if let Some(m) = &model {
+        if dpi != m.dpi {
+            issues.push(CheckIssue::new(
+                "dpi_mismatch",
+                Severity::Warning,
+                None,
+                format!(
+                    "checked at {dpi} dpi but the {} prints at {} dpi",
+                    m.name, m.dpi
+                ),
+                "omit dpi to check at the model resolution",
+            ));
+        }
+        let head_mm = f64::from(m.head_dots) * 25.4 / f64::from(m.dpi);
+        if label.width_mm > head_mm + EPS {
+            let left = (label.width_mm - head_mm) / 2.0;
+            let right = left + head_mm;
+            for e in &visible {
+                let (x0, _, x1, _) = rotated_bounds(e);
+                if x0 < left - EPS || x1 > right + EPS {
+                    issues.push(CheckIssue::new(
+                        "outside_printable",
+                        Severity::Warning,
+                        Some(e.id),
+                        format!(
+                            "element {} reaches outside the {head_mm:.1} mm printable width of the {}",
+                            e.id.0, m.name
+                        ),
+                        "keep elements within the centred printable area",
+                    ));
+                }
+            }
+        }
+    }
+
+    if let Some(paper) = &o.paper
+        && let Some(media) = paper.media
+        && media != label.media
+    {
+        issues.push(CheckIssue::new(
+            "paper_mismatch",
+            Severity::Warning,
+            None,
+            format!(
+                "the printer reports {media:?} paper (RFID {}), the label is set to {:?}",
+                paper.barcode, label.media
+            ),
+            "set the label media with doc.set_label or load matching paper",
+        ));
+    }
+
+    // Bindings: `{{name}}` must name a variable, and should not be empty.
+    for e in doc.elements() {
+        let Ok(v) = serde_json::to_value(&e.kind) else {
+            continue;
+        };
+        let mut names = Vec::new();
+        collect_bindings(&v, &mut names);
+        for name in names {
+            match doc.variables.get(&name) {
+                None => issues.push(CheckIssue::new(
+                    "binding_missing",
+                    Severity::Warning,
+                    Some(e.id),
+                    format!(
+                        "element {} uses {{{{{name}}}}} but no such variable is set",
+                        e.id.0
+                    ),
+                    "set it with variable.set, or fix the name",
+                )),
+                Some(val) if val.is_empty() => issues.push(CheckIssue::new(
+                    "binding_empty",
+                    Severity::Info,
+                    Some(e.id),
+                    format!("variable `{name}` used by element {} is empty", e.id.0),
+                    "give it a value with variable.set",
+                )),
+                Some(_) => {}
+            }
+        }
+    }
 
     for e in doc.elements().filter(|e| !e.hidden) {
         let (x0, y0, x1, y1) = rotated_bounds(e);
@@ -184,7 +314,7 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, dpi: u32) -> Vec<CheckIssue
         }
     }
 
-    if let Some(m) = doc_model(ctx, doc) {
+    if let Some(m) = &model {
         if label.width_mm > m.max_width_mm + EPS {
             issues.push(CheckIssue::new(
                 "label_too_wide",
@@ -304,6 +434,48 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, dpi: u32) -> Vec<CheckIssue
                 ),
                 "pick a bundled font family",
             ),
+            RenderIssue::LowContrast {
+                element_id,
+                black_percent,
+            } => CheckIssue::new(
+                "low_contrast",
+                Severity::Warning,
+                Some(*element_id),
+                format!(
+                    "image of element {} is {black_percent}% black after dithering",
+                    element_id.0
+                ),
+                "adjust brightness, contrast or threshold (element.set_props)",
+            ),
+            RenderIssue::CodeLayout {
+                element_id,
+                module_dots,
+                slack_dots,
+                quiet_modules,
+            } => {
+                let Some(e) = doc.element(*element_id) else {
+                    continue;
+                };
+                let horizontal_only = matches!(e.kind, ElementKind::Barcode(_));
+                let need_mm = f64::from(quiet_modules * module_dots) * 25.4 / f64::from(dpi);
+                let have_mm = f64::from(*slack_dots) * 25.4 / f64::from(dpi)
+                    + clearance(e, &visible, label, horizontal_only);
+                if have_mm + EPS < need_mm {
+                    CheckIssue::new(
+                        "quiet_zone",
+                        Severity::Warning,
+                        Some(*element_id),
+                        format!(
+                            "{} element {} has {have_mm:.2} mm of quiet zone, {need_mm:.2} mm                              ({quiet_modules} modules) is recommended",
+                            e.kind.type_name(),
+                            element_id.0
+                        ),
+                        "leave blank space around the code or make its box wider than the symbol",
+                    )
+                } else {
+                    continue;
+                }
+            }
         });
     }
 
@@ -341,6 +513,99 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, dpi: u32) -> Vec<CheckIssue
     issues
 }
 
+/// Collect `{{name}}` binding names from every string in `v`.
+fn collect_bindings(v: &serde_json::Value, out: &mut Vec<String>) {
+    match v {
+        serde_json::Value::String(s) => {
+            let mut rest = s.as_str();
+            while let Some(start) = rest.find("{{") {
+                let after = &rest[start + 2..];
+                let Some(end) = after.find("}}") else { break };
+                let name = after[..end].trim().to_owned();
+                if !name.is_empty() && !out.contains(&name) {
+                    out.push(name);
+                }
+                rest = &after[end + 2..];
+            }
+        }
+        serde_json::Value::Array(a) => a.iter().for_each(|x| collect_bindings(x, out)),
+        serde_json::Value::Object(m) => m.values().for_each(|x| collect_bindings(x, out)),
+        _ => {}
+    }
+}
+
+/// Free space in mm around `e` on its quiet-zone sides, up to the label edge or the nearest
+/// other visible element. `horizontal_only` for 1D codes (left and right of the bars).
+fn clearance(
+    e: &Element,
+    others: &[&Element],
+    label: &crate::LabelSpec,
+    horizontal_only: bool,
+) -> f64 {
+    let b = rotated_bounds(e);
+    let turned = {
+        let r = e.rotation_deg.rem_euclid(180.0);
+        (45.0..135.0).contains(&r)
+    };
+    // Sides to measure: (dx_sign, dy_sign).
+    let sides: &[(i8, i8)] = match (horizontal_only, turned) {
+        (true, false) => &[(-1, 0), (1, 0)],
+        (true, true) => &[(0, -1), (0, 1)],
+        (false, _) => &[(-1, 0), (1, 0), (0, -1), (0, 1)],
+    };
+    let mut min = f64::INFINITY;
+    for &(dx, dy) in sides {
+        let mut gap = match (dx, dy) {
+            (-1, _) => b.0,
+            (1, _) => label.width_mm - b.2,
+            (_, -1) => b.1,
+            _ => label.height_mm - b.3,
+        };
+        for o in others.iter().filter(|o| o.id != e.id) {
+            let ob = rotated_bounds(o);
+            if overlaps(b, ob) {
+                continue; // overlapping elements are a decode problem, not a quiet-zone one
+            }
+            let in_lane = if dx != 0 {
+                ob.1 < b.3 && b.1 < ob.3
+            } else {
+                ob.0 < b.2 && b.0 < ob.2
+            };
+            if !in_lane {
+                continue;
+            }
+            let d = match (dx, dy) {
+                (-1, _) if ob.2 <= b.0 => b.0 - ob.2,
+                (1, _) if ob.0 >= b.2 => ob.0 - b.2,
+                (_, -1) if ob.3 <= b.1 => b.1 - ob.3,
+                (_, 1) if ob.1 >= b.3 => ob.1 - b.3,
+                _ => continue,
+            };
+            gap = gap.min(d);
+        }
+        min = min.min(gap.max(0.0));
+    }
+    if min.is_finite() { min } else { 0.0 }
+}
+
+/// Paper loaded in `address` (or the only connected printer); `None` when unknown.
+fn check_paper(
+    ctx: &Ctx<'_>,
+    address: Option<&str>,
+) -> Result<Option<crate::services::PaperInfo>, CommandError> {
+    let devices = ctx.services().devices.clone();
+    match address {
+        Some(a) => Ok(devices.status(a)?.paper),
+        None => {
+            let connected = devices.connected();
+            match connected.as_slice() {
+                [only] => Ok(devices.status(&only.address).ok().and_then(|s| s.paper)),
+                _ => Ok(None),
+            }
+        }
+    }
+}
+
 /// `doc.check`
 #[derive(Debug)]
 pub struct DocCheck;
@@ -353,17 +618,28 @@ impl Command for DocCheck {
     fn meta() -> CommandMeta {
         CommandMeta::query(
             "Check document",
-            "Find print problems: elements outside the label, text overflow or shrinking, \
-             barcode encode failures, modules < 2 dots, codes that do not decode from the \
-             rendered raster, label wider than the model's head, density out of model range. \
-             Returns {ok, dpi, issues:[{rule, severity, element_id?, message, hint}]}.",
+            "Find print problems. Rules: out_of_bounds, in_margin (with margin_mm), \
+             outside_printable, label_too_wide, dpi_mismatch, density_out_of_range, \
+             paper_mismatch (RFID media of the printer), binding_missing, binding_empty, \
+             render_failed, text_overflow, text_shrunk (< 5 pt is a warning), encode_failed, \
+             module_too_narrow (< 2 dots), quiet_zone, code_unreadable (render, decode, \
+             compare), bad_asset, font_fallback, low_contrast. Returns {ok, dpi, \
+             issues:[{rule, severity, element_id?, message, hint}]}; ok is false when any issue \
+             has severity error.",
         )
     }
 
     fn run(ctx: &mut Ctx<'_>, p: CheckParams) -> Result<CheckOutput, CommandError> {
         let doc = ctx.doc_arc(p.doc_id.as_deref())?;
         let dpi = pick_dpi(ctx, &doc, p.dpi)?;
-        let issues = check_document(ctx, &doc, dpi);
+        let margin_mm = check_mm("margin_mm", p.margin_mm.unwrap_or(0.0), false)?;
+        let paper = check_paper(ctx, p.address.as_deref())?;
+        let opts = CheckOptions {
+            dpi,
+            margin_mm,
+            paper,
+        };
+        let issues = check_document(ctx, &doc, &opts);
         let ok = !issues.iter().any(|i| i.severity == Severity::Error);
         Ok(CheckOutput { ok, dpi, issues })
     }

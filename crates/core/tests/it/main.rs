@@ -6,6 +6,7 @@ mod commands;
 mod device;
 mod file;
 mod history;
+mod phase2;
 mod schema;
 
 use labely_core::{CommandError, Session};
