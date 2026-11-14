@@ -57,7 +57,9 @@ fn enabled(app: &LabelyApp, id: &str) -> bool {
         "doc.new" | "doc.open" | "device.scan" => true,
         "history.undo" => app.session.can_undo(None),
         "history.redo" => app.session.can_redo(None),
-        "element.delete" | "element.duplicate" | "element.reorder" => has_sel,
+        "element.delete" | "element.duplicate" | "element.reorder" | "element.ungroup"
+        | "element.lock" => has_sel,
+        "element.group" => app.selection().len() >= 2,
         _ => has_doc,
     }
 }
@@ -129,8 +131,65 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
                 ui.close();
             }
         }
+        "arrange" => {
+            ui.separator();
+            let n = app.selection().len();
+            ui.add_enabled_ui(n >= 1, |ui| {
+                ui.menu_button(app.i18n.t("menu-align"), |ui| {
+                    for edge in ["left", "center", "right", "top", "middle", "bottom"] {
+                        if ui.button(app.i18n.t(&format!("align-{edge}"))).clicked() {
+                            let ids = app.selection();
+                            app.run_reporting("element.align", json!({"ids": ids, "edge": edge}));
+                            ui.close();
+                        }
+                    }
+                });
+            });
+            for axis in ["horizontal", "vertical"] {
+                if ui
+                    .add_enabled(
+                        n >= 3,
+                        egui::Button::new(app.i18n.t(&format!("distribute-{axis}"))),
+                    )
+                    .clicked()
+                {
+                    let ids = app.selection();
+                    app.run_reporting("element.distribute", json!({"ids": ids, "axis": axis}));
+                    ui.close();
+                }
+            }
+            ui.separator();
+            ui.checkbox(&mut app.ui.snap, app.i18n.t("action-snap"));
+        }
         "view" => {
             ui.separator();
+            ui.checkbox(&mut app.ui.show_grid, app.i18n.t("action-show-grid"));
+            ui.horizontal(|ui| {
+                ui.label(app.i18n.t("prop-grid-mm"));
+                ui.add(
+                    egui::DragValue::new(&mut app.ui.grid_mm)
+                        .range(0.5..=20.0)
+                        .speed(0.1),
+                );
+            });
+            ui.menu_button(app.i18n.t("menu-label-color"), |ui| {
+                for (key, rgb) in [
+                    ("color-white", [255, 255, 255]),
+                    ("color-yellow", [255, 236, 140]),
+                    ("color-pink", [255, 196, 214]),
+                    ("color-blue", [180, 220, 255]),
+                    ("color-green", [196, 236, 190]),
+                    ("color-transparent", [228, 228, 228]),
+                ] {
+                    if ui
+                        .radio(app.ui.label_color == rgb, app.i18n.t(key))
+                        .clicked()
+                    {
+                        app.ui.label_color = rgb;
+                        ui.close();
+                    }
+                }
+            });
             if ui.button(app.i18n.t("action-zoom-in")).clicked() {
                 app.ui.zoom = (app.ui.zoom * 1.25).min(80.0);
             }
@@ -328,6 +387,22 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
                 created.extend(env.created);
             }
             app.select(&created);
+        }
+        "element.group" => {
+            let ids = app.selection();
+            app.run_reporting("element.group", json!({ "ids": ids }));
+        }
+        "element.ungroup" => {
+            let ids = app.selection();
+            app.run_reporting("element.ungroup", json!({ "ids": ids }));
+        }
+        "element.lock" => {
+            let ids = app.selection();
+            let all_locked = app.session.doc(None).is_some_and(|d| {
+                ids.iter()
+                    .all(|id| d.element(*id).is_some_and(|e| e.locked))
+            });
+            app.run_reporting("element.lock", json!({"ids": ids, "locked": !all_locked}));
         }
         "element.reorder" => {
             for sel in app.selection() {

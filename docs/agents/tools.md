@@ -53,6 +53,11 @@ Hints:
 | `element.delete` | edit | ids |
 | `element.duplicate` | edit | id, dx_mm, dy_mm |
 | `element.reorder` | edit | id, to (front, back, forward, backward) |
+| `element.align` | edit | ids, edge (left, center, right, top, middle, bottom), to (selection, label; default selection for 2+ ids) → moved |
+| `element.distribute` | edit | ids (3+), axis (horizontal, vertical) → moved |
+| `element.group` | edit | ids (2+; members bring their whole group) → group, members |
+| `element.ungroup` | edit | ids → ungrouped |
+| `element.lock` | edit | ids, locked (default true) |
 | `history.undo`, `history.redo` | edit | doc_id |
 | `history.journal` | query | since |
 | `selection.set` | ui | ids, mode (replace, add, remove, toggle) |

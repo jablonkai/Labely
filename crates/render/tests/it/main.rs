@@ -50,6 +50,7 @@ impl Doc {
             hidden: false,
             flip_h: false,
             flip_v: false,
+            group: None,
             kind,
         });
         id

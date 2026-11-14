@@ -1,6 +1,7 @@
 //! Integration tests for labely-core, driven through `Session::execute` with testkit fakes.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod arrange;
 mod batch;
 mod commands;
 mod data;

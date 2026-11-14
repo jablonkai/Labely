@@ -173,14 +173,8 @@ pub struct CheckOutput {
     pub issues: Vec<CheckIssue>,
 }
 
-/// Axis-aligned bounds of the rotated frame: (min_x, min_y, max_x, max_y) in mm.
 fn rotated_bounds(e: &Element) -> (f64, f64, f64, f64) {
-    let (s, c) = e.rotation_deg.to_radians().sin_cos();
-    let (hw, hh) = (e.width_mm / 2.0, e.height_mm / 2.0);
-    let ex = (hw * c).abs() + (hh * s).abs();
-    let ey = (hw * s).abs() + (hh * c).abs();
-    let (cx, cy) = (e.x_mm + hw, e.y_mm + hh);
-    (cx - ex, cy - ey, cx + ex, cy + ey)
+    e.bounds()
 }
 
 fn overlaps(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {

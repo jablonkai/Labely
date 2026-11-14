@@ -1322,6 +1322,15 @@ expression: r
                             "description": "Mirror top–bottom inside the frame (before rotation).",
                             "type": "boolean"
                           },
+                          "group": {
+                            "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                            "format": "uint64",
+                            "minimum": 0,
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
                           "height_mm": {
                             "format": "double",
                             "type": "number"
@@ -3767,6 +3776,15 @@ expression: r
                 "description": "Mirror top–bottom inside the frame (before rotation).",
                 "type": "boolean"
               },
+              "group": {
+                "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
               "height_mm": {
                 "format": "double",
                 "type": "number"
@@ -4894,6 +4912,15 @@ expression: r
                 "description": "Mirror top–bottom inside the frame (before rotation).",
                 "type": "boolean"
               },
+              "group": {
+                "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
               "height_mm": {
                 "format": "double",
                 "type": "number"
@@ -5609,6 +5636,15 @@ expression: r
               "flip_v": {
                 "description": "Mirror top–bottom inside the frame (before rotation).",
                 "type": "boolean"
+              },
+              "group": {
+                "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
               },
               "height_mm": {
                 "format": "double",
@@ -6332,6 +6368,15 @@ expression: r
                 "description": "Mirror top–bottom inside the frame (before rotation).",
                 "type": "boolean"
               },
+              "group": {
+                "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
               "height_mm": {
                 "format": "double",
                 "type": "number"
@@ -7054,6 +7099,15 @@ expression: r
                 "description": "Mirror top–bottom inside the frame (before rotation).",
                 "type": "boolean"
               },
+              "group": {
+                "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                "format": "uint64",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
               "height_mm": {
                 "format": "double",
                 "type": "number"
@@ -7345,6 +7399,361 @@ expression: r
         "title": "ReorderParams",
         "type": "object"
       },
+      "undoable": true
+    },
+    {
+      "description": "Align elements' rotated bounding boxes on an edge or centre line (left, center, right, top, middle, bottom) of their common box (`to: selection`, the default for 2+ ids) or of the label. Locked elements stay put. Returns {moved}.",
+      "id": "element.align",
+      "journal": true,
+      "kind": "edit",
+      "label": "Align",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "moved": {
+            "description": "Elements whose position changed.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "moved"
+        ],
+        "title": "MovedOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "edge": {
+            "description": "Edge or centre line to align on.",
+            "oneOf": [
+              {
+                "enum": [
+                  "left",
+                  "right",
+                  "top",
+                  "bottom"
+                ],
+                "type": "string"
+              },
+              {
+                "const": "center",
+                "description": "Horizontal centres.",
+                "type": "string"
+              },
+              {
+                "const": "middle",
+                "description": "Vertical centres.",
+                "type": "string"
+              }
+            ]
+          },
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "description": "What `element.align` aligns to.",
+                "oneOf": [
+                  {
+                    "const": "selection",
+                    "description": "The bounding box of the given elements.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "label",
+                    "description": "The label.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: `selection` for two or more elements, `label` for one."
+          }
+        },
+        "required": [
+          "ids",
+          "edge"
+        ],
+        "title": "AlignParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Space 3+ elements evenly along an axis: the outermost stay, the others move so the gaps between their bounding boxes are equal. Returns {moved}.",
+      "id": "element.distribute",
+      "journal": true,
+      "kind": "edit",
+      "label": "Distribute",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "moved": {
+            "description": "Elements whose position changed.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "moved"
+        ],
+        "title": "MovedOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "axis": {
+            "enum": [
+              "horizontal",
+              "vertical"
+            ],
+            "type": "string"
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ids": {
+            "description": "Three or more elements.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids",
+          "axis"
+        ],
+        "title": "DistributeParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Group two or more elements (members of existing groups bring their whole group). Groups are flat; the studio selects and moves a group as one. Returns {group, members}.",
+      "id": "element.group",
+      "journal": true,
+      "kind": "edit",
+      "label": "Group",
+      "menu": "arrange",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "group": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "members": {
+            "description": "Every member of the new group.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "group",
+          "members"
+        ],
+        "title": "GroupOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "IdsParams",
+        "type": "object"
+      },
+      "shortcut": "Ctrl+G",
+      "undoable": true
+    },
+    {
+      "description": "Dissolve the groups of the given elements. Returns {ungrouped}.",
+      "id": "element.ungroup",
+      "journal": true,
+      "kind": "edit",
+      "label": "Ungroup",
+      "menu": "arrange",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ungrouped": {
+            "description": "Elements that left a group.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ungrouped"
+        ],
+        "title": "UngroupOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "IdsParams",
+        "type": "object"
+      },
+      "shortcut": "Ctrl+Shift+G",
+      "undoable": true
+    },
+    {
+      "description": "Lock (default) or unlock elements. Locked elements cannot be moved, resized or edited until unlocked.",
+      "id": "element.lock",
+      "journal": true,
+      "kind": "edit",
+      "label": "Lock",
+      "menu": "arrange",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "locked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ids",
+          "locked"
+        ],
+        "title": "LockOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ids": {
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "locked": {
+            "default": null,
+            "description": "Lock (default) or unlock.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "LockParams",
+        "type": "object"
+      },
+      "shortcut": "Ctrl+L",
       "undoable": true
     },
     {

@@ -56,6 +56,8 @@ pub enum Gesture {
     Move {
         start: egui::Pos2,
         originals: Vec<(ElementId, f64, f64)>,
+        /// Union of the moving elements' bounding boxes at the start, mm.
+        bounds: (f64, f64, f64, f64),
         key: String,
     },
     Resize {
@@ -101,6 +103,15 @@ pub struct UiState {
     pub show_printers: bool,
     pub show_preview: bool,
     pub show_data: bool,
+    /// Snap moved elements to the label, other elements and the grid.
+    pub snap: bool,
+    pub show_grid: bool,
+    /// Grid spacing, mm.
+    pub grid_mm: f64,
+    /// Label colour shown on the canvas (not printed).
+    pub label_color: [u8; 3],
+    /// Snap guides of the current drag, mm: (vertical x lines, horizontal y lines).
+    pub guides: (Vec<f64>, Vec<f64>),
     /// Focused table cell (row, column) in the properties panel.
     pub table_cell: (usize, usize),
     /// Data record shown on the canvas, 1-based.
@@ -133,6 +144,11 @@ impl Default for UiState {
             show_preview: false,
             show_data: false,
             table_cell: (0, 0),
+            snap: true,
+            show_grid: false,
+            grid_mm: 1.0,
+            label_color: [255, 255, 255],
+            guides: (Vec::new(), Vec::new()),
             record: 1,
             gesture: None,
             gesture_seq: 0,
@@ -292,10 +308,13 @@ impl LabelyApp {
         self.session.selection(None)
     }
 
+    /// Select `ids`, widened to whole groups.
     pub fn select(&mut self, ids: &[ElementId]) {
-        if self.session.active_doc_id().is_some() {
-            self.run("selection.set", json!({ "ids": ids }));
-        }
+        let Some(doc) = self.session.doc(None) else {
+            return;
+        };
+        let ids = labely_core::commands::arrange::expand_groups(doc, ids);
+        self.run("selection.set", json!({ "ids": ids }));
     }
 
     /// Next coalescing key for a gesture or a property edit session.

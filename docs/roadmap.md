@@ -84,8 +84,8 @@ Phase 3 lands in slices, one pull request each.
 | 3.1 Data | CSV/XLSX sources, column binding, serial counters, record ranges, copies per record, studio data panel, CLI `--data`/`--record` (ADR-0014, format v2, API 3) | done |
 | 3.2a Elements | date/time bindings, flip, vertical text, Insert → Date/Time/Serial (ADR-0015) | done |
 | 3.2b Elements | tables, borders, bundled icons, reading codes from images (ADR-0016) | done |
-| 3.3 Editor | align, distribute, group, lock, snapping, grids, shortcuts, canvas background | next |
-| 3.4 Templates | starter set, local library and folders, PNG/PDF export, image and multi-image import | |
+| 3.3 Editor | align, distribute, group, lock, snapping, grid, shortcuts, label colour (ADR-0017) | done |
+| 3.4 Templates | starter set, local library and folders, PNG/PDF export, image and multi-image import | next |
 | 3.5 Printing and device | print queue, print history, label paper database, RFID auto-match, calibration, settings | |
 
 ## Phase 4: Android shell + AppFunctions
