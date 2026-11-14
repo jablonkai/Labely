@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{DEFAULT_DPI, render_options};
+use super::{DEFAULT_DPI, render_options_for};
 use crate::command::{Command, CommandError, CommandMeta, Ctx, ErrorCode};
 use crate::services::{DeviceInfo, DeviceStatus, PrintRequest};
 
@@ -207,11 +207,93 @@ pub struct PrintParams {
     /// Print density; defaults to the label's density, else the model default.
     #[serde(default)]
     pub density: Option<u8>,
+    /// Data records to print, 1-based: `all` (default), `3`, `1,4,6-9`. Needs a data source.
+    #[serde(default)]
+    pub records: Option<String>,
+    /// Labels to print without a data source, 1–5000 (default 1); serials advance per label.
+    #[serde(default)]
+    pub count: Option<u32>,
+    /// Column holding each record's copy count (0 skips the record); overrides `copies`.
+    #[serde(default)]
+    pub copies_column: Option<String>,
+}
+
+/// Most distinct labels (records × pages, with per-record copies expanded) in one job.
+pub const MAX_JOB_LABELS: usize = 5000;
+
+/// The distinct labels of a job: (data row, job position, copies).
+fn plan_labels(
+    doc: &crate::document::Document,
+    p: &PrintParams,
+    copies: u16,
+) -> Result<Vec<(Option<usize>, u64, u16)>, CommandError> {
+    let Some(data) = &doc.data else {
+        if p.records.is_some() || p.copies_column.is_some() {
+            return Err(CommandError::bad_params(
+                "`records` and `copies_column` need a data source",
+            )
+            .with_hint("attach data with data.attach_csv or data.attach_xlsx"));
+        }
+        let count = p.count.unwrap_or(1);
+        if !(1..=MAX_JOB_LABELS as u32).contains(&count) {
+            return Err(
+                CommandError::bad_params(format!("count must be 1–{MAX_JOB_LABELS}"))
+                    .with_param("count"),
+            );
+        }
+        return Ok((0..u64::from(count)).map(|n| (None, n, copies)).collect());
+    };
+    if p.count.is_some() {
+        return Err(CommandError::bad_params(
+            "`count` is for documents without data; use `records` to pick records",
+        )
+        .with_param("count"));
+    }
+    let rows = super::parse_records(p.records.as_deref().unwrap_or("all"), data.rows.len())
+        .map_err(|e| {
+            CommandError::bad_params(e)
+                .with_param("records")
+                .with_hint("records are 1-based, e.g. `1,3,5-7` or `all`")
+        })?;
+    if rows.is_empty() {
+        return Err(CommandError::bad_params("no records to print").with_param("records"));
+    }
+    let mut out = Vec::with_capacity(rows.len());
+    for (n, row) in rows.into_iter().enumerate() {
+        let c = match &p.copies_column {
+            None => copies,
+            Some(col) => {
+                let Some(cell) = data.cell(row, col) else {
+                    return Err(CommandError::not_found(format!("no column `{col}`"))
+                        .with_param("copies_column")
+                        .with_accepted(data.columns.clone()));
+                };
+                let cell = cell.trim();
+                match cell.parse::<u16>() {
+                    Ok(c) if c <= 999 => c,
+                    _ if cell.is_empty() => 0,
+                    _ => {
+                        return Err(CommandError::bad_params(format!(
+                            "record {}: copies `{cell}` in column `{col}` is not 0–999",
+                            row + 1
+                        ))
+                        .with_param("copies_column"));
+                    }
+                }
+            }
+        };
+        if c > 0 {
+            out.push((Some(row), n as u64, c));
+        }
+    }
+    Ok(out)
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct PrintOutput {
     pub address: String,
+    /// Distinct labels rendered (records or count, times pages).
+    pub labels: u32,
     pub pages_printed: u32,
     pub duration_ms: u64,
     pub copies: u16,
@@ -231,15 +313,17 @@ impl Command for PrintSubmit {
     fn meta() -> CommandMeta {
         CommandMeta::device(
             "Print",
-            "Render every page at the connected model's dpi (variables substituted) and print \
-             it. copies 1–999 (default 1); density defaults to the label's, else the model's. \
-             Blocks until done. Run doc.check first.",
+            "Render and print at the connected model's dpi: one label per data record \
+             (`records` like `1,3,5-7`, default all) or `count` labels without data, with \
+             bindings and serials filled in. copies 1–999 (default 1) or per record from \
+             `copies_column`; density defaults to the label's, else the model's. Blocks until \
+             done. Run doc.check first.",
         )
     }
 
     fn run(ctx: &mut Ctx<'_>, p: PrintParams) -> Result<PrintOutput, CommandError> {
         let doc = ctx.doc_arc(p.doc_id.as_deref())?;
-        let address = pick_address(ctx, p.address)?;
+        let address = pick_address(ctx, p.address.clone())?;
         let devices = ctx.services().devices.clone();
         let model = devices
             .connected()
@@ -279,25 +363,55 @@ impl Command for PrintSubmit {
                 doc.label.width_mm, m.name, m.max_width_mm
             ));
         }
+        let labels = plan_labels(&doc, &p, copies)?;
+        let uniform = labels.iter().all(|l| l.2 == copies);
+        let total: usize = if uniform {
+            labels.len() * doc.pages.len()
+        } else {
+            labels.iter().map(|l| usize::from(l.2)).sum::<usize>() * doc.pages.len()
+        };
+        if total > MAX_JOB_LABELS {
+            return Err(CommandError::bad_params(format!(
+                "the job has {total} labels; at most {MAX_JOB_LABELS} are printed at once"
+            ))
+            .with_param("records")
+            .with_hint("print fewer records per job"));
+        }
+        if labels.is_empty() {
+            return Err(CommandError::bad_params(
+                "every selected record has 0 copies; nothing to print",
+            )
+            .with_param("copies_column"));
+        }
         let renderer = ctx.services().renderer.clone();
-        let mut pages = Vec::with_capacity(doc.pages.len());
-        for page in 0..doc.pages.len() {
-            let out = renderer
-                .render(&doc, &render_options(&doc, dpi, page))
-                .map_err(|e| CommandError::bad_params(format!("cannot render page {page}: {e}")))?;
-            pages.push(out.bitmap);
+        let mut pages = Vec::with_capacity(total);
+        for &(row, n, c) in &labels {
+            for page in 0..doc.pages.len() {
+                let out = renderer
+                    .render(&doc, &render_options_for(&doc, dpi, page, row, n))
+                    .map_err(|e| {
+                        let at = row.map_or(String::new(), |r| format!(" of record {}", r + 1));
+                        CommandError::bad_params(format!("cannot render page {page}{at}: {e}"))
+                    })?;
+                let reps = if uniform { 1 } else { c };
+                for _ in 1..reps {
+                    pages.push(out.bitmap.clone());
+                }
+                pages.push(out.bitmap);
+            }
         }
         let report = devices.print(
             &address,
             PrintRequest {
                 pages,
-                copies,
+                copies: if uniform { copies } else { 1 },
                 density,
                 media: doc.label.media,
             },
         )?;
         Ok(PrintOutput {
             address,
+            labels: (labels.len() * doc.pages.len()) as u32,
             pages_printed: report.pages_printed,
             duration_ms: report.duration_ms,
             copies,

@@ -20,7 +20,7 @@ fn save_open_roundtrip() {
     let original = s.doc(None).unwrap().clone();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(
-        text.starts_with("{\n  \"format_version\": 1,"),
+        text.starts_with("{\n  \"format_version\": 2,"),
         "pretty JSON"
     );
 
@@ -46,11 +46,11 @@ fn open_rejects_newer_format_and_garbage() {
     let dir = tempfile::tempdir().unwrap();
     let mut s = labely_testkit::test_session();
     let newer = dir.path().join("new.labely");
-    std::fs::write(&newer, r#"{"format_version": 2, "name": "x"}"#).unwrap();
+    std::fs::write(&newer, r#"{"format_version": 3, "name": "x"}"#).unwrap();
     let e = err(&mut s, "doc.open", json!({"path": newer.to_str().unwrap()}));
     assert_eq!(e.code, ErrorCode::BadParams);
     assert!(
-        e.message.contains("format_version 2 is newer"),
+        e.message.contains("format_version 3 is newer"),
         "{}",
         e.message
     );

@@ -95,6 +95,9 @@ pub struct UiState {
     pub show_check: bool,
     pub show_printers: bool,
     pub show_preview: bool,
+    pub show_data: bool,
+    /// Data record shown on the canvas, 1-based.
+    pub record: usize,
     pub gesture: Option<Gesture>,
     pub gesture_seq: u64,
     pub dialog: Option<Dialog>,
@@ -121,6 +124,8 @@ impl Default for UiState {
             show_check: false,
             show_printers: false,
             show_preview: false,
+            show_data: false,
+            record: 1,
             gesture: None,
             gesture_seq: 0,
             dialog: None,
@@ -139,6 +144,8 @@ impl Default for UiState {
 pub struct Raster {
     pub doc: Arc<Document>,
     pub dpi: u32,
+    /// Binding values it was rendered with.
+    pub values: std::collections::BTreeMap<String, String>,
     pub texture: egui::TextureHandle,
     pub size: [usize; 2],
 }
@@ -332,7 +339,7 @@ impl LabelyApp {
                     .default_size(260.0)
                     .show(ui, |ui| panels::properties(self, ui));
             }
-            if self.ui.show_check || self.ui.show_printers {
+            if self.ui.show_check || self.ui.show_printers || self.ui.show_data {
                 egui::Panel::bottom("tools")
                     .resizable(true)
                     .default_size(160.0)

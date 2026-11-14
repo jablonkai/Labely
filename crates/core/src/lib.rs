@@ -26,4 +26,4 @@ pub use services::{DeviceHub, Renderer, Services};
 pub use session::{JournalEntry, Session};
 
 /// Command API version; bump when any command schema changes incompatibly.
-pub const API_VERSION: u32 = 2;
+pub const API_VERSION: u32 = 3;

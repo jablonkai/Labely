@@ -3,6 +3,7 @@
 
 mod batch;
 mod commands;
+mod data;
 mod device;
 mod file;
 mod history;

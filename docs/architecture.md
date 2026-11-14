@@ -82,7 +82,8 @@ stays testable with no I/O.
 
 ```
 Document { format_version, id, meta{name, created, modified}, label: LabelSpec,
-           pages: Vec<Page> (usually 1), data_sources: Vec<DataSource>, variables: Vec<Variable> }
+           pages: Vec<Page> (usually 1), data: Option<DataSource>, serials: Map<name, SerialSpec>,
+           variables: Map<name, String> }   // data and serials: format v2, ADR-0014
 LabelSpec { width_mm, height_mm, corner_radius_mm, shape: Rect|Round|Custom, gap: Gap|BlackMark|Continuous|Transparent,
             margins_mm, print_direction, printer_hint: Option<ModelRef>, rfid_hint: Option<PaperRef> }
 Page { background: Option<ImageRef>, elements: Vec<Element> }        // z-order = vec order

@@ -43,7 +43,13 @@ pub fn from_json(text: &str) -> Result<Document, FileError> {
             supported: FORMAT_VERSION,
         });
     }
-    // Version 1 is the only version so far; migrations go here.
+    let mut v = v;
+    // v1 -> v2 only added optional fields (`data`, `serials`).
+    if found < 2
+        && let Some(m) = v.as_object_mut()
+    {
+        m.insert("format_version".to_owned(), Value::from(FORMAT_VERSION));
+    }
     serde_path_to_error::deserialize(v).map_err(|e| {
         let path = e.path().to_string();
         FileError::Parse(format!("at `{path}`: {}", e.into_inner()))
@@ -84,9 +90,11 @@ mod tests {
     fn roundtrip_and_version_gate() {
         let d = Document::new("x", LabelSpec::default());
         let s = to_json(&d).unwrap();
-        assert!(s.contains("\n  \"format_version\": 1"));
+        assert!(s.contains("\n  \"format_version\": 2"));
         assert_eq!(from_json(&s).unwrap(), d);
-        let newer = s.replace("\"format_version\": 1", "\"format_version\": 99");
+        let v1 = s.replace("\"format_version\": 2", "\"format_version\": 1");
+        assert_eq!(from_json(&v1).unwrap(), d, "v1 migrates to v2");
+        let newer = s.replace("\"format_version\": 2", "\"format_version\": 99");
         let e = from_json(&newer).unwrap_err();
         assert!(matches!(e, FileError::TooNew { found: 99, .. }), "{e}");
         assert!(e.to_string().contains("upgrade Labely"));

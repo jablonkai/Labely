@@ -52,11 +52,19 @@ Hints:
 | `selection.set` | ui | ids, mode (replace, add, remove, toggle) |
 | `selection.get` | query | doc_id |
 | `variable.set` | edit | name, value (used as `{{name}}`) |
-| `render.preview` | query | dpi, page |
+| `data.attach_csv` | edit | path or text, delimiter, header |
+| `data.attach_xlsx` | edit | path (.xlsx, .xls, .ods), sheet, header |
+| `data.detach` | edit | doc_id |
+| `data.get` | query | from (1-based), limit |
+| `data.bind` | edit | id, column (a column, serial or variable) |
+| `data.preview_record` | query | record (1-based) |
+| `data.set_serial` | edit | name (default `serial`), start, step, digits, prefix, suffix |
+| `data.remove_serial` | edit | name |
+| `render.preview` | query | dpi, page, record |
 | `device.scan` | device | timeout_ms |
 | `device.list` | device | |
 | `device.connect`, `.disconnect`, `.status` | device | address |
-| `print.submit` | device | address, copies, density |
+| `print.submit` | device | address, copies, density, records, count, copies_column |
 
 \* `frame` is `x_mm, y_mm, width_mm, height_mm`, plus optional `rotation_deg` and `name`. Every
 document command also takes an optional `doc_id`; the default is the active document. The JSON
@@ -79,7 +87,9 @@ Printer addresses:
 | `dpi_mismatch` | warning | The check dpi differs from the model's dpi. |
 | `density_out_of_range` | error | The density is outside the model's range. |
 | `paper_mismatch` | warning | The printer's RFID paper media differs from the label media. |
-| `binding_missing` / `binding_empty` | warning / info | A `{{name}}` has no variable, or its value is empty. |
+| `binding_missing` | warning | A `{{name}}` matches no data column, serial or variable. |
+| `binding_empty` | info | A bound variable is empty, or a bound column is empty in some records. |
+| `data_empty` | warning | The attached data source has no records. |
 | `render_failed` | error | The page could not be rendered. |
 | `text_overflow` | error | The text does not fit its box. |
 | `text_shrunk` | info, or warning below 5 pt | The text was auto-shrunk. |

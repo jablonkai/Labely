@@ -34,11 +34,23 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 pub struct FakeRenderer {
     /// Recent renders: bitmap and the codes it "contains".
     memo: Mutex<Vec<(Bitmap1, Vec<DecodedCode>)>>,
+    /// Binding values of every render, in order.
+    values: Mutex<Vec<std::collections::BTreeMap<String, String>>>,
 }
 
 impl FakeRenderer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Binding values passed to each render so far, oldest first.
+    pub fn rendered_values(&self) -> Vec<std::collections::BTreeMap<String, String>> {
+        lock(&self.values).clone()
+    }
+
+    /// Forget the recorded binding values.
+    pub fn clear_values(&self) {
+        lock(&self.values).clear();
     }
 }
 
@@ -52,6 +64,7 @@ impl Renderer for FakeRenderer {
             .pages
             .get(opts.page)
             .ok_or(RenderError::NoSuchPage(opts.page))?;
+        lock(&self.values).push(opts.values.clone());
         let (wmm, hmm) = (doc.label.width_mm, doc.label.height_mm);
         let (w, h) = (mm_to_dots(wmm, opts.dpi), mm_to_dots(hmm, opts.dpi));
         if !(1..=20_000).contains(&w) || !(1..=20_000).contains(&h) {

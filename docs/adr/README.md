@@ -15,3 +15,4 @@
 | [0011](0011-mobile-ai-surfaces.md) | AppFunctions / App Intents | proposed |
 | [0012](0012-session-policy.md) | Session policy: file roots, print gating | proposed |
 | [0013](0013-i18n-crate.md) | `labely-i18n` crate | proposed |
+| [0014](0014-data-sources-and-serials.md) | Data sources and serial numbers | proposed |

@@ -71,6 +71,12 @@ enum Cmd {
         output: PathBuf,
         #[arg(long)]
         dpi: Option<u32>,
+        /// Data record to render, 1-based.
+        #[arg(long)]
+        record: Option<usize>,
+        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods).
+        #[arg(long)]
+        data: Option<PathBuf>,
     },
     /// Check a document for printing problems.
     Check {
@@ -88,6 +94,18 @@ enum Cmd {
         copies: u16,
         #[arg(long)]
         density: Option<u8>,
+        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods).
+        #[arg(long)]
+        data: Option<PathBuf>,
+        /// Records to print, 1-based: `all` (default), `3`, `1,4,6-9`.
+        #[arg(long)]
+        records: Option<String>,
+        /// Labels to print when there is no data (serials advance per label).
+        #[arg(long)]
+        count: Option<u32>,
+        /// Column holding each record's copy count.
+        #[arg(long)]
+        copies_column: Option<String>,
     },
     /// Show a printer's status (battery, lid, loaded labels).
     Status {
@@ -136,6 +154,22 @@ impl Ctx {
     fn open(&mut self, file: &Path) -> Result<()> {
         self.exec("doc.open", json!({ "path": file }))
             .with_context(|| format!("opening {}", file.display()))?;
+        Ok(())
+    }
+
+    /// Attach a CSV (by extension) or spreadsheet as the document's data.
+    fn attach(&mut self, path: &Path) -> Result<()> {
+        let ext = path
+            .extension()
+            .map(|e| e.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let id = if matches!(ext.as_str(), "xlsx" | "xlsm" | "xls" | "ods") {
+            "data.attach_xlsx"
+        } else {
+            "data.attach_csv"
+        };
+        self.exec(id, json!({ "path": path }))
+            .with_context(|| format!("attaching {}", path.display()))?;
         Ok(())
     }
 
@@ -224,11 +258,23 @@ fn run(cli: Cli) -> Result<()> {
             roots,
             connection,
         } => mcp(headless, connect, allow_print, roots, connection)?,
-        Cmd::Render { file, output, dpi } => {
+        Cmd::Render {
+            file,
+            output,
+            dpi,
+            record,
+            data,
+        } => {
             ctx.open(&file)?;
+            if let Some(d) = &data {
+                ctx.attach(d)?;
+            }
             let mut p = json!({});
             if let Some(d) = dpi {
                 p["dpi"] = json!(d);
+            }
+            if let Some(r) = record {
+                p["record"] = json!(r);
             }
             let env = ctx.exec("render.preview", p)?;
             let r = &env["result"];
@@ -267,12 +313,28 @@ fn run(cli: Cli) -> Result<()> {
             printer,
             copies,
             density,
+            data,
+            records,
+            count,
+            copies_column,
         } => {
             ctx.open(&file)?;
+            if let Some(d) = &data {
+                ctx.attach(d)?;
+            }
             ctx.exec("device.connect", json!({ "address": printer }))?;
             let mut p = json!({ "address": printer, "copies": copies });
             if let Some(d) = density {
                 p["density"] = json!(d);
+            }
+            if let Some(r) = records {
+                p["records"] = json!(r);
+            }
+            if let Some(c) = count {
+                p["count"] = json!(c);
+            }
+            if let Some(c) = copies_column {
+                p["copies_column"] = json!(c);
             }
             let env = ctx.exec("print.submit", p)?;
             ctx.show(&env)?;
