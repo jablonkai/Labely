@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Current `.labely` format version.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Stable element id, unique within a document.
 #[derive(
@@ -33,6 +33,12 @@ pub struct Document {
     /// Free variables usable as `{{name}}` in string properties.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, String>,
+    /// Attached data source; each row is one record, printed as one label (v2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<DataSource>,
+    /// Serial counters usable as `{{name}}`; they advance by one step per label (v2).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub serials: BTreeMap<String, SerialSpec>,
     /// Next id to hand out.
     pub next_id: u64,
 }
@@ -47,6 +53,8 @@ impl Document {
             pages: vec![Page::default()],
             assets: BTreeMap::new(),
             variables: BTreeMap::new(),
+            data: None,
+            serials: BTreeMap::new(),
             next_id: 1,
         }
     }
@@ -72,6 +80,87 @@ impl Document {
             .iter_mut()
             .flat_map(|p| p.elements.iter_mut())
             .find(|e| e.id == id)
+    }
+}
+
+/// Tabular data embedded in the document. Cells are text; column names are the binding
+/// names (`{{column}}`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DataSource {
+    /// File name the data came from, for display only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    pub columns: Vec<String>,
+    /// Rows of cells; a short row reads as empty cells.
+    pub rows: Vec<Vec<String>>,
+}
+
+impl DataSource {
+    /// Cell value of `row` (0-based) in `column`, empty when the row is short.
+    pub fn cell(&self, row: usize, column: &str) -> Option<&str> {
+        let c = self.columns.iter().position(|n| n == column)?;
+        let r = self.rows.get(row)?;
+        Some(r.get(c).map_or("", String::as_str))
+    }
+
+    /// `column -> value` for one row (0-based).
+    pub fn record(&self, row: usize) -> BTreeMap<String, String> {
+        let cells = self.rows.get(row).map_or(&[][..], Vec::as_slice);
+        self.columns
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (c.clone(), cells.get(i).cloned().unwrap_or_default()))
+            .collect()
+    }
+}
+
+/// A serial number: `prefix + pad(start + step × n, digits) + suffix`, where `n` is the
+/// 0-based position of the label in the print job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SerialSpec {
+    #[serde(default = "one_i64")]
+    pub start: i64,
+    #[serde(default = "one_i64")]
+    pub step: i64,
+    /// Minimum digits; shorter numbers are zero-padded. 0 means no padding.
+    #[serde(default)]
+    pub digits: u8,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub prefix: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub suffix: String,
+}
+
+fn one_i64() -> i64 {
+    1
+}
+
+impl Default for SerialSpec {
+    fn default() -> Self {
+        Self {
+            start: 1,
+            step: 1,
+            digits: 0,
+            prefix: String::new(),
+            suffix: String::new(),
+        }
+    }
+}
+
+impl SerialSpec {
+    /// Value for the label at position `n` (0-based).
+    pub fn value(&self, n: u64) -> String {
+        let n = i64::try_from(n).unwrap_or(i64::MAX);
+        let v = self.start.saturating_add(self.step.saturating_mul(n));
+        let digits = usize::from(self.digits);
+        let num = if v < 0 {
+            format!("-{:0digits$}", v.unsigned_abs())
+        } else {
+            format!("{v:0digits$}")
+        };
+        format!("{}{num}{}", self.prefix, self.suffix)
     }
 }
 
@@ -466,5 +555,39 @@ mod tests {
         assert_eq!(e["text"], "Hi");
         let back: Document = serde_json::from_value(v).unwrap();
         assert_eq!(back, d);
+    }
+
+    #[test]
+    fn serial_values() {
+        let s = SerialSpec {
+            start: 7,
+            step: 3,
+            digits: 4,
+            prefix: "A-".into(),
+            suffix: "/x".into(),
+        };
+        assert_eq!(s.value(0), "A-0007/x");
+        assert_eq!(s.value(2), "A-0013/x");
+        let neg = SerialSpec {
+            start: 0,
+            step: -1,
+            digits: 2,
+            ..Default::default()
+        };
+        assert_eq!(neg.value(3), "-03");
+        assert_eq!(SerialSpec::default().value(9), "10");
+    }
+
+    #[test]
+    fn data_records() {
+        let d = DataSource {
+            origin: None,
+            columns: vec!["a".into(), "b".into()],
+            rows: vec![vec!["1".into()], vec!["2".into(), "x".into()]],
+        };
+        assert_eq!(d.cell(0, "b"), Some(""));
+        assert_eq!(d.cell(1, "b"), Some("x"));
+        assert_eq!(d.cell(5, "a"), None);
+        assert_eq!(d.record(1)["a"], "2");
     }
 }

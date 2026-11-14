@@ -11,7 +11,7 @@ use crate::dialogs::NewDocForm;
 
 /// Menu order.
 pub const MENUS: &[&str] = &[
-    "file", "edit", "insert", "arrange", "label", "view", "print",
+    "file", "edit", "insert", "arrange", "label", "data", "view", "print",
 ];
 
 /// Localised label of a command: `cmd-<id>` with dots and underscores as dashes.
@@ -117,6 +117,7 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
             ui.checkbox(&mut app.ui.show_props, app.i18n.t("panel-properties"));
             ui.checkbox(&mut app.ui.show_check, app.i18n.t("panel-check"));
             ui.checkbox(&mut app.ui.show_printers, app.i18n.t("panel-printers"));
+            ui.checkbox(&mut app.ui.show_data, app.i18n.t("panel-data"));
             ui.checkbox(&mut app.ui.show_preview, app.i18n.t("panel-preview"));
             ui.separator();
             ui.menu_button(app.i18n.t("menu-language"), |ui| {
@@ -295,6 +296,39 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
         "element.reorder" => {
             for sel in app.selection() {
                 app.run_reporting("element.reorder", json!({"id": sel, "to": "front"}));
+            }
+        }
+        "data.attach_csv" | "data.attach_xlsx" => {
+            let exts: &[&str] = if id == "data.attach_csv" {
+                &["csv", "tsv", "txt"]
+            } else {
+                &["xlsx", "xlsm", "xls", "ods"]
+            };
+            if let Some(path) = pick_file(app, exts)
+                && app.run_reporting(id, json!({ "path": path })).ok
+            {
+                app.ui.record = 1;
+                app.ui.show_data = true;
+            }
+        }
+        "data.set_serial" => {
+            let name = app.session.doc(None).map_or_else(
+                || "serial".to_owned(),
+                |d| {
+                    (1..)
+                        .map(|i| {
+                            if i == 1 {
+                                "serial".to_owned()
+                            } else {
+                                format!("serial{i}")
+                            }
+                        })
+                        .find(|n| !d.serials.contains_key(n))
+                        .unwrap_or_default()
+                },
+            );
+            if app.run_reporting(id, json!({ "name": name })).ok {
+                app.ui.show_data = true;
             }
         }
         "element.add_image" => {

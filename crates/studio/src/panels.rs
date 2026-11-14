@@ -386,9 +386,15 @@ fn label_properties(app: &mut LabelyApp, ui: &mut Ui, doc: &labely_core::Documen
 /// Bottom tools: check results and printers.
 pub fn tools(app: &mut LabelyApp, ui: &mut Ui) {
     ui.columns(
-        usize::from(app.ui.show_check) + usize::from(app.ui.show_printers),
+        usize::from(app.ui.show_check)
+            + usize::from(app.ui.show_printers)
+            + usize::from(app.ui.show_data),
         |cols| {
             let mut i = 0;
+            if app.ui.show_data {
+                data_panel(app, &mut cols[i]);
+                i += 1;
+            }
             if app.ui.show_check {
                 check_panel(app, &mut cols[i]);
                 i += 1;
@@ -398,6 +404,157 @@ pub fn tools(app: &mut LabelyApp, ui: &mut Ui) {
             }
         },
     );
+}
+
+/// Data source, record navigator, column binding and serial counters.
+fn data_panel(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.heading(app.i18n.t("panel-data"));
+    let Some(doc) = app.session.doc_arc(None) else {
+        return;
+    };
+    let bindable = match app.selection().as_slice() {
+        [id] => doc.element(*id).is_some_and(|e| {
+            matches!(
+                e.kind,
+                labely_core::ElementKind::Text(_)
+                    | labely_core::ElementKind::Barcode(_)
+                    | labely_core::ElementKind::Code2d(_)
+            )
+        }),
+        _ => false,
+    };
+    let values = crate::canvas::record_values(&doc, app.ui.record);
+    egui::ScrollArea::vertical().id_salt("data").show(ui, |ui| {
+        match &doc.data {
+            None => {
+                ui.label(app.i18n.t("data-none"));
+                ui.horizontal(|ui| {
+                    for id in ["data.attach_csv", "data.attach_xlsx"] {
+                        if ui.button(menu::command_label(&app.i18n, id)).clicked() {
+                            menu::invoke(app, id);
+                        }
+                    }
+                });
+            }
+            Some(d) => {
+                let n = d.rows.len();
+                ui.horizontal(|ui| {
+                    if let Some(o) = &d.origin {
+                        ui.strong(o);
+                    }
+                    ui.label(
+                        app.i18n
+                            .t_args("data-records", &[("count", Arg::Num(n as f64))]),
+                    );
+                    if ui
+                        .small_button(menu::command_label(&app.i18n, "data.detach"))
+                        .clicked()
+                    {
+                        app.run_reporting("data.detach", json!({}));
+                    }
+                });
+                if n > 0 {
+                    let mut record = app.ui.record.clamp(1, n);
+                    ui.horizontal(|ui| {
+                        let l = ui.label(app.i18n.t("data-record")).id;
+                        if ui.small_button("◀").clicked() {
+                            record = record.saturating_sub(1).max(1);
+                        }
+                        ui.add(egui::DragValue::new(&mut record).range(1..=n))
+                            .labelled_by(l);
+                        if ui.small_button("▶").clicked() {
+                            record = (record + 1).min(n);
+                        }
+                    });
+                    app.ui.record = record;
+                }
+                egui::Grid::new("data-columns")
+                    .num_columns(3)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for c in &d.columns {
+                            ui.label(c);
+                            ui.weak(values.get(c).map_or("", String::as_str));
+                            if ui
+                                .add_enabled(
+                                    bindable,
+                                    egui::Button::new(app.i18n.t("action-bind")).small(),
+                                )
+                                .on_hover_text(app.i18n.t("action-bind-hint"))
+                                .clicked()
+                                && let [id] = app.selection().as_slice()
+                            {
+                                app.run_reporting("data.bind", json!({"id": id, "column": c}));
+                            }
+                            ui.end_row();
+                        }
+                    });
+            }
+        }
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.strong(app.i18n.t("data-serials"));
+            if ui
+                .small_button(menu::command_label(&app.i18n, "data.set_serial"))
+                .clicked()
+            {
+                menu::invoke(app, "data.set_serial");
+            }
+        });
+        for (name, spec) in &doc.serials {
+            serial_row(app, ui, name, spec, bindable, &values);
+        }
+    });
+}
+
+fn serial_row(
+    app: &mut LabelyApp,
+    ui: &mut Ui,
+    name: &str,
+    spec: &labely_core::document::SerialSpec,
+    bindable: bool,
+    values: &std::collections::BTreeMap<String, String>,
+) {
+    let mut s = spec.clone();
+    ui.horizontal_wrapped(|ui| {
+        ui.label(format!("{{{{{name}}}}}"));
+        ui.weak(values.get(name).map_or("", String::as_str));
+        if ui
+            .add_enabled(
+                bindable,
+                egui::Button::new(app.i18n.t("action-bind")).small(),
+            )
+            .on_hover_text(app.i18n.t("action-bind-hint"))
+            .clicked()
+            && let [id] = app.selection().as_slice()
+        {
+            app.run_reporting("data.bind", json!({"id": id, "column": name}));
+        }
+        if ui.small_button("✖").clicked() {
+            app.run_reporting("data.remove_serial", json!({ "name": name }));
+            return;
+        }
+        ui.end_row();
+        ui.label(app.i18n.t("serial-start"));
+        ui.add(egui::DragValue::new(&mut s.start));
+        ui.label(app.i18n.t("serial-step"));
+        ui.add(egui::DragValue::new(&mut s.step));
+        ui.label(app.i18n.t("serial-digits"));
+        ui.add(egui::DragValue::new(&mut s.digits).range(0..=18));
+        ui.label(app.i18n.t("serial-prefix"));
+        ui.add(egui::TextEdit::singleline(&mut s.prefix).desired_width(48.0));
+        ui.label(app.i18n.t("serial-suffix"));
+        ui.add(egui::TextEdit::singleline(&mut s.suffix).desired_width(48.0));
+    });
+    if &s != spec {
+        app.run_reporting(
+            "data.set_serial",
+            json!({
+                "name": name, "start": s.start, "step": s.step, "digits": s.digits,
+                "prefix": s.prefix, "suffix": s.suffix,
+            }),
+        );
+    }
 }
 
 fn check_panel(app: &mut LabelyApp, ui: &mut Ui) {

@@ -3,7 +3,7 @@ source: crates/core/tests/it/schema.rs
 expression: r
 ---
 {
-  "api_version": 2,
+  "api_version": 3,
   "commands": [
     {
       "description": "List every command with its kind, description and JSON Schemas for params and result. Optional `prefix` filters ids (e.g. `element.`).",
@@ -593,6 +593,43 @@ expression: r
                 "description": "Embedded assets keyed by lowercase hex sha256 of the bytes.",
                 "type": "object"
               },
+              "data": {
+                "additionalProperties": false,
+                "description": "Attached data source; each row is one record, printed as one label (v2).",
+                "properties": {
+                  "columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "origin": {
+                    "description": "File name the data came from, for display only.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rows": {
+                    "description": "Rows of cells; a short row reads as empty cells.",
+                    "items": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "columns",
+                  "rows"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "format_version": {
                 "format": "uint32",
                 "minimum": 0,
@@ -1091,6 +1128,46 @@ expression: r
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "serials": {
+                "additionalProperties": {
+                  "additionalProperties": false,
+                  "description": "A serial number: `prefix + pad(start + step × n, digits) + suffix`, where `n` is the\n0-based position of the label in the print job.",
+                  "properties": {
+                    "digits": {
+                      "default": 0,
+                      "description": "Minimum digits; shorter numbers are zero-padded. 0 means no padding.",
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    },
+                    "start": {
+                      "default": 1,
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "step": {
+                      "default": 1,
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "suffix": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "start",
+                    "step",
+                    "digits"
+                  ],
+                  "type": "object"
+                },
+                "description": "Serial counters usable as `{{name}}`; they advance by one step per label (v2).",
+                "type": "object"
               },
               "variables": {
                 "additionalProperties": {
@@ -4749,7 +4826,694 @@ expression: r
       "undoable": true
     },
     {
-      "description": "Render a page to the exact 1-bit print raster and return it as base64 PNG with its size in dots. dpi defaults to the label's printer model (else 203). Variables are substituted.",
+      "description": "Embed CSV data (path or text) as the document's data source, replacing any other. Each row is one record printed as one label; bind columns as `{{column}}`. Returns the columns, the record count and the first rows.",
+      "id": "data.attach_csv",
+      "journal": true,
+      "kind": "edit",
+      "label": "Attach CSV",
+      "menu": "data",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Summary of the attached data source.",
+        "properties": {
+          "columns": {
+            "description": "Column names; bind them as `{{column}}`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview": {
+            "description": "The first rows.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "row_count": {
+            "description": "Number of records.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sheet": {
+            "description": "Sheet that was read (spreadsheets only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sheets": {
+            "description": "All sheets in the workbook (spreadsheets only).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns",
+          "row_count",
+          "preview"
+        ],
+        "title": "DataSummary",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "delimiter": {
+            "default": null,
+            "description": "One-character field delimiter; detected from the first line when absent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "header": {
+            "default": null,
+            "description": "First row holds the column names (default true). Otherwise columns are A, B, C….",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "path": {
+            "default": null,
+            "description": "CSV file to read (UTF-8). Pass exactly one of `path` or `text`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "default": null,
+            "description": "CSV content inline.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "AttachCsvParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Embed one sheet of a spreadsheet (.xlsx, .xls, .ods) as the document's data source, replacing any other. Cells become text (dates as YYYY-MM-DD). Each row is one record; bind columns as `{{column}}`.",
+      "id": "data.attach_xlsx",
+      "journal": true,
+      "kind": "edit",
+      "label": "Attach spreadsheet",
+      "menu": "data",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Summary of the attached data source.",
+        "properties": {
+          "columns": {
+            "description": "Column names; bind them as `{{column}}`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview": {
+            "description": "The first rows.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "row_count": {
+            "description": "Number of records.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sheet": {
+            "description": "Sheet that was read (spreadsheets only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sheets": {
+            "description": "All sheets in the workbook (spreadsheets only).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "columns",
+          "row_count",
+          "preview"
+        ],
+        "title": "DataSummary",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "header": {
+            "default": null,
+            "description": "First row holds the column names (default true). Otherwise columns are A, B, C….",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "Spreadsheet file: .xlsx, .xlsm, .xls or .ods.",
+            "type": "string"
+          },
+          "sheet": {
+            "default": null,
+            "description": "Sheet name; defaults to the first sheet.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "AttachXlsxParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Remove the document's data source. Bindings stay in the elements and render as literal `{{column}}` until data is attached again.",
+      "id": "data.detach",
+      "journal": true,
+      "kind": "edit",
+      "label": "Remove data",
+      "menu": "data",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "removed": {
+            "description": "Whether a data source was removed.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "DetachOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DocParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Columns, record count and a page of rows of the data source (from 1-based, limit ≤ 200), plus the serial counters.",
+      "id": "data.get",
+      "journal": false,
+      "kind": "query",
+      "label": "Get data",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "attached": {
+            "description": "False when no data source is attached; the other fields are then empty.",
+            "type": "boolean"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "from": {
+            "description": "1-based number of the first returned row.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "serials": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "description": "A serial number: `prefix + pad(start + step × n, digits) + suffix`, where `n` is the\n0-based position of the label in the print job.",
+              "properties": {
+                "digits": {
+                  "default": 0,
+                  "description": "Minimum digits; shorter numbers are zero-padded. 0 means no padding.",
+                  "format": "uint8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "prefix": {
+                  "type": "string"
+                },
+                "start": {
+                  "default": 1,
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "step": {
+                  "default": 1,
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "suffix": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "start",
+                "step",
+                "digits"
+              ],
+              "type": "object"
+            },
+            "description": "Serial counters by name.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "attached",
+          "columns",
+          "row_count",
+          "from",
+          "rows",
+          "serials"
+        ],
+        "title": "GetOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "default": null,
+            "description": "First record to return, 1-based (default 1).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": null,
+            "description": "Records to return, 0–200 (default 20).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "GetParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Set a text element's `text`, or a barcode or 2D code's `data`, to `{{column}}`. The name must be a data column, serial or variable. For mixed content, use element.set_props with `{{name}}` inside the string.",
+      "id": "data.bind",
+      "journal": true,
+      "kind": "edit",
+      "label": "Bind to column",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Stable element id, unique within a document.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "property": {
+            "description": "Property that now holds the binding (`text` or `data`).",
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "property",
+          "value"
+        ],
+        "title": "BindOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "description": "Column, serial or variable name.",
+            "type": "string"
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Text, barcode or 2D-code element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "column"
+        ],
+        "title": "BindParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Binding values for one record (1-based) as printing all records would produce them: columns, serials at that position, and variables. Use render.preview {record} for the image.",
+      "id": "data.preview_record",
+      "journal": false,
+      "kind": "query",
+      "label": "Preview record",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "record": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "row_count": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Every binding name with its value for this record (columns, serials, variables).",
+            "type": "object"
+          }
+        },
+        "required": [
+          "record",
+          "row_count",
+          "values"
+        ],
+        "title": "PreviewRecordOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "record": {
+            "default": null,
+            "description": "Record number, 1-based (default 1).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "PreviewRecordParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Create or replace a serial counter `{{name}}` (default name `serial`): prefix + zero-padded (start + step × n) + suffix, where n is the label's 0-based position in the print job. Bind it with data.bind or `{{name}}` in any text.",
+      "id": "data.set_serial",
+      "journal": true,
+      "kind": "edit",
+      "label": "Serial number",
+      "menu": "data",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sample": {
+            "description": "Values of the first three labels.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "additionalProperties": false,
+            "description": "A serial number: `prefix + pad(start + step × n, digits) + suffix`, where `n` is the\n0-based position of the label in the print job.",
+            "properties": {
+              "digits": {
+                "default": 0,
+                "description": "Minimum digits; shorter numbers are zero-padded. 0 means no padding.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "prefix": {
+                "type": "string"
+              },
+              "start": {
+                "default": 1,
+                "format": "int64",
+                "type": "integer"
+              },
+              "step": {
+                "default": 1,
+                "format": "int64",
+                "type": "integer"
+              },
+              "suffix": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "step",
+              "digits"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "serial",
+          "sample"
+        ],
+        "title": "SetSerialOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "digits": {
+            "default": null,
+            "description": "Zero-pad to this many digits, 0–18 (default 0: no padding).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "default": null,
+            "description": "Binding name, used as `{{name}}` (default `serial`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prefix": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start": {
+            "default": null,
+            "description": "First value (default 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "step": {
+            "default": null,
+            "description": "Increment per label, may be negative (default 1).",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "suffix": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "SetSerialParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Delete a serial counter by name.",
+      "id": "data.remove_serial",
+      "journal": true,
+      "kind": "edit",
+      "label": "Remove serial",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "removed": {
+            "description": "Whether a data source was removed.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "DetachOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RemoveSerialParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Render a page to the exact 1-bit print raster and return it as base64 PNG with its size in dots. dpi defaults to the label's printer model (else 203). Bindings are filled from `record` (1-based, default 1), serials and variables.",
       "id": "render.preview",
       "journal": false,
       "kind": "query",
@@ -4811,6 +5575,16 @@ expression: r
           "page": {
             "default": null,
             "description": "0-based page index (default 0).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "record": {
+            "default": null,
+            "description": "Data record to show, 1-based (default 1). Serials take that record's position.",
             "format": "uint",
             "minimum": 0,
             "type": [
@@ -5347,7 +6121,7 @@ expression: r
       "undoable": false
     },
     {
-      "description": "Render every page at the connected model's dpi (variables substituted) and print it. copies 1–999 (default 1); density defaults to the label's, else the model's. Blocks until done. Run doc.check first.",
+      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Blocks until done. Run doc.check first.",
       "id": "print.submit",
       "journal": false,
       "kind": "device",
@@ -5381,6 +6155,12 @@ expression: r
             "minimum": 0,
             "type": "integer"
           },
+          "labels": {
+            "description": "Distinct labels rendered (records or count, times pages).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "pages_printed": {
             "format": "uint32",
             "minimum": 0,
@@ -5389,6 +6169,7 @@ expression: r
         },
         "required": [
           "address",
+          "labels",
           "pages_printed",
           "duration_ms",
           "copies",
@@ -5421,6 +6202,24 @@ expression: r
               "null"
             ]
           },
+          "copies_column": {
+            "default": null,
+            "description": "Column holding each record's copy count (0 skips the record); overrides `copies`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "count": {
+            "default": null,
+            "description": "Labels to print without a data source, 1–5000 (default 1); serials advance per label.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "density": {
             "default": null,
             "description": "Print density; defaults to the label's density, else the model default.",
@@ -5434,6 +6233,14 @@ expression: r
           },
           "doc_id": {
             "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "records": {
+            "default": null,
+            "description": "Data records to print, 1-based: `all` (default), `3`, `1,4,6-9`. Needs a data source.",
             "type": [
               "string",
               "null"

@@ -136,12 +136,22 @@ pub fn hit(doc: &Document, x: f64, y: f64, zoom: f32) -> Option<ElementId> {
         .map(|e| e.id)
 }
 
+/// Binding values for showing 1-based `record` (clamped to the data), as printing all
+/// records would fill them.
+pub fn record_values(doc: &Document, record: usize) -> std::collections::BTreeMap<String, String> {
+    let rows = doc.data.as_ref().map_or(0, |d| d.rows.len());
+    let record = record.clamp(1, rows.max(1));
+    let row = (rows > 0).then(|| record - 1);
+    labely_core::commands::binding_values(doc, row, (record - 1) as u64)
+}
+
 /// Keep the cached raster in step with the document.
 fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) {
+    let values = record_values(doc, app.ui.record);
     if app
         .raster
         .as_ref()
-        .is_some_and(|r| Arc::ptr_eq(&r.doc, doc))
+        .is_some_and(|r| Arc::ptr_eq(&r.doc, doc) && r.values == values)
     {
         return;
     }
@@ -155,7 +165,7 @@ fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) 
     let opts = labely_core::services::RenderOptions {
         dpi,
         page: 0,
-        values: doc.variables.clone(),
+        values: values.clone(),
     };
     let Ok(out) = services.renderer.render(doc, &opts) else {
         app.raster = None;
@@ -174,12 +184,14 @@ fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) 
             r.texture.set(image, egui::TextureOptions::NEAREST);
             r.doc = doc.clone();
             r.dpi = dpi;
+            r.values = values;
         }
         _ => {
             let texture = ctx.load_texture("label-raster", image, egui::TextureOptions::NEAREST);
             app.raster = Some(Raster {
                 doc: doc.clone(),
                 dpi,
+                values,
                 texture,
                 size: [w, h],
             });

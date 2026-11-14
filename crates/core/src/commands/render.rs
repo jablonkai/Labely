@@ -4,7 +4,10 @@ use base64::Engine;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{DEFAULT_DPI, check_dpi, check_mm, doc_model, interpolate, render_options};
+use super::data::record_index;
+use super::{
+    DEFAULT_DPI, check_dpi, check_mm, doc_model, interpolate, render_options, render_options_for,
+};
 use crate::command::{Command, CommandError, CommandMeta, Ctx};
 use crate::document::{Document, Element, ElementId, ElementKind};
 use crate::services::{RenderError, RenderIssue};
@@ -39,6 +42,9 @@ pub struct PreviewParams {
     /// 0-based page index (default 0).
     #[serde(default)]
     pub page: Option<usize>,
+    /// Data record to show, 1-based (default 1). Serials take that record's position.
+    #[serde(default)]
+    pub record: Option<usize>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -63,15 +69,17 @@ impl Command for RenderPreview {
         CommandMeta::query(
             "Preview",
             "Render a page to the exact 1-bit print raster and return it as base64 PNG with its \
-             size in dots. dpi defaults to the label's printer model (else 203). Variables are \
-             substituted.",
+             size in dots. dpi defaults to the label's printer model (else 203). Bindings are \
+             filled from `record` (1-based, default 1), serials and variables.",
         )
     }
 
     fn run(ctx: &mut Ctx<'_>, p: PreviewParams) -> Result<PreviewOutput, CommandError> {
         let doc = ctx.doc_arc(p.doc_id.as_deref())?;
         let dpi = pick_dpi(ctx, &doc, p.dpi)?;
-        let opts = render_options(&doc, dpi, p.page.unwrap_or(0));
+        let record = p.record.unwrap_or(1);
+        let row = record_index(&doc, record)?;
+        let opts = render_options_for(&doc, dpi, p.page.unwrap_or(0), row, record as u64 - 1);
         let renderer = ctx.services().renderer.clone();
         let out = renderer.render(&doc, &opts).map_err(render_error)?;
         let png = renderer.to_png(&out.bitmap).map_err(render_error)?;
@@ -264,7 +272,18 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
         ));
     }
 
-    // Bindings: `{{name}}` must name a variable, and should not be empty.
+    // Bindings: `{{name}}` must name a column, serial or variable, and should not be empty.
+    if let Some(d) = &doc.data
+        && d.rows.is_empty()
+    {
+        issues.push(CheckIssue::new(
+            "data_empty",
+            Severity::Warning,
+            None,
+            "the data source has no records".to_owned(),
+            "attach data with rows, or remove it with data.detach",
+        ));
+    }
     for e in doc.elements() {
         let Ok(v) = serde_json::to_value(&e.kind) else {
             continue;
@@ -272,16 +291,42 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
         let mut names = Vec::new();
         collect_bindings(&v, &mut names);
         for name in names {
+            if let Some(d) = doc.data.as_ref().filter(|d| d.columns.contains(&name)) {
+                let empty: Vec<usize> = (0..d.rows.len())
+                    .filter(|&r| d.cell(r, &name).is_some_and(|c| c.trim().is_empty()))
+                    .collect();
+                if let Some(first) = empty.first() {
+                    issues.push(CheckIssue::new(
+                        "binding_empty",
+                        Severity::Info,
+                        Some(e.id),
+                        format!(
+                            "column `{name}` used by element {} is empty in {} of {} records \
+                             (first: record {})",
+                            e.id.0,
+                            empty.len(),
+                            d.rows.len(),
+                            first + 1
+                        ),
+                        "fill the cells, or skip those records with print.submit {records}",
+                    ));
+                }
+                continue;
+            }
+            if doc.serials.contains_key(&name) {
+                continue;
+            }
             match doc.variables.get(&name) {
                 None => issues.push(CheckIssue::new(
                     "binding_missing",
                     Severity::Warning,
                     Some(e.id),
                     format!(
-                        "element {} uses {{{{{name}}}}} but no such variable is set",
+                        "element {} uses {{{{{name}}}}} but no column, serial or variable has \
+                         that name",
                         e.id.0
                     ),
-                    "set it with variable.set, or fix the name",
+                    "attach data, set it with variable.set or data.set_serial, or fix the name",
                 )),
                 Some(val) if val.is_empty() => issues.push(CheckIssue::new(
                     "binding_empty",

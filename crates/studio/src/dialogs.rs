@@ -32,6 +32,10 @@ pub struct PrintForm {
     pub copies: u16,
     /// 0 = model default.
     pub density: u8,
+    /// Data records, e.g. `1,3,5-7`; empty = all.
+    pub records: String,
+    /// Labels to print without data.
+    pub count: u32,
 }
 
 impl Default for PrintForm {
@@ -41,6 +45,8 @@ impl Default for PrintForm {
             address: format!("fake:{}", dir.display()),
             copies: 1,
             density: 0,
+            records: String::new(),
+            count: 1,
         }
     }
 }
@@ -150,6 +156,20 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         ui.add(egui::DragValue::new(&mut form.copies).range(1..=999))
             .labelled_by(l);
         ui.end_row();
+        let has_data = app.session.doc(None).is_some_and(|d| d.data.is_some());
+        if has_data {
+            let l = ui.label(app.i18n.t("print-records")).id;
+            ui.add(
+                egui::TextEdit::singleline(&mut form.records)
+                    .hint_text(app.i18n.t("print-records-hint")),
+            )
+            .labelled_by(l);
+        } else {
+            let l = ui.label(app.i18n.t("print-count")).id;
+            ui.add(egui::DragValue::new(&mut form.count).range(1..=5000))
+                .labelled_by(l);
+        }
+        ui.end_row();
         let l = ui.label(app.i18n.t("prop-density")).id;
         ui.add(
             egui::Slider::new(&mut form.density, 0..=5).text(app.i18n.t("print-density-default")),
@@ -171,6 +191,13 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                 let mut p = json!({"address": form.address, "copies": form.copies});
                 if form.density > 0 {
                     p["density"] = json!(form.density);
+                }
+                if app.session.doc(None).is_some_and(|d| d.data.is_some()) {
+                    if !form.records.trim().is_empty() {
+                        p["records"] = json!(form.records.trim());
+                    }
+                } else if form.count > 1 {
+                    p["count"] = json!(form.count);
                 }
                 if app.run_reporting("print.submit", p).ok {
                     app.set_status(app.i18n.t("status-printed"), false);

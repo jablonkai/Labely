@@ -41,7 +41,31 @@ Send each example as the arguments of `command_batch`, or as the `steps` of a
 ```
 
 To print the label for someone else, run `variable.set` with the new value and print again.
-CSV and XLSX data merge arrive in Phase 3.
+
+## Data merge: one label per CSV row, with a serial
+
+```json
+{"steps": [
+  {"id": "data.attach_csv", "params": {"text": "name,sku,qty\nApple,A-1,2\nPear,P-7,1\n"}},
+  {"id": "data.set_serial", "params": {"start": 1, "digits": 4, "prefix": "N"}},
+  {"id": "element.add_text", "params": {"x_mm": 2, "y_mm": 2, "width_mm": 30, "height_mm": 8,
+    "text": "{{name}} · {{serial}}", "fit": "shrink"}},
+  {"id": "element.add_barcode", "params": {"x_mm": 2, "y_mm": 12, "width_mm": 40, "height_mm": 12,
+    "data": "x"}},
+  {"id": "data.bind", "params": {"id": "$3.id", "column": "sku"}}
+]}
+```
+
+Use `{"path": "items.csv"}` or `data.attach_xlsx {"path": "items.xlsx", "sheet": "Stock"}` for
+files. Check a record with `data.preview_record {"record": 2}` or `render.preview
+{"record": 2}`, then print after the batch:
+
+- `print.submit {}` prints every record, one label each.
+- `print.submit {"records": "2,5-9"}` prints a selection (1-based, in that order).
+- `print.submit {"copies_column": "qty"}` takes each record's copies from a column; 0 skips it.
+- Without data, `print.submit {"count": 20}` prints 20 labels and the serial advances on each.
+
+The serial is the label's position in the job, so `records: "5-9"` numbers them from `start`.
 
 ## Non-atomic: keep going after a failing step
 

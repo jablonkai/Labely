@@ -42,8 +42,8 @@ fn command_list_prefix() {
 /// schemas changed: bump `API_VERSION` in crates/core/src/lib.rs (if it was not bumped yet in
 /// this release cycle) and paste the new hash here.
 const PINNED: (u32, &str) = (
-    2,
-    "ca893e835605f7a6f9c8611670873e4f1455a8db2b59612b0543895bb8b42d0c",
+    3,
+    "a0d6808760bac9b0143067540014f806775bff97d7223110163fe1039a177102",
 );
 
 #[test]

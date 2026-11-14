@@ -75,6 +75,18 @@ for approval. Plan tags in [`feature-matrix.md`](feature-matrix.md) (Ph1–Ph6) 
   where the protocol supports them.
 - **Exit criteria:** every Ph1–Ph3 row in the feature matrix is done or has a stated reason.
 
+### Phase 3 progress
+
+Phase 3 lands in slices, one pull request each.
+
+| Slice | Scope | Status |
+|---|---|---|
+| 3.1 Data | CSV/XLSX sources, column binding, serial counters, record ranges, copies per record, studio data panel, CLI `--data`/`--record` (ADR-0014, format v2, API 3) | done |
+| 3.2 Elements | date/time, tables, vertical text, flip, borders and icons, remaining symbologies | next |
+| 3.3 Editor | align, distribute, group, lock, snapping, grids, shortcuts, canvas background | |
+| 3.4 Templates | starter set, local library and folders, PNG/PDF export, image and multi-image import | |
+| 3.5 Printing and device | print queue, print history, label paper database, RFID auto-match, calibration, settings | |
+
 ## Phase 4: Android shell + AppFunctions
 
 - UniFFI Kotlin bindings, cargo-ndk builds, native BLE via `NativeBleLink`, Compose UI (editor,

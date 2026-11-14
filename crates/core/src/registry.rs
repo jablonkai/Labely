@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
-use crate::commands::{device, doc, element, history, meta, render, selection, variable};
+use crate::commands::{data, device, doc, element, history, meta, render, selection, variable};
 use crate::schema::{output_schema, params_schema};
 
 type RunFn = fn(&mut Ctx<'_>, Value) -> Result<Value, CommandError>;
@@ -315,6 +315,14 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<selection::SelectionSet>().in_menu("edit", None),
         Entry::of::<selection::SelectionGet>(),
         Entry::of::<variable::VariableSet>(),
+        Entry::of::<data::AttachCsv>().in_menu("data", None),
+        Entry::of::<data::AttachXlsx>().in_menu("data", None),
+        Entry::of::<data::Detach>().in_menu("data", None),
+        Entry::of::<data::Get>(),
+        Entry::of::<data::Bind>(),
+        Entry::of::<data::PreviewRecord>(),
+        Entry::of::<data::SetSerial>().in_menu("data", None),
+        Entry::of::<data::RemoveSerial>(),
         Entry::of::<render::RenderPreview>().in_menu("view", None),
         Entry::of::<device::DeviceScan>().in_menu("print", None),
         Entry::of::<device::DeviceList>(),
