@@ -4,6 +4,7 @@
 pub mod app;
 pub mod canvas;
 pub mod dialogs;
+pub mod jobs;
 pub mod mcp_host;
 pub mod menu;
 pub mod panels;

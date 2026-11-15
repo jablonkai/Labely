@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use labely_core::commands::interpolate;
 use labely_core::document::{Document, ElementKind, MediaType, TextFit};
 use labely_core::services::{
-    DecodedCode, DeviceError, DeviceHub, DeviceInfo, DeviceStatus, ModelInfo, PaperInfo,
-    PrintReport, PrintRequest, RenderError, RenderIssue, RenderOptions, RenderOutput, Renderer,
-    Services,
+    DecodedCode, DeviceError, DeviceHub, DeviceInfo, DeviceStatus, JobControl, ModelInfo,
+    PaperInfo, PrintReport, PrintRequest, RenderError, RenderIssue, RenderOptions, RenderOutput,
+    Renderer, Services,
 };
 use labely_core::{Bitmap1, Session};
 
@@ -305,6 +305,10 @@ struct HubState {
     prints: Vec<(String, PrintRequest)>,
     fail_next_print: Option<DeviceError>,
     paper: Option<PaperInfo>,
+    /// While set, `print` blocks (until released or cancelled).
+    hold: bool,
+    /// Prints currently blocked by `hold`.
+    held: usize,
 }
 
 /// One fake printer at [`FAKE_ADDRESS`]; records every [`PrintRequest`].
@@ -331,6 +335,24 @@ impl FakeDeviceHub {
     /// Make the next `print` fail with `err`.
     pub fn fail_next_print(&self, err: DeviceError) {
         lock(&self.state).fail_next_print = Some(err);
+    }
+
+    /// While `hold` is true, prints block after reporting their first page, so tests can
+    /// watch the queue, pause it and cancel the running job.
+    pub fn hold_prints(&self, hold: bool) {
+        lock(&self.state).hold = hold;
+    }
+
+    /// Wait (up to 5 s) until a print is blocked by [`Self::hold_prints`].
+    pub fn wait_held(&self) -> bool {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < until {
+            if lock(&self.state).held > 0 {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        false
     }
 
     fn info(&self, connected: bool) -> DeviceInfo {
@@ -397,14 +419,32 @@ impl DeviceHub for FakeDeviceHub {
         })
     }
 
-    fn print(&self, address: &str, job: PrintRequest) -> Result<PrintReport, DeviceError> {
+    fn print(
+        &self,
+        address: &str,
+        job: PrintRequest,
+        control: &JobControl,
+    ) -> Result<PrintReport, DeviceError> {
         self.require(address)?;
+        let pages_printed = job.pages.len() as u32 * u32::from(job.copies);
+        control.set_progress(0, pages_printed);
+        if lock(&self.state).hold {
+            control.set_progress(1.min(pages_printed), pages_printed);
+            lock(&self.state).held += 1;
+            while lock(&self.state).hold && !control.is_cancelled() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            lock(&self.state).held -= 1;
+            if control.is_cancelled() {
+                return Err(DeviceError::Cancelled);
+            }
+        }
         let mut st = lock(&self.state);
         if let Some(e) = st.fail_next_print.take() {
             return Err(e);
         }
-        let pages_printed = job.pages.len() as u32 * u32::from(job.copies);
         st.prints.push((address.to_owned(), job));
+        control.set_progress(pages_printed, pages_printed);
         Ok(PrintReport {
             pages_printed,
             duration_ms: 0,
@@ -485,9 +525,9 @@ mod tests {
     #[test]
     fn hub_records_prints() {
         let hub = FakeDeviceHub::new();
-        assert!(hub.print(FAKE_ADDRESS, job()).is_err());
+        assert!(hub.print(FAKE_ADDRESS, job(), &JobControl::new()).is_err());
         hub.connect(FAKE_ADDRESS).unwrap();
-        let r = hub.print(FAKE_ADDRESS, job()).unwrap();
+        let r = hub.print(FAKE_ADDRESS, job(), &JobControl::new()).unwrap();
         assert_eq!(r.pages_printed, 2);
         assert_eq!(hub.prints().len(), 1);
     }

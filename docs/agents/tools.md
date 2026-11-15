@@ -85,7 +85,17 @@ Hints:
 | `device.scan` | device | timeout_ms |
 | `device.list` | device | |
 | `device.connect`, `.disconnect`, `.status` | device | address |
-| `print.submit` | device | address, copies, density, records, count, copies_column |
+| `print.submit` | device | address, copies, density, records, count, copies_column, wait → job_id, state |
+| `job.list` | query | → paused, jobs [{id, state, address, doc_name, pages_done, pages_total, error, …}] |
+| `job.get` | query | id |
+| `job.wait` | device | id, timeout_ms (default 60000, max 600000) |
+| `job.cancel` | device | id |
+| `job.pause`, `job.resume` | device | → paused |
+| `job.clear` | device | → removed (finished jobs only) |
+| `job.history` | query | limit, offset → total, entries [{id, printed_at, doc_name, pages_printed, state, file}] |
+| `job.history_open` | edit | id → doc_id, name |
+| `job.history_delete` | edit | ids |
+| `job.history_clear` | edit | |
 
 \* `frame` is `x_mm, y_mm, width_mm, height_mm`, plus optional `rotation_deg` and `name`. Every
 document command also takes an optional `doc_id`; the default is the active document. The JSON
@@ -95,11 +105,21 @@ Template library writes (`template.save`, `.move`, `.duplicate`, `.delete`, `.fo
 journaled and cannot be undone. They address templates by reference inside the library
 directory, so they are not limited by the file roots; `export.*` paths are.
 
+Print jobs go through a queue with one worker. `print.submit` waits for its job by default;
+with `wait: false` it returns `{job_id, state: "queued"}` at once. A paused queue finishes the
+running job and starts no new one; a waited `print.submit` on a paused queue fails with
+`bad_params`. `job.cancel` drops a queued job or stops the running one at the next label
+(state `cancelled`, error code `cancelled`). In the studio an agent's `job.wait` waits at most
+2 s per call, so poll it. `job.*` commands are not gated by "Allow agents to print". The print
+history (`job.history*`) keeps every job that reached a printer, with a snapshot of the
+document; it is not limited by the file roots, and its writes cannot be undone.
+
 Printer addresses:
 - `ble:<id>`
 - `usb:<port>`
 - `sim:<model id>`: the protocol simulator.
-- `fake:<dir>[?model=<id>]`: writes PNGs to `<dir>/job-NNNN/`.
+- `fake:<dir>[?model=<id>&delay_ms=<n>]`: writes PNGs to `<dir>/job-NNNN/`; `delay_ms` makes
+  each page take that long, to watch the queue.
 
 ## Bindings
 

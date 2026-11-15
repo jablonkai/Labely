@@ -10127,7 +10127,7 @@ expression: r
       "undoable": false
     },
     {
-      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Blocks until done. Run doc.check first.",
+      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Jobs go through the print queue; by default the command waits until the job has printed, `wait: false` returns {job_id} at once. Run doc.check first.",
       "id": "print.submit",
       "journal": false,
       "kind": "device",
@@ -10161,6 +10161,10 @@ expression: r
             "minimum": 0,
             "type": "integer"
           },
+          "job_id": {
+            "description": "Queue id for job.get, job.wait and job.cancel.",
+            "type": "string"
+          },
           "labels": {
             "description": "Distinct labels rendered (records or count, times pages).",
             "format": "uint32",
@@ -10168,12 +10172,26 @@ expression: r
             "type": "integer"
           },
           "pages_printed": {
+            "description": "Pages printed so far (0 while queued).",
             "format": "uint32",
             "minimum": 0,
             "type": "integer"
+          },
+          "state": {
+            "description": "`done` after a waited print; `queued` or `printing` with `wait: false`.",
+            "enum": [
+              "queued",
+              "printing",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
           }
         },
         "required": [
+          "job_id",
+          "state",
           "address",
           "labels",
           "pages_printed",
@@ -10251,12 +10269,1131 @@ expression: r
               "string",
               "null"
             ]
+          },
+          "wait": {
+            "default": null,
+            "description": "Wait until the job has printed (default true). With false the job is queued and the\ncommand returns at once; follow it with job.get or job.wait.",
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "title": "PrintParams",
         "type": "object"
       },
       "shortcut": "Ctrl+P",
+      "undoable": false
+    },
+    {
+      "description": "List the print queue: queued, printing and recently finished jobs (oldest first) with progress, plus whether the queue is paused.",
+      "id": "job.list",
+      "journal": false,
+      "kind": "query",
+      "label": "Print jobs",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "jobs": {
+            "description": "Queued, running and recently finished jobs, oldest first.",
+            "items": {
+              "description": "A queued, running or finished print job.",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "copies": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "density": {
+                  "format": "uint8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "doc_name": {
+                  "description": "Name of the printed document.",
+                  "type": "string"
+                },
+                "duration_ms": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "error": {
+                  "description": "Why the job failed or was cancelled.",
+                  "properties": {
+                    "accepted": {
+                      "description": "Accepted values or nearest valid ids.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "code": {
+                      "description": "Stable error codes (prior-art §4.2 item 9).",
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "unknown_command",
+                            "bad_params",
+                            "disabled",
+                            "no_document",
+                            "not_found",
+                            "device_unavailable",
+                            "device_error",
+                            "cancelled",
+                            "internal"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "forbidden",
+                          "description": "Refused by the session policy (file roots, print gating).",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "hint": {
+                      "description": "What to do next.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "param": {
+                      "description": "Offending param path, e.g. `width_mm` or `props.font_size_pt`.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "finished_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "description": "`job-<n>`, unique within the session.",
+                  "type": "string"
+                },
+                "labels": {
+                  "description": "Distinct labels (records or count, times pages).",
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "model": {
+                  "description": "Printer model id, when known.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "pages_done": {
+                  "description": "Pages printed so far.",
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "pages_total": {
+                  "description": "Pages the printer will feed (labels × copies).",
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "description": "Where a job is.",
+                  "enum": [
+                    "queued",
+                    "printing",
+                    "done",
+                    "failed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                "submitted_at": {
+                  "description": "Local time, `YYYY-MM-DD HH:MM:SS`.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "state",
+                "address",
+                "doc_name",
+                "labels",
+                "copies",
+                "density",
+                "pages_total",
+                "pages_done",
+                "submitted_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "paused": {
+            "description": "A paused queue starts no new job.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused",
+          "jobs"
+        ],
+        "title": "JobListOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "One print job with its state and progress.",
+      "id": "job.get",
+      "journal": false,
+      "kind": "query",
+      "label": "Print job",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A queued, running or finished print job.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "copies": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "density": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "doc_name": {
+            "description": "Name of the printed document.",
+            "type": "string"
+          },
+          "duration_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Why the job failed or was cancelled.",
+            "properties": {
+              "accepted": {
+                "description": "Accepted values or nearest valid ids.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "code": {
+                "description": "Stable error codes (prior-art §4.2 item 9).",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "unknown_command",
+                      "bad_params",
+                      "disabled",
+                      "no_document",
+                      "not_found",
+                      "device_unavailable",
+                      "device_error",
+                      "cancelled",
+                      "internal"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "forbidden",
+                    "description": "Refused by the session policy (file roots, print gating).",
+                    "type": "string"
+                  }
+                ]
+              },
+              "hint": {
+                "description": "What to do next.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "description": "Offending param path, e.g. `width_mm` or `props.font_size_pt`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "`job-<n>`, unique within the session.",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Distinct labels (records or count, times pages).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "model": {
+            "description": "Printer model id, when known.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pages_done": {
+            "description": "Pages printed so far.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pages_total": {
+            "description": "Pages the printer will feed (labels × copies).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "description": "Where a job is.",
+            "enum": [
+              "queued",
+              "printing",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "submitted_at": {
+            "description": "Local time, `YYYY-MM-DD HH:MM:SS`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "address",
+          "doc_name",
+          "labels",
+          "copies",
+          "density",
+          "pages_total",
+          "pages_done",
+          "submitted_at"
+        ],
+        "title": "JobInfo",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Job id from print.submit or job.list, e.g. `job-3`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "JobIdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Block until the job is done, failed or cancelled, or timeout_ms (default 60000) passes; returns the job. Check `state`: it is still `queued` or `printing` after a timeout.",
+      "id": "job.wait",
+      "journal": false,
+      "kind": "device",
+      "label": "Wait for print job",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A queued, running or finished print job.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "copies": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "density": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "doc_name": {
+            "description": "Name of the printed document.",
+            "type": "string"
+          },
+          "duration_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Why the job failed or was cancelled.",
+            "properties": {
+              "accepted": {
+                "description": "Accepted values or nearest valid ids.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "code": {
+                "description": "Stable error codes (prior-art §4.2 item 9).",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "unknown_command",
+                      "bad_params",
+                      "disabled",
+                      "no_document",
+                      "not_found",
+                      "device_unavailable",
+                      "device_error",
+                      "cancelled",
+                      "internal"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "forbidden",
+                    "description": "Refused by the session policy (file roots, print gating).",
+                    "type": "string"
+                  }
+                ]
+              },
+              "hint": {
+                "description": "What to do next.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "description": "Offending param path, e.g. `width_mm` or `props.font_size_pt`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "`job-<n>`, unique within the session.",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Distinct labels (records or count, times pages).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "model": {
+            "description": "Printer model id, when known.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pages_done": {
+            "description": "Pages printed so far.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pages_total": {
+            "description": "Pages the printer will feed (labels × copies).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "description": "Where a job is.",
+            "enum": [
+              "queued",
+              "printing",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "submitted_at": {
+            "description": "Local time, `YYYY-MM-DD HH:MM:SS`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "address",
+          "doc_name",
+          "labels",
+          "copies",
+          "density",
+          "pages_total",
+          "pages_done",
+          "submitted_at"
+        ],
+        "title": "JobInfo",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": null,
+            "description": "Longest wait in milliseconds (default 60000, max 600000).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "WaitParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Cancel a queued job, or stop the printing one at the next label. A printing job turns `cancelled` once the printer has stopped; follow with job.wait.",
+      "id": "job.cancel",
+      "journal": false,
+      "kind": "device",
+      "label": "Cancel print job",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A queued, running or finished print job.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "copies": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "density": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "doc_name": {
+            "description": "Name of the printed document.",
+            "type": "string"
+          },
+          "duration_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Why the job failed or was cancelled.",
+            "properties": {
+              "accepted": {
+                "description": "Accepted values or nearest valid ids.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "code": {
+                "description": "Stable error codes (prior-art §4.2 item 9).",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "unknown_command",
+                      "bad_params",
+                      "disabled",
+                      "no_document",
+                      "not_found",
+                      "device_unavailable",
+                      "device_error",
+                      "cancelled",
+                      "internal"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "forbidden",
+                    "description": "Refused by the session policy (file roots, print gating).",
+                    "type": "string"
+                  }
+                ]
+              },
+              "hint": {
+                "description": "What to do next.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "param": {
+                "description": "Offending param path, e.g. `width_mm` or `props.font_size_pt`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "`job-<n>`, unique within the session.",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Distinct labels (records or count, times pages).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "model": {
+            "description": "Printer model id, when known.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pages_done": {
+            "description": "Pages printed so far.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pages_total": {
+            "description": "Pages the printer will feed (labels × copies).",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "description": "Where a job is.",
+            "enum": [
+              "queued",
+              "printing",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "submitted_at": {
+            "description": "Local time, `YYYY-MM-DD HH:MM:SS`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "address",
+          "doc_name",
+          "labels",
+          "copies",
+          "density",
+          "pages_total",
+          "pages_done",
+          "submitted_at"
+        ],
+        "title": "JobInfo",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Job id from print.submit or job.list, e.g. `job-3`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "JobIdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Pause the print queue: the printing job finishes, queued jobs wait for job.resume.",
+      "id": "job.pause",
+      "journal": false,
+      "kind": "device",
+      "label": "Pause print queue",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
+        ],
+        "title": "PausedOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Resume a paused print queue.",
+      "id": "job.resume",
+      "journal": false,
+      "kind": "device",
+      "label": "Resume print queue",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
+        ],
+        "title": "PausedOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Remove finished jobs from job.list. The print history keeps them.",
+      "id": "job.clear",
+      "journal": false,
+      "kind": "device",
+      "label": "Clear finished jobs",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "removed": {
+            "description": "Finished jobs removed from the list.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "ClearOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Printed jobs, newest first (limit default 50, max 1000; offset). Each entry with a `file` can be reopened with job.history_open.",
+      "id": "job.history",
+      "journal": false,
+      "kind": "query",
+      "label": "Print history",
+      "menu": "print",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "entries": {
+            "items": {
+              "description": "One printed job in the history.",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "copies": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "doc_name": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "file": {
+                  "description": "Snapshot file name in the history directory.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "description": "`YYYYMMDD-HHMMSS[-n]`.",
+                  "type": "string"
+                },
+                "labels": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "pages_printed": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "printed_at": {
+                  "description": "Local time the job finished, `YYYY-MM-DD HH:MM:SS`.",
+                  "type": "string"
+                },
+                "state": {
+                  "description": "`done`, `failed` or `cancelled`.",
+                  "enum": [
+                    "queued",
+                    "printing",
+                    "done",
+                    "failed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "printed_at",
+                "doc_name",
+                "address",
+                "labels",
+                "copies",
+                "pages_printed",
+                "state"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "Entries in the whole history.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "entries"
+        ],
+        "title": "HistoryOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": null,
+            "description": "Most entries to return, newest first (default 50, max 1000).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "offset": {
+            "default": null,
+            "description": "Entries to skip (default 0).",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "title": "HistoryParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Delete print-history entries and their document snapshots. Cannot be undone.",
+      "id": "job.history_delete",
+      "journal": false,
+      "kind": "edit",
+      "label": "Delete history entries",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "deleted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "HistoryDeleteOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "description": "History entry ids from job.history.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "HistoryDeleteParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Delete the whole print history and its document snapshots. Cannot be undone.",
+      "id": "job.history_clear",
+      "journal": false,
+      "kind": "edit",
+      "label": "Clear print history",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "deleted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "HistoryDeleteOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Open the document as it was printed in a history entry, as a new unsaved document, and make it active. Print it again with print.submit.",
+      "id": "job.history_open",
+      "journal": true,
+      "kind": "edit",
+      "label": "Open from history",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "doc_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_id",
+          "name"
+        ],
+        "title": "HistoryOpenOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "History entry id from job.history.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "HistoryOpenParams",
+        "type": "object"
+      },
       "undoable": false
     }
   ],

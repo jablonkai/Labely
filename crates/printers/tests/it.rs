@@ -2,7 +2,7 @@
 
 use labely_core::Bitmap1;
 use labely_core::document::MediaType;
-use labely_core::services::{DeviceHub, PrintRequest};
+use labely_core::services::{DeviceError, DeviceHub, JobControl, PrintRequest};
 use labely_printers::Hub;
 use labely_printers::driver::{Driver, prepare_for_head};
 use labely_printers::niimbot::NiimbotDriver;
@@ -44,8 +44,8 @@ fn b21_pro_job_roundtrips_through_simulator() {
         density: 4,
         media: MediaType::Gap,
     };
-    let mut events = Vec::new();
-    let report = drv.print(&job, &mut |p| events.push(p)).unwrap();
+    let control = JobControl::new();
+    let report = drv.print(&job, &control).unwrap();
     assert_eq!(report.pages_printed, 2);
 
     let log = sim.log();
@@ -61,7 +61,46 @@ fn b21_pro_job_roundtrips_through_simulator() {
         "simulator reassembled the exact raster"
     );
     assert_eq!(log.pages[0].1, 2);
-    assert!(!events.is_empty());
+    assert_eq!(control.progress(), (2, 2));
+}
+
+#[test]
+fn cancelled_job_sends_no_page() {
+    let (sim, transport) = Simulator::start(SimConfig::b21_pro());
+    let mut drv = NiimbotDriver::new(Box::new(transport));
+    drv.connect().unwrap();
+    let job = PrintRequest {
+        pages: vec![test_label()],
+        copies: 1,
+        density: 3,
+        media: MediaType::Gap,
+    };
+    let control = JobControl::new();
+    control.cancel();
+    let err = drv.print(&job, &control).unwrap_err();
+    assert_eq!(err, DeviceError::Cancelled);
+    assert!(sim.log().pages.is_empty());
+}
+
+#[test]
+fn hub_fake_printer_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let hub = Hub::new();
+    let bad = format!("fake:{}?colour=red", dir.path().display());
+    assert!(
+        hub.connect(&bad)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown option")
+    );
+    let addr = format!(
+        "fake:{}?model=niimbot.b21_pro&delay_ms=1",
+        dir.path().display()
+    );
+    assert_eq!(
+        hub.connect(&addr).unwrap().model.unwrap().id,
+        "niimbot.b21_pro"
+    );
 }
 
 #[test]
@@ -77,7 +116,7 @@ fn printer_error_is_reported() {
         density: 3,
         media: MediaType::Gap,
     };
-    let err = drv.print(&job, &mut |_| {}).unwrap_err();
+    let err = drv.print(&job, &JobControl::new()).unwrap_err();
     assert!(err.to_string().contains("CoverOpen"), "{err}");
 }
 
@@ -94,7 +133,7 @@ fn hub_fake_printer_writes_png() {
         density: 3,
         media: MediaType::Gap,
     };
-    hub.print(&addr, job).unwrap();
+    hub.print(&addr, job, &JobControl::new()).unwrap();
     let png = dir.path().join("job-0001/page-01.png");
     assert!(png.exists());
     let meta: serde_json::Value =
@@ -113,4 +152,37 @@ fn hub_sim_and_errors() {
     hub.disconnect("sim:niimbot.b21_pro").unwrap();
     assert!(hub.connect("nope:x").is_err());
     assert!(hub.connect("fake:/tmp/x?model=does.not.exist").is_err());
+}
+
+#[test]
+fn hub_stays_responsive_while_printing() {
+    let dir = tempfile::tempdir().unwrap();
+    let hub = std::sync::Arc::new(Hub::new());
+    let addr = format!("fake:{}?delay_ms=300", dir.path().display());
+    hub.connect(&addr).unwrap();
+    let control = std::sync::Arc::new(JobControl::new());
+    let worker = {
+        let (hub, addr, control) = (hub.clone(), addr.clone(), control.clone());
+        std::thread::spawn(move || {
+            let job = PrintRequest {
+                pages: vec![test_label(), test_label()],
+                copies: 1,
+                density: 3,
+                media: MediaType::Gap,
+            };
+            hub.print(&addr, job, &control)
+        })
+    };
+    while control.progress().1 == 0 {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    // Listing never waits; status and disconnect report busy instead of blocking.
+    assert_eq!(hub.connected().len(), 1);
+    let busy = hub.status(&addr).unwrap_err();
+    assert!(busy.to_string().contains("busy printing"), "{busy}");
+    assert!(hub.disconnect(&addr).is_err());
+    control.cancel();
+    assert_eq!(worker.join().unwrap().unwrap_err(), DeviceError::Cancelled);
+    assert!(hub.status(&addr).is_ok());
+    hub.disconnect(&addr).unwrap();
 }

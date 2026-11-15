@@ -392,6 +392,7 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
         }
         "render.preview" => app.ui.show_preview = !app.ui.show_preview,
         "print.submit" => app.ui.dialog = Some(Dialog::Print),
+        "job.history" => crate::jobs::open_history(app),
         "device.scan" => {
             app.ui.show_printers = true;
             scan(app);

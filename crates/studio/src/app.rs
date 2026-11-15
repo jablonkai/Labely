@@ -14,6 +14,9 @@ use serde_json::{Value, json};
 use crate::mcp_host::{McpCall, McpHost};
 use crate::{canvas, dialogs, menu, panels};
 
+/// Longest `job.wait` an agent gets in the studio, milliseconds.
+pub const AGENT_WAIT_MS: u64 = 2_000;
+
 /// Spreadsheet-style column name: 0 → A, 26 → AA.
 pub fn column_name(i: usize) -> String {
     labely_core::commands::data::column_letter(i)
@@ -36,6 +39,8 @@ pub struct StudioOptions {
     pub connection_file: Option<PathBuf>,
     /// Template library; default `<app-data>/templates`.
     pub template_dir: Option<PathBuf>,
+    /// Print history; default `<app-data>/history`.
+    pub history_dir: Option<PathBuf>,
 }
 
 impl Default for StudioOptions {
@@ -49,6 +54,7 @@ impl Default for StudioOptions {
             native_dialogs: true,
             connection_file: None,
             template_dir: None,
+            history_dir: None,
         }
     }
 }
@@ -92,6 +98,7 @@ pub enum Dialog {
     NewDoc(dialogs::NewDocForm),
     Templates(crate::templates::Gallery),
     SaveTemplate(crate::templates::SaveForm),
+    History(crate::jobs::HistoryView),
     Print,
     About,
 }
@@ -135,6 +142,8 @@ pub struct UiState {
     pub agent_log: VecDeque<String>,
     /// Canvas mapping of the last frame (for tests and tools).
     pub last_view: Option<crate::canvas::View>,
+    /// Last seen state of each print job, to report finished jobs once.
+    pub jobs_seen: std::collections::BTreeMap<String, labely_core::jobs::JobState>,
 }
 
 impl Default for UiState {
@@ -165,6 +174,7 @@ impl Default for UiState {
             allow_agent_print: false,
             agent_log: VecDeque::new(),
             last_view: None,
+            jobs_seen: Default::default(),
         }
     }
 }
@@ -241,6 +251,12 @@ impl LabelyApp {
             .clone()
             .unwrap_or_else(|| labely_mcp::connection::data_dir().join("templates"));
         app.session.set_template_dir(Some(templates));
+        let history = app
+            .opts
+            .history_dir
+            .clone()
+            .unwrap_or_else(|| labely_mcp::connection::data_dir().join("history"));
+        app.session.set_history_dir(Some(history));
         if let Some(path) = app.opts.open.clone() {
             app.run_reporting("doc.open", json!({ "path": path }));
         }
@@ -292,7 +308,18 @@ impl LabelyApp {
     }
 
     /// Run a command for an agent: restricted file roots, printing only when allowed.
-    pub fn run_as_agent(&mut self, id: &str, params: Value) -> Envelope {
+    pub fn run_as_agent(&mut self, id: &str, mut params: Value) -> Envelope {
+        // Agent calls run on the UI thread: a long job.wait would freeze the window, so it
+        // waits at most AGENT_WAIT_MS per call and the agent polls.
+        if id == "job.wait"
+            && let Some(p) = params.as_object_mut()
+        {
+            let t = p
+                .get("timeout_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or(AGENT_WAIT_MS);
+            p.insert("timeout_ms".into(), json!(t.min(AGENT_WAIT_MS)));
+        }
         let user = self.session.policy().clone();
         let mut agent = Policy::restricted(self.agent_roots.clone());
         agent.allow_print = self.ui.allow_agent_print;
@@ -364,6 +391,7 @@ impl LabelyApp {
     pub fn show(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         self.serve_agents(&ctx);
+        crate::jobs::watch(self, &ctx);
         menu::shortcuts(self, &ctx);
         egui::Panel::top("menu").show(ui, |ui| menu::menu_bar(self, ui));
         egui::Panel::bottom("status").show(ui, |ui| panels::status_bar(self, ui));

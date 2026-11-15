@@ -17,7 +17,8 @@
    consider the warnings. Rule ids are listed in [tools.md](tools.md#doccheck-rules).
 6. **Print.** Call `print {address, copies?, density?}`. If the printer is not connected yet,
    run `command_run {id: "device.connect", params: {address}}` first. Printing returns
-   `forbidden` until the user allows it.
+   `forbidden` until the user allows it. For long jobs pass `wait: false` and follow the
+   returned `job_id` with `job.get` or `job.wait`.
 
 Units are millimetres, angles are degrees, and font sizes are points. The origin is the top-left
 corner of the label. Element ids are stable integers.
@@ -44,7 +45,7 @@ Error codes are stable:
 | `not_found` | An id or path does not exist. `accepted` lists the valid ones. |
 | `device_unavailable` | The printer is off, out of range or not connected. |
 | `device_error` | The printer reported a problem. Follow the `hint`. |
-| `cancelled` | The call was cancelled. In the studio this happens when the UI did not answer within 30 s. |
+| `cancelled` | The call was cancelled. In the studio this happens when the UI did not answer within 30 s. A cancelled print job also reports it. |
 | `forbidden` | Blocked by policy: a path outside the allowed roots, or printing while it is off. |
 | `internal` | A bug in Labely. The state is unchanged. |
 

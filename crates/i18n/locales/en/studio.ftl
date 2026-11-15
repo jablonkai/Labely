@@ -220,3 +220,26 @@ template-jar = Jar
 template-cable-flag = Cable flag
 template-wifi = Wi-Fi
 template-shipping = Shipping
+
+## Print queue and history
+cmd-job-history = Print history…
+panel-jobs = Print jobs
+jobs-none = No print jobs yet.
+jobs-paused = The queue is paused: queued jobs wait.
+job-queued = queued
+job-printing = printing
+job-done = done
+job-failed = failed
+job-cancelled = cancelled
+action-pause = Pause
+action-resume = Resume
+action-clear-finished = Clear finished
+action-clear-history = Clear history
+history-title = Print history
+history-empty = Nothing printed yet.
+history-pages = { $count ->
+    [one] { $count } page
+   *[other] { $count } pages
+}
+status-queued = Queued for printing.
+status-job-done = Printed: { $name }

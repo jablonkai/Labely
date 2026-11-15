@@ -1,13 +1,13 @@
 //! FakePrinter: "prints" each page to a PNG plus a `job.json` describing the job.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use labely_core::Bitmap1;
-use labely_core::services::{DeviceError, DeviceStatus, PrintReport, PrintRequest};
+use labely_core::services::{DeviceError, DeviceStatus, JobControl, PrintReport, PrintRequest};
 use serde::Serialize;
 
-use crate::driver::{Driver, Identity, Progress, prepare_for_head};
+use crate::driver::{Driver, Identity, prepare_for_head};
 use crate::registry::Model;
 
 /// Writes `<dir>/job-NNNN/page-NN.png` (head orientation, as a real printer would receive
@@ -17,6 +17,8 @@ pub struct FakePrinter {
     dir: PathBuf,
     model: Model,
     jobs: u32,
+    /// Simulated time per printed page, so queue, progress and cancel can be watched.
+    page_delay: Duration,
 }
 
 #[derive(Serialize)]
@@ -42,7 +44,14 @@ impl FakePrinter {
             dir: dir.into(),
             model,
             jobs: 0,
+            page_delay: Duration::ZERO,
         }
+    }
+
+    /// Take `delay` per printed page (address option `delay_ms`).
+    pub fn with_page_delay(mut self, delay: Duration) -> Self {
+        self.page_delay = delay;
+        self
     }
 
     pub fn model(&self) -> &Model {
@@ -93,14 +102,20 @@ impl Driver for FakePrinter {
     fn print(
         &mut self,
         job: &PrintRequest,
-        progress: &mut dyn FnMut(Progress),
+        control: &JobControl,
     ) -> Result<PrintReport, DeviceError> {
         let started = Instant::now();
         self.jobs += 1;
         let job_dir = self.dir.join(format!("job-{:04}", self.jobs));
         std::fs::create_dir_all(&job_dir).map_err(io)?;
+        let copies = u32::from(job.copies.max(1));
+        let total = job.pages.len() as u32 * copies;
+        control.set_progress(0, total);
         let mut pages = Vec::new();
         for (i, page) in job.pages.iter().enumerate() {
+            if control.is_cancelled() {
+                break;
+            }
             let head = prepare_for_head(page, &self.model);
             let file = format!("page-{:02}.png", i + 1);
             write_png(&job_dir.join(&file), &head)?;
@@ -110,8 +125,11 @@ impl Driver for FakePrinter {
                 height_dots: head.height(),
                 black_dots: head.count_black(),
             });
+            if !self.page_delay.is_zero() {
+                std::thread::sleep(self.page_delay * copies);
+            }
+            control.set_progress((i as u32 + 1) * copies, total);
         }
-        let total = job.pages.len() as u32 * u32::from(job.copies.max(1));
         let record = JobRecord {
             model: &self.model.id,
             copies: job.copies,
@@ -121,10 +139,9 @@ impl Driver for FakePrinter {
         };
         let json = serde_json::to_vec_pretty(&record).map_err(io)?;
         std::fs::write(job_dir.join("job.json"), json).map_err(io)?;
-        progress(Progress {
-            pages_done: total,
-            pages_total: total,
-        });
+        if control.is_cancelled() {
+            return Err(DeviceError::Cancelled);
+        }
         Ok(PrintReport {
             pages_printed: total,
             duration_ms: started.elapsed().as_millis() as u64,
