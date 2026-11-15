@@ -111,6 +111,13 @@ impl Renderer for LabelRenderer {
         bitmap_to_png(bitmap)
     }
 
+    fn fonts(&self) -> Vec<String> {
+        self.text
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .families()
+    }
+
     fn icons(&self) -> Vec<labely_core::services::IconInfo> {
         icons::ICONS
             .iter()
@@ -424,12 +431,55 @@ fn text_layer(
     w: u32,
     h: u32,
 ) -> Result<Pixmap, RenderError> {
-    let s = ctx.subst(&p.text);
-    let s = match p.direction {
-        TextDirection::Horizontal => s,
-        TextDirection::Vertical => text::vertical(&s),
+    let runs = match p.direction {
+        TextDirection::Horizontal if !p.spans.is_empty() => span_runs(ctx, p),
+        TextDirection::Horizontal => vec![plain_run(p, ctx.subst(&p.text))],
+        TextDirection::Vertical => vec![plain_run(p, text::vertical(&ctx.subst(&p.text)))],
     };
-    draw_text(ctx, engine, el, p, &s, w, h)
+    draw_runs(ctx, engine, el, p, &runs, w, h)
+}
+
+/// The whole text in the element's own style.
+fn plain_run(p: &TextProps, text: String) -> text::Run {
+    text::Run {
+        text,
+        bold: p.bold,
+        italic: p.italic,
+        underline: p.underline,
+        scale: 1.0,
+    }
+}
+
+/// Split `p.text` at span edges (clamped to the text) and style each piece; bindings are
+/// substituted per piece.
+fn span_runs(ctx: &Ctx<'_>, p: &TextProps) -> Vec<text::Run> {
+    let chars: Vec<char> = p.text.chars().collect();
+    let n = chars.len();
+    let mut cuts = vec![0, n];
+    for sp in &p.spans {
+        cuts.push(sp.start.min(n));
+        cuts.push(sp.end.min(n));
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    let base = p.font_size_pt.max(f64::MIN_POSITIVE);
+    cuts.windows(2)
+        .map(|w| {
+            let (a, b) = (w[0], w[1]);
+            let mut run = plain_run(p, String::new());
+            for sp in p.spans.iter().filter(|sp| sp.start <= a && sp.end >= b) {
+                run.bold = sp.bold.unwrap_or(run.bold);
+                run.italic = sp.italic.unwrap_or(run.italic);
+                run.underline = sp.underline.unwrap_or(run.underline);
+                if let Some(pt) = sp.font_size_pt {
+                    run.scale = (pt / base) as f32;
+                }
+            }
+            run.text = ctx.subst(&chars[a..b].iter().collect::<String>());
+            run
+        })
+        .filter(|r| !r.text.is_empty())
+        .collect()
 }
 
 /// Lay out and draw already-substituted text `s` with `p`'s style into a `w`×`h` pixmap.
@@ -442,19 +492,46 @@ fn draw_text(
     w: u32,
     h: u32,
 ) -> Result<Pixmap, RenderError> {
-    let s = s.to_owned();
+    draw_runs(ctx, engine, el, p, &[plain_run(p, s.to_owned())], w, h)
+}
+
+/// Largest font size in pt allowed by `fit: fill`.
+const MAX_FILL_PT: f64 = 1000.0;
+
+/// Lay out and draw styled runs with `p`'s paragraph settings into a `w`×`h` pixmap.
+fn draw_runs(
+    ctx: &mut Ctx<'_>,
+    engine: &mut TextEngine,
+    el: &Element,
+    p: &TextProps,
+    runs: &[text::Run],
+    w: u32,
+    h: u32,
+) -> Result<Pixmap, RenderError> {
     let mut st = text_style(engine, ctx, el, p);
     let (bw, bh) = (w as f32, h as f32);
     let fits = |l: &text::Laid| l.width <= bw + 0.5 && l.height <= bh + 0.5;
-    let mut laid = engine.layout(&s, &st, bw);
-    if !fits(&laid) && p.fit == TextFit::Shrink && p.font_size_pt > 1.0 {
+    let mut laid = engine.layout_runs(runs, &st, bw);
+    let has_text = runs.iter().any(|r| !r.text.trim().is_empty());
+    let search = match p.fit {
+        TextFit::Shrink if !fits(&laid) && p.font_size_pt > 1.0 => {
+            Some((p.font_size_pt * 10.0).floor() as i64 - 1)
+        }
+        // The box height bounds any size that fits.
+        TextFit::Fill if has_text => {
+            let box_pt = f64::from(h) / f64::from(ctx.dpi) * 72.0;
+            Some((box_pt.min(MAX_FILL_PT) * 10.0).floor() as i64)
+        }
+        _ => None,
+    };
+    if let Some(hi) = search {
         // Largest size in 0.1 pt steps (down to 1 pt) that fits.
-        let (mut lo, mut hi) = (10i64, (p.font_size_pt * 10.0).floor() as i64 - 1);
+        let (mut lo, mut hi) = (10i64, hi);
         let mut best = None;
         while lo <= hi {
             let mid = (lo + hi) / 2;
             st.size_px = ctx.px(mid as f64 / 10.0);
-            if fits(&engine.layout(&s, &st, bw)) {
+            if fits(&engine.layout_runs(runs, &st, bw)) {
                 best = Some(mid);
                 lo = mid + 1;
             } else {
@@ -463,15 +540,27 @@ fn draw_text(
         }
         let size = best.unwrap_or(10) as f64 / 10.0;
         st.size_px = ctx.px(size);
-        laid = engine.layout(&s, &st, bw);
-        ctx.issues.push(RenderIssue::TextShrunk {
-            element_id: el.id,
-            font_size_pt: size,
-        });
+        laid = engine.layout_runs(runs, &st, bw);
+        if size < p.font_size_pt {
+            ctx.issues.push(RenderIssue::TextShrunk {
+                element_id: el.id,
+                font_size_pt: size,
+            });
+        }
     }
     if !fits(&laid) {
         ctx.issues
             .push(RenderIssue::TextOverflow { element_id: el.id });
+    }
+    if let Some(max) = p.max_length_mm {
+        let length_mm = f64::from(laid.width) * 25.4 / f64::from(ctx.dpi);
+        if length_mm > max + 0.05 {
+            ctx.issues.push(RenderIssue::TextTooLong {
+                element_id: el.id,
+                length_mm: (length_mm * 10.0).round() / 10.0,
+                max_length_mm: max,
+            });
+        }
     }
     let dy = match p.valign {
         VAlign::Top => 0.0,
@@ -834,6 +923,17 @@ fn image_layer(
             });
             return Ok(None);
         }
+    };
+    let img = match &p.crop {
+        Some(c) if c.validate().is_ok() => {
+            let (iw, ih) = (f64::from(img.width()), f64::from(img.height()));
+            let x0 = (c.left * iw).floor() as u32;
+            let y0 = (c.top * ih).floor() as u32;
+            let x1 = ((c.right * iw).ceil() as u32).clamp(x0 + 1, img.width());
+            let y1 = ((c.bottom * ih).ceil() as u32).clamp(y0 + 1, img.height());
+            image::imageops::crop_imm(&img, x0, y0, x1 - x0, y1 - y0).to_image()
+        }
+        _ => img,
     };
     let (iw, ih) = (f64::from(img.width()), f64::from(img.height()));
     let (fw, fh) = (f64::from(w), f64::from(h));

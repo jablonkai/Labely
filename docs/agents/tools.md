@@ -52,7 +52,7 @@ Hints:
 | `template.folder` | edit | op (create, rename, delete), folder, to, with_templates → folders |
 | `export.png` | query | path, dpi, page, record |
 | `export.pdf` | query | path, dpi, records or count → pages (one per label) |
-| `element.add_text` | edit | frame\*, text, font_family, font_size_pt, bold, italic, underline, align, valign, line_spacing, letter_spacing_mm, wrap, fit, invert, direction (horizontal, vertical) |
+| `element.add_text` | edit | frame\*, text, font_family, font_size_pt, bold, italic, underline, align, valign, line_spacing, letter_spacing_mm, wrap, fit (none, shrink, fill), invert, direction (horizontal, vertical), max_length_mm |
 | `element.add_barcode` | edit | frame\*, data, symbology, human_readable, text_size_pt |
 | `element.add_code2d` | edit | frame\*, data, symbology, ecc |
 | `element.add_image` | edit | frame\*, path or data_base64, mime, fit, dither, threshold, brightness, contrast, invert |
@@ -64,11 +64,13 @@ Hints:
 | `element.add_icon` | edit | frame\*, icon (from icon.list), keep_aspect, invert |
 | `element.add_border` | edit | frame\*, style (single, double, thick_thin, dashed, dotted, corners, ticket, scallop), stroke_mm, corner_radius_mm |
 | `icon.list` | query | category |
+| `font.list` | query | → fonts (family names for font_family) |
 | `code.decode` | query | path or data_base64 → codes [{kind, symbology, text}] |
-| `element.set_props` | edit | id, props (any frame or kind property, plus flip_h, flip_v) |
+| `element.set_props` | edit | id, props (any frame or kind property, plus flip_h, flip_v; text `spans` [{start, end, bold, italic, underline, font_size_pt}]; image `crop` {left, top, right, bottom} in 0–1; `mirror: null` unlinks a mirror copy) |
 | `element.move` / `.resize` / `.rotate` | edit | id, x_mm, y_mm / width_mm, height_mm / rotation_deg |
 | `element.delete` | edit | ids |
 | `element.duplicate` | edit | id, dx_mm, dy_mm |
+| `element.mirror` | edit | id, axis (horizontal = left–right, vertical = top–bottom) → id of a linked copy that follows the source |
 | `element.paste` | edit | elements (as in doc.get), assets, dx_mm, dy_mm → ids |
 | `element.reorder` | edit | id, to (front, back, forward, backward) |
 | `element.align` | edit | ids, edge (left, center, right, top, middle, bottom), to (selection, label; default selection for 2+ ids) → moved |

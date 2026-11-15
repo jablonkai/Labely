@@ -304,3 +304,20 @@ action-show-rulers = Rulers
 menu-units = Units
 units-mm = Millimetres
 units-inch = Inches
+
+## Text and data (3.6c)
+cmd-element-mirror = Mirror copy (left–right)
+action-mirror-vertical = Mirror copy (top–bottom)
+props-mirror-of = Mirror copy of element { $id }
+action-unlink = Unlink
+props-style-selection = Selection
+props-style-selection-hint = Select part of the text above, then style it
+action-clear-styles = Clear styles
+props-crop = Crop
+crop-left = Left
+crop-right = Right
+crop-top = Top
+crop-bottom = Bottom
+action-reset-crop = Reset crop
+data-drag-hint = Drag a column onto an element to bind it, or onto empty space for a new text.
+action-add-from-column = Add an element bound to this column

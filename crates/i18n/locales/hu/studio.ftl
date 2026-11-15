@@ -298,3 +298,20 @@ action-show-rulers = Vonalzók
 menu-units = Mértékegység
 units-mm = Milliméter
 units-inch = Hüvelyk
+
+## Szöveg és adatok (3.6c)
+cmd-element-mirror = Tükrözött másolat (balra–jobbra)
+action-mirror-vertical = Tükrözött másolat (fel–le)
+props-mirror-of = A(z) { $id }. elem tükrözött másolata
+action-unlink = Leválasztás
+props-style-selection = Kijelölés
+props-style-selection-hint = Jelöld ki a szöveg egy részét fent, majd formázd
+action-clear-styles = Formázás törlése
+props-crop = Vágás
+crop-left = Bal
+crop-right = Jobb
+crop-top = Felső
+crop-bottom = Alsó
+action-reset-crop = Vágás visszaállítása
+data-drag-hint = Húzz egy oszlopot egy elemre a kötéshez, vagy üres helyre új szöveghez.
+action-add-from-column = Ehhez az oszlophoz kötött elem hozzáadása

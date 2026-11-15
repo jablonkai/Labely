@@ -24,6 +24,7 @@ pub const FRAME_KEYS: &[&str] = &[
     "hidden",
     "flip_h",
     "flip_v",
+    "mirror",
 ];
 
 /// Largest embeddable image, bytes.
@@ -120,10 +121,35 @@ pub(crate) fn validate_element(e: &Element) -> Result<(), CommandError> {
         ElementKind::Text(t) => {
             positive("font_size_pt", t.font_size_pt)?;
             positive("line_spacing", t.line_spacing)?;
+            if let Some(v) = t.max_length_mm {
+                positive("max_length_mm", v)?;
+            }
+            if t.spans.len() > MAX_SPANS {
+                return Err(CommandError::bad_params(format!(
+                    "at most {MAX_SPANS} spans, got {}",
+                    t.spans.len()
+                ))
+                .with_param("spans"));
+            }
+            for (i, sp) in t.spans.iter().enumerate() {
+                if sp.start >= sp.end {
+                    return Err(CommandError::bad_params(format!(
+                        "span {i}: `start` must be < `end`"
+                    ))
+                    .with_param(format!("spans.{i}")));
+                }
+                if let Some(v) = sp.font_size_pt {
+                    positive(&format!("spans.{i}.font_size_pt"), v)?;
+                }
+            }
         }
         ElementKind::Barcode(b) => positive("text_size_pt", b.text_size_pt)?,
         ElementKind::Code2d(_) => {}
         ElementKind::Image(i) => {
+            if let Some(c) = &i.crop {
+                c.validate()
+                    .map_err(|m| CommandError::bad_params(m).with_param("crop"))?;
+            }
             for (n, v) in [("brightness", i.brightness), ("contrast", i.contrast)] {
                 if !(-1.0..=1.0).contains(&v) {
                     return Err(
@@ -195,6 +221,7 @@ pub(crate) fn add(
         flip_h: false,
         flip_v: false,
         group: None,
+        mirror: None,
         kind,
     };
     validate_element(&e)?;
@@ -238,7 +265,8 @@ add_params!(TextParams {
     /// Wrap at the frame width (default true).
     #[serde(default)]
     wrap: Option<bool>,
-    /// `none` (default; overflow reported by doc.check) or `shrink`.
+    /// `none` (default; overflow reported by doc.check), `shrink` (smaller until it fits)
+    /// or `fill` (the largest size that fits the box).
     #[serde(default)]
     fit: Option<TextFit>,
     /// White text on black.
@@ -247,6 +275,9 @@ add_params!(TextParams {
     /// `horizontal` (default) or `vertical` (characters stacked top to bottom).
     #[serde(default)]
     direction: Option<TextDirection>,
+    /// doc.check warns when the longest printed line is wider than this, mm.
+    #[serde(default)]
+    max_length_mm: Option<f64>,
 });
 
 /// `element.add_text`
@@ -276,6 +307,7 @@ impl Command for AddText {
         };
         set_opt!(t, p: font_family, font_size_pt, bold, italic, underline, align, valign,
             line_spacing, letter_spacing_mm, wrap, fit, invert, direction);
+        t.max_length_mm = p.max_length_mm;
         add(ctx, p.doc_id.as_deref(), frame, ElementKind::Text(t))
     }
 }
@@ -488,6 +520,7 @@ impl Command for AddImage {
             brightness: 0.0,
             contrast: 0.0,
             invert: false,
+            crop: None,
         };
         set_opt!(props, p: fit, dither, threshold, brightness, contrast, invert);
         let doc = ctx.doc_mut(p.doc_id.as_deref())?;
@@ -973,10 +1006,76 @@ impl Command for Duplicate {
         copy.y_mm += dy;
         copy.locked = false;
         copy.group = None;
+        copy.mirror = None;
         let page = page.unwrap_or(0);
         if let Some(pg) = doc.pages.get_mut(page) {
             pg.elements.push(copy);
         }
+        Ok(AddOutput { id })
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MirrorParams {
+    #[serde(default)]
+    pub doc_id: Option<String>,
+    /// Source element.
+    pub id: ElementId,
+    /// `horizontal` (left–right, default) or `vertical` (top–bottom).
+    #[serde(default)]
+    pub axis: MirrorAxis,
+}
+
+/// `element.mirror`
+#[derive(Debug)]
+pub struct Mirror;
+
+impl Command for Mirror {
+    const ID: &'static str = "element.mirror";
+    type Params = MirrorParams;
+    type Output = AddOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::edit(
+            "Mirror copy",
+            "Add a linked mirror copy of an element, reflected across the label's vertical \
+             (`horizontal`) or horizontal (`vertical`) centre line. The copy follows every later \
+             change to the source; set its `mirror` to null with element.set_props to unlink \
+             it. Returns {id} of the copy.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: MirrorParams) -> Result<AddOutput, CommandError> {
+        let doc = ctx.doc_mut(p.doc_id.as_deref())?;
+        let src = element(doc, p.id)?;
+        if src.mirror.is_some() {
+            return Err(CommandError::bad_params(format!(
+                "element {} is itself a mirror copy",
+                p.id.0
+            ))
+            .with_param("id")
+            .with_hint("mirror its source instead"));
+        }
+        let mut copy = src.clone();
+        let page = doc
+            .pages
+            .iter()
+            .position(|pg| pg.elements.iter().any(|e| e.id == p.id))
+            .unwrap_or(0);
+        let id = doc.alloc_id();
+        copy.id = id;
+        copy.name = None;
+        copy.locked = false;
+        copy.group = None;
+        copy.mirror = Some(MirrorLink {
+            of: p.id,
+            axis: p.axis,
+        });
+        if let Some(pg) = doc.pages.get_mut(page) {
+            pg.elements.push(copy);
+        }
+        doc.sync_mirrors();
         Ok(AddOutput { id })
     }
 }
@@ -1073,9 +1172,21 @@ impl Command for Paste {
             new.push(e);
         }
         let mut ids = Vec::with_capacity(new.len());
+        let mut remap = std::collections::BTreeMap::new();
         for e in &mut new {
+            let old = e.id;
             e.id = doc.alloc_id();
+            remap.entry(old).or_insert(e.id);
             ids.push(e.id);
+        }
+        // A mirror stays linked only when its source is pasted with it.
+        for e in &mut new {
+            e.mirror = e.mirror.and_then(|m| {
+                remap.get(&m.of).map(|of| MirrorLink {
+                    of: *of,
+                    axis: m.axis,
+                })
+            });
         }
         for e in &mut new {
             if let Some(g) = e.group {

@@ -277,6 +277,9 @@ pub struct Element {
     /// Group id shared by grouped elements (`element.group`); groups are flat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<u64>,
+    /// Linked mirror copy (`element.mirror`): content, size and position follow the source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mirror: Option<MirrorLink>,
     #[serde(flatten)]
     pub kind: ElementKind,
 }
@@ -306,6 +309,73 @@ impl Element {
         let ey = (hw * s).abs() + (hh * c).abs();
         let (cx, cy) = (self.x_mm + hw, self.y_mm + hh);
         (cx - ex, cy - ey, cx + ex, cy + ey)
+    }
+}
+
+/// A mirror copy's link to its source element.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MirrorLink {
+    /// Source element on the same page.
+    pub of: ElementId,
+    pub axis: MirrorAxis,
+}
+
+/// Line a mirror copy is reflected across.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MirrorAxis {
+    /// Left–right, across the label's vertical centre line.
+    #[default]
+    Horizontal,
+    /// Top–bottom, across the label's horizontal centre line.
+    Vertical,
+}
+
+impl Document {
+    /// Re-derive every linked mirror copy from its source. A link whose source is gone, is on
+    /// another page or is itself a mirror is dropped and the copy stays as it is.
+    pub fn sync_mirrors(&mut self) {
+        let (lw, lh) = (self.label.width_mm, self.label.height_mm);
+        for page in &mut self.pages {
+            if !page.elements.iter().any(|e| e.mirror.is_some()) {
+                continue;
+            }
+            for i in 0..page.elements.len() {
+                let Some(link) = page.elements[i].mirror else {
+                    continue;
+                };
+                let src = page
+                    .elements
+                    .iter()
+                    .find(|e| e.id == link.of && e.mirror.is_none() && e.id != page.elements[i].id)
+                    .cloned();
+                let m = &mut page.elements[i];
+                let Some(src) = src else {
+                    m.mirror = None;
+                    continue;
+                };
+                m.kind = src.kind;
+                m.width_mm = src.width_mm;
+                m.height_mm = src.height_mm;
+                m.rotation_deg = (-src.rotation_deg).rem_euclid(360.0);
+                m.hidden = src.hidden;
+                match link.axis {
+                    MirrorAxis::Horizontal => {
+                        m.x_mm = lw - src.x_mm - src.width_mm;
+                        m.y_mm = src.y_mm;
+                        m.flip_h = !src.flip_h;
+                        m.flip_v = src.flip_v;
+                    }
+                    MirrorAxis::Vertical => {
+                        m.x_mm = src.x_mm;
+                        m.y_mm = lh - src.y_mm - src.height_mm;
+                        m.flip_h = src.flip_h;
+                        m.flip_v = !src.flip_v;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -354,7 +424,31 @@ pub enum TextFit {
     None,
     /// Shrink the font until the text fits.
     Shrink,
+    /// Grow or shrink the font to the largest size that fits the box.
+    Fill,
 }
+
+/// Style for a range of a text element's `text`. Unset fields keep the element's style;
+/// later spans win where they overlap.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TextSpan {
+    /// First character (Unicode scalar index into `text`).
+    pub start: usize,
+    /// One past the last character.
+    pub end: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bold: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub italic: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub underline: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_size_pt: Option<f64>,
+}
+
+/// Most spans on one text element.
+pub const MAX_SPANS: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -390,6 +484,13 @@ pub struct TextProps {
     /// Horizontal, or vertical: one character per row, top to bottom.
     #[serde(default, skip_serializing_if = "is_default")]
     pub direction: TextDirection,
+    /// Warn in `doc.check` when the longest printed line is wider than this, mm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_length_mm: Option<f64>,
+    /// Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that
+    /// crosses a span edge is not substituted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spans: Vec<TextSpan>,
 }
 
 /// Text flow. Text turned 90° is `rotation_deg: 90`; curved text is planned for Phase 6.
@@ -442,6 +543,8 @@ impl Default for TextProps {
             fit: TextFit::None,
             invert: false,
             direction: TextDirection::Horizontal,
+            max_length_mm: None,
+            spans: Vec::new(),
         }
     }
 }
@@ -571,6 +674,32 @@ pub struct ImageProps {
     pub contrast: f64,
     #[serde(default)]
     pub invert: bool,
+    /// Part of the source image to use, as fractions of its size; the whole image if absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crop: Option<Crop>,
+}
+
+/// A crop rectangle in fractions (0–1) of the image's width and height.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Crop {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+impl Crop {
+    /// `Err` names the problem when the edges are not 0 ≤ left < right ≤ 1 (and the same
+    /// for top and bottom).
+    pub fn validate(&self) -> Result<(), String> {
+        let ok = |a: f64, b: f64| a.is_finite() && b.is_finite() && 0.0 <= a && a < b && b <= 1.0;
+        if ok(self.left, self.right) && ok(self.top, self.bottom) {
+            Ok(())
+        } else {
+            Err("crop needs 0 ≤ left < right ≤ 1 and 0 ≤ top < bottom ≤ 1".to_owned())
+        }
+    }
 }
 
 fn default_threshold() -> u8 {
@@ -830,6 +959,7 @@ mod tests {
             flip_h: false,
             flip_v: false,
             group: None,
+            mirror: None,
             kind: ElementKind::Text(TextProps {
                 text: "Hi".into(),
                 ..Default::default()

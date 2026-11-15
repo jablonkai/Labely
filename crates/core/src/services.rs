@@ -45,6 +45,12 @@ pub enum RenderIssue {
         element_id: ElementId,
         font_size_pt: f64,
     },
+    /// The longest printed line is wider than the element's `max_length_mm`.
+    TextTooLong {
+        element_id: ElementId,
+        length_mm: f64,
+        max_length_mm: f64,
+    },
     /// Barcode/2D data could not be encoded for the symbology.
     EncodeFailed {
         element_id: ElementId,
@@ -109,6 +115,10 @@ pub trait Renderer: Send + Sync {
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode>;
     /// Encode a 1-bit bitmap as PNG.
     fn to_png(&self, bitmap: &Bitmap1) -> Result<Vec<u8>, RenderError>;
+    /// Installed font family names, sorted; empty when the renderer cannot list them.
+    fn fonts(&self) -> Vec<String> {
+        Vec::new()
+    }
     /// Names of the built-in icons, with their category.
     fn icons(&self) -> Vec<IconInfo> {
         Vec::new()

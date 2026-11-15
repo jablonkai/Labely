@@ -471,6 +471,20 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
                 ),
                 "below 5 pt is hard to read on thermal labels; enlarge the box or shorten the text",
             ),
+            RenderIssue::TextTooLong {
+                element_id,
+                length_mm,
+                max_length_mm,
+            } => CheckIssue::new(
+                "text_too_long",
+                Severity::Warning,
+                Some(*element_id),
+                format!(
+                    "text of element {} is {length_mm:.1} mm long, over its {max_length_mm:.1} mm limit",
+                    element_id.0
+                ),
+                "shorten the text, reduce font_size_pt, or raise max_length_mm",
+            ),
             RenderIssue::EncodeFailed {
                 element_id,
                 message,
@@ -516,7 +530,7 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
                     "font `{requested}` of element {} is unavailable; a fallback was used",
                     element_id.0
                 ),
-                "pick a bundled font family",
+                "pick a family from font.list",
             ),
             RenderIssue::LowContrast {
                 element_id,

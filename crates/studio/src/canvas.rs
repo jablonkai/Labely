@@ -494,6 +494,17 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
         app.ui.gesture = None;
         app.ui.guides = (Vec::new(), Vec::new());
     }
+    if let Some(col) = resp.dnd_release_payload::<crate::menu::ColumnDrag>()
+        && let Some(p) = ui.input(|i| i.pointer.hover_pos())
+    {
+        let (x, y) = view.to_mm(p);
+        crate::menu::drop_column(app, &col.0, x, y, zoom);
+    } else if resp
+        .dnd_hover_payload::<crate::menu::ColumnDrag>()
+        .is_some()
+    {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
+    }
     if resp.clicked()
         && let Some(p) = resp.interact_pointer_pos()
     {

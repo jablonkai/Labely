@@ -162,6 +162,8 @@ pub struct UiState {
     pub jobs_seen: std::collections::BTreeMap<String, labely_core::jobs::JobState>,
     /// Show rulers along the canvas edges.
     pub show_rulers: bool,
+    /// The text property field, for reading its selection when styling spans.
+    pub text_edit_id: Option<egui::Id>,
     /// Text of the last studio copy, for Edit → Paste (egui cannot read the system clipboard
     /// on demand) and to offset pastes into the document it came from.
     pub clipboard: Option<(String, String)>,
@@ -198,6 +200,7 @@ impl Default for UiState {
             last_view: None,
             jobs_seen: Default::default(),
             show_rulers: true,
+            text_edit_id: None,
             clipboard: None,
         }
     }

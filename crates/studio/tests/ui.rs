@@ -792,3 +792,93 @@ fn rotate_paper_overlay_and_units() {
         (1.0, 5.0)
     );
 }
+
+#[test]
+fn columns_bind_by_drop_and_create_elements() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    app.run("data.attach_csv", json!({"text": "name,sku\nApple,A1\n"}));
+    app.run(
+        "element.add_text",
+        json!({"x_mm": 1, "y_mm": 1, "width_mm": 40, "height_mm": 8, "text": "x"}),
+    );
+    let id = app.session.doc(None).unwrap().elements().next().unwrap().id;
+    // Dropping onto the text binds it; onto empty space adds a bound text there.
+    labely_studio::menu::drop_column(&mut app, "name", 5.0, 4.0, 8.0);
+    labely_studio::menu::drop_column(&mut app, "sku", 25.0, 22.0, 8.0);
+    let doc = app.session.doc(None).unwrap();
+    let texts: Vec<_> = doc
+        .elements()
+        .map(|e| match &e.kind {
+            labely_core::ElementKind::Text(t) => (e.id, t.text.clone(), e.x_mm + e.width_mm / 2.0),
+            k => panic!("{k:?}"),
+        })
+        .collect();
+    assert_eq!(texts[0], (id, "{{name}}".to_owned(), 21.0));
+    assert_eq!((texts[1].1.as_str(), texts[1].2), ("{{sku}}", 25.0));
+
+    // The "+" menu of a column adds a barcode bound to it.
+    app.ui.show_data = true;
+    let mut h = harness(app);
+    h.run();
+    h.get_all_by_label("+").last().unwrap().click();
+    h.run();
+    h.get_by_label("Barcode").click();
+    h.run_steps(8);
+    let doc = h.state().session.doc(None).unwrap();
+    let last = doc.elements().last().unwrap();
+    match &last.kind {
+        labely_core::ElementKind::Barcode(b) => assert_eq!(b.data, "{{sku}}"),
+        k => panic!("{k:?}"),
+    }
+}
+
+#[test]
+fn mirror_copy_from_menu_and_font_picker() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    app.run(
+        "element.add_rect",
+        json!({"x_mm": 2, "y_mm": 1, "width_mm": 20, "height_mm": 8}),
+    );
+    let id = app.session.doc(None).unwrap().elements().next().unwrap().id;
+    app.select(&[id]);
+    let mut h = harness(app);
+    h.run();
+    h.get_by_label("Arrange").click();
+    h.run();
+    h.get_by_label("Mirror copy (left–right)").click();
+    h.run();
+    let copy = h.state().selection()[0];
+    let doc = h.state().session.doc(None).unwrap();
+    let e = doc.element(copy).unwrap();
+    assert_eq!((e.x_mm, e.flip_h), (28.0, true));
+    assert_eq!(e.mirror.map(|m| m.of), Some(id));
+    h.get_by_label("Unlink").click();
+    h.run();
+    let doc = h.state().session.doc(None).unwrap();
+    assert!(doc.element(copy).unwrap().mirror.is_none());
+
+    // The font of a text element is picked from the installed families.
+    h.state_mut().run(
+        "element.add_text",
+        json!({"x_mm": 2, "y_mm": 12, "width_mm": 20, "height_mm": 8, "text": "Hi"}),
+    );
+    let t = h
+        .state()
+        .session
+        .doc(None)
+        .unwrap()
+        .elements()
+        .last()
+        .unwrap()
+        .id;
+    h.state_mut().select(&[t]);
+    h.run();
+    h.get_all_by_label("font").last().unwrap().click();
+    h.run();
+    assert!(
+        h.query_by_label("Noto Sans").is_some(),
+        "font picker lists the bundled font"
+    );
+}

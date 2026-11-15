@@ -332,6 +332,9 @@ impl Session {
                 Envelope::failure(e)
             }
             Ok((Ok(result), warnings)) => {
+                if entry.meta.kind == CommandKind::Edit {
+                    self.sync_mirrors(&before);
+                }
                 let (changed, created) = diff_state(&before, &self.state);
                 if entry.meta.kind == CommandKind::Edit && entry.meta.undoable {
                     self.record_history(&before, id, coalesce);
@@ -344,6 +347,26 @@ impl Session {
                 }
                 let result = (!terse).then_some(result);
                 Envelope::success(result, changed, created, warnings)
+            }
+        }
+    }
+
+    /// Re-derive linked mirror copies in every document an edit replaced.
+    fn sync_mirrors(&mut self, before: &State) {
+        for (doc_id, open) in &mut self.state.docs {
+            if before
+                .docs
+                .get(doc_id)
+                .is_some_and(|p| Arc::ptr_eq(&p.doc, &open.doc))
+            {
+                continue;
+            }
+            if open.doc.elements().any(|e| e.mirror.is_some()) {
+                let mut doc = (*open.doc).clone();
+                doc.sync_mirrors();
+                if doc != *open.doc {
+                    open.doc = Arc::new(doc);
+                }
             }
         }
     }

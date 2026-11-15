@@ -10,6 +10,7 @@ pub mod menu;
 pub mod panels;
 pub mod paper;
 pub mod prefs;
+pub mod rich;
 pub mod templates;
 
 pub use app::{LabelyApp, StudioOptions};
