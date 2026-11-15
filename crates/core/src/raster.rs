@@ -92,6 +92,49 @@ impl Bitmap1 {
         out
     }
 
+    /// Mirror left to right.
+    pub fn mirror_h(&self) -> Self {
+        let mut out = Self::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                if self.get(x, y) {
+                    out.set(self.width - 1 - x, y, true);
+                }
+            }
+        }
+        out
+    }
+
+    /// Rotate 180°.
+    pub fn rotate_180(&self) -> Self {
+        let mut out = Self::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                if self.get(x, y) {
+                    out.set(self.width - 1 - x, self.height - 1 - y, true);
+                }
+            }
+        }
+        out
+    }
+
+    /// Move the content by `(dx, dy)` dots (positive is right and down) on a canvas of the
+    /// same size; dots pushed off the edge are dropped.
+    pub fn shifted(&self, dx: i64, dy: i64) -> Self {
+        let mut out = Self::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                if self.get(x, y) {
+                    let (nx, ny) = (i64::from(x) + dx, i64::from(y) + dy);
+                    if let (Ok(nx), Ok(ny)) = (u32::try_from(nx), u32::try_from(ny)) {
+                        out.set(nx, ny, true);
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// Place this bitmap into a wider canvas of `width` dots, horizontally offset by `x0`.
     pub fn pad_to_width(&self, width: u32, x0: u32) -> Self {
         let mut out = Self::new(width, self.height);
@@ -119,5 +162,18 @@ mod tests {
         assert_eq!((r.width(), r.height()), (2, 3));
         assert!(r.get(1, 2));
         assert_eq!(r.count_black(), 1);
+    }
+
+    #[test]
+    fn mirror_rotate_shift() {
+        let mut b = Bitmap1::new(4, 3);
+        b.set(0, 0, true);
+        assert!(b.mirror_h().get(3, 0));
+        assert!(b.rotate_180().get(3, 2));
+        let s = b.shifted(2, 1);
+        assert!(s.get(2, 1));
+        assert_eq!(s.count_black(), 1);
+        assert_eq!(b.shifted(-1, 0).count_black(), 0);
+        assert_eq!(b.shifted(4, 0).count_black(), 0);
     }
 }

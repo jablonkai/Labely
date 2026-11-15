@@ -368,10 +368,69 @@ pub struct PrintParams {
     /// Column holding each record's copy count (0 skips the record); overrides `copies`.
     #[serde(default)]
     pub copies_column: Option<String>,
+    /// Move the print right (positive) or left, in mm, −10 to 10 (default 0).
+    #[serde(default)]
+    pub offset_x_mm: Option<f32>,
+    /// Move the print down (positive, later in the feed) or up, in mm, −10 to 10 (default 0).
+    #[serde(default)]
+    pub offset_y_mm: Option<f32>,
+    /// Mirror the print left to right, for transparent or iron-on media (default false).
+    #[serde(default)]
+    pub mirror: Option<bool>,
+    /// Turn the print 180° so labels leave the printer the other way round (default false).
+    #[serde(default)]
+    pub rotate_180: Option<bool>,
     /// Wait until the job has printed (default true). With false the job is queued and the
     /// command returns at once; follow it with job.get or job.wait.
     #[serde(default)]
     pub wait: Option<bool>,
+}
+
+/// Largest print offset either way, in mm.
+pub const MAX_OFFSET_MM: f32 = 10.0;
+
+/// Job-wide changes to every rendered page: offset, mirror and 180° turn.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct PageTransform {
+    dx: i64,
+    dy: i64,
+    mirror: bool,
+    rotate_180: bool,
+}
+
+impl PageTransform {
+    fn from_params(p: &PrintParams, dpi: u32) -> Result<Self, CommandError> {
+        let dots = |mm: Option<f32>, name: &'static str| -> Result<i64, CommandError> {
+            let mm = mm.unwrap_or(0.0);
+            if !mm.is_finite() || mm.abs() > MAX_OFFSET_MM {
+                return Err(CommandError::bad_params(format!(
+                    "{name} must be between −{MAX_OFFSET_MM} and {MAX_OFFSET_MM} mm"
+                ))
+                .with_param(name));
+            }
+            Ok((f64::from(mm) * f64::from(dpi) / 25.4).round() as i64)
+        };
+        Ok(Self {
+            dx: dots(p.offset_x_mm, "offset_x_mm")?,
+            dy: dots(p.offset_y_mm, "offset_y_mm")?,
+            mirror: p.mirror.unwrap_or(false),
+            rotate_180: p.rotate_180.unwrap_or(false),
+        })
+    }
+
+    /// Offset first (in label coordinates), then mirror, then the 180° turn.
+    fn apply(&self, mut b: crate::raster::Bitmap1) -> crate::raster::Bitmap1 {
+        if self.dx != 0 || self.dy != 0 {
+            b = b.shifted(self.dx, self.dy);
+        }
+        if self.mirror {
+            b = b.mirror_h();
+        }
+        if self.rotate_180 {
+            b = b.rotate_180();
+        }
+        b
+    }
 }
 
 /// Most distinct labels (records × pages, with per-record copies expanded) in one job.
@@ -479,7 +538,9 @@ impl Command for PrintSubmit {
              bindings and serials filled in. copies 1–999 (default 1) or per record from \
              `copies_column`; density defaults to the label's, else the model's. Jobs go \
              through the print queue; by default the command waits until the job has \
-             printed, `wait: false` returns {job_id} at once. Run doc.check first.",
+             printed, `wait: false` returns {job_id} at once. offset_x_mm/offset_y_mm (±10) \
+             move the print, mirror flips it for transparent media, rotate_180 turns it \
+             for the other output direction. Run doc.check first.",
         )
     }
 
@@ -525,6 +586,7 @@ impl Command for PrintSubmit {
                 doc.label.width_mm, m.name, m.max_width_mm
             ));
         }
+        let transform = PageTransform::from_params(&p, dpi)?;
         let labels = plan_labels(&doc, &p, copies)?;
         let uniform = labels.iter().all(|l| l.2 == copies);
         let total: usize = if uniform {
@@ -555,11 +617,12 @@ impl Command for PrintSubmit {
                         let at = row.map_or(String::new(), |r| format!(" of record {}", r + 1));
                         CommandError::bad_params(format!("cannot render page {page}{at}: {e}"))
                     })?;
+                let bitmap = transform.apply(out.bitmap);
                 let reps = if uniform { 1 } else { c };
                 for _ in 1..reps {
-                    pages.push(out.bitmap.clone());
+                    pages.push(bitmap.clone());
                 }
-                pages.push(out.bitmap);
+                pages.push(bitmap);
             }
         }
         let distinct = (labels.len() * doc.pages.len()) as u32;

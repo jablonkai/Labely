@@ -68,7 +68,7 @@ for approval. Plan tags in [`feature-matrix.md`](feature-matrix.md) (Ph1–Ph6) 
 - **Editor:** align, distribute, group, lock, snapping, grids, shortcuts.
 - **Data:** CSV and XLSX sources (calamine) with field binding, variables, serial numbers, record
   ranges.
-- **Printing:** print queue; multiple printers at once.
+- **Printing:** print queue. Printing to several printers at once moved to later (ADR-0019).
 - **Templates:** an original starter set, local library and folders, import and export (PNG, PDF,
   `.labely`, image import, multi-image batch).
 - **Device:** label paper database (local), RFID paper auto-match, calibration, and device settings
@@ -88,6 +88,9 @@ Phase 3 lands in slices, one pull request each.
 | 3.4 Templates | starter set, local library and folders, PNG/PDF export, image and multi-image import (ADR-0018) | done |
 | 3.5a Printing | print queue (pause, resume, cancel), local print history with reopen (ADR-0019) | done |
 | 3.5b Device | label paper library, RFID barcode links and detection, calibration, auto-off and sound settings (ADR-0020) | done |
+| 3.6a Print and codes | print offset, mirror, 180° output direction; Code 128 A/B/C and GS1-128 (ADR-0021) | done |
+| 3.6b Shell | document tabs, recent files, rulers, printable-area overlay, rotate paper, clipboard, inch units | open |
+| 3.6c Text and data | grow-to-fit text, max-length guard, font picker, drag-to-bind and element from column, rich text spans, image crop, linked mirror copies | open |
 
 ## Phase 4: Android shell + AppFunctions
 

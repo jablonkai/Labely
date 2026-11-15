@@ -450,8 +450,21 @@ impl Default for TextProps {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Symbology1d {
+    /// Code 128, code set chosen automatically.
     #[default]
     Code128,
+    /// Code 128 forced to code set A (upper case, digits, control characters).
+    #[serde(rename = "code128_a")]
+    Code128A,
+    /// Code 128 forced to code set B (printable ASCII).
+    #[serde(rename = "code128_b")]
+    Code128B,
+    /// Code 128 forced to code set C (an even number of digits).
+    #[serde(rename = "code128_c")]
+    Code128C,
+    /// GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.
+    #[serde(rename = "gs1_128")]
+    Gs1128,
     Code39,
     Code93,
     Ean13,
