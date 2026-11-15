@@ -174,6 +174,21 @@ pub struct DeviceStatus {
     pub paper: Option<PaperInfo>,
 }
 
+/// Printer settings that can be read and changed. `None` means the printer does not report
+/// (or support) that setting.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DeviceSettings {
+    /// Auto power-off level 1–4 (1 = shortest; NIIMBOT: 15, 30, 45, 60 min).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_off_level: Option<u8>,
+    /// Beep on power on and off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound_power: Option<bool>,
+    /// Beep when a Bluetooth host connects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound_bluetooth: Option<bool>,
+}
+
 /// A rendered job handed to a device.
 #[derive(Debug, Clone)]
 pub struct PrintRequest {
@@ -264,6 +279,29 @@ pub trait DeviceHub: Send + Sync {
         job: PrintRequest,
         control: &JobControl,
     ) -> Result<PrintReport, DeviceError>;
+    /// Calibrate the label sensor for `media`: the printer feeds until it finds a label edge.
+    fn calibrate(&self, address: &str, media: MediaType) -> Result<(), DeviceError> {
+        let _ = media;
+        Err(DeviceError::Unavailable(format!(
+            "{address} does not support calibration"
+        )))
+    }
+    /// Read the printer's settings.
+    fn settings(&self, address: &str) -> Result<DeviceSettings, DeviceError> {
+        let _ = address;
+        Ok(DeviceSettings::default())
+    }
+    /// Change the settings given in `patch` (fields that are `None` stay), then return them.
+    fn set_settings(
+        &self,
+        address: &str,
+        patch: &DeviceSettings,
+    ) -> Result<DeviceSettings, DeviceError> {
+        let _ = patch;
+        Err(DeviceError::Unavailable(format!(
+            "{address} has no settings that Labely can change"
+        )))
+    }
 }
 
 /// Services available to commands.

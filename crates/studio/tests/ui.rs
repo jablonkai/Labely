@@ -16,6 +16,7 @@ fn options() -> StudioOptions {
         lang: Lang::En,
         // Never write the real app-data history from tests.
         history_dir: Some(std::env::temp_dir().join("labely-studio-test-history")),
+        paper_file: Some(std::env::temp_dir().join("labely-studio-test-papers.json")),
         ..StudioOptions::default()
     }
 }
@@ -512,4 +513,82 @@ fn print_queue_panel_and_history() {
     assert!(h.state().ui.dialog.is_none());
     assert_eq!(h.state().session.doc(None).unwrap().name, "Queue test");
     assert_eq!(h.state().session.doc_ids().count(), 2);
+}
+
+#[test]
+fn paper_library_and_printer_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            paper_file: Some(dir.path().join("papers.json")),
+            ..options()
+        },
+    );
+    assert!(
+        app.run(
+            "doc.new",
+            json!({"width_mm": 40, "height_mm": 30, "printer_model": "niimbot.b21_pro"})
+        )
+        .ok
+    );
+    let mut h = harness(app);
+    h.run();
+    h.get_all_by_label("Label").next().unwrap().click();
+    h.run();
+    h.get_by_label("Label paper…").click();
+    h.run();
+    assert!(h.query_by_label("Label paper").is_some());
+    let search = h.get_by_label("Search");
+    search.focus();
+    search.type_text("25x25-round");
+    h.run();
+    h.get_by_label("Use").click();
+    h.run();
+    assert!(
+        h.state().ui.dialog.is_none(),
+        "using a paper closes the dialog"
+    );
+    let label = h.state().session.doc(None).unwrap().label.clone();
+    assert_eq!((label.width_mm, label.corner_radius_mm), (25.0, 3.0));
+
+    // Add a custom paper.
+    h.get_all_by_label("Label").next().unwrap().click();
+    h.run();
+    h.get_by_label("Label paper…").click();
+    h.run();
+    let name = h
+        .get_all_by_role_and_label(egui::accesskit::Role::TextInput, "Name")
+        .last()
+        .unwrap();
+    name.focus();
+    name.type_text("Jar lid");
+    h.run();
+    h.get_by_label("Add paper").click();
+    h.run();
+    let saved = std::fs::read_to_string(dir.path().join("papers.json")).unwrap();
+    assert!(saved.contains("my:jar-lid"), "{saved}");
+    h.get_by_label("Close").click();
+    h.run();
+
+    // Printer settings dialog on a fake printer: calibrate.
+    let out = dir.path().join("out");
+    let address = format!("fake:{}", out.display());
+    assert!(
+        h.state_mut()
+            .run("device.connect", json!({"address": address}))
+            .ok
+    );
+    h.get_all_by_label("Print").next().unwrap().click();
+    h.run();
+    h.get_by_label("Printer settings and calibration…").click();
+    h.run();
+    assert!(h.query_by_label("Printer settings").is_some());
+    h.get_by_label("Calibrate").click();
+    h.run();
+    assert!(out.join("calibrate-0001.json").is_file());
+    assert_eq!(
+        h.state().ui.status.as_ref().map(|s| s.text.as_str()),
+        Some("Calibration done.")
+    );
 }

@@ -760,11 +760,24 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                             app.set_status(r["status"].to_string(), false);
                         }
                     }
-                    if ui.small_button(app.i18n.t("action-disconnect")).clicked() {
-                        app.run_reporting("device.disconnect", json!({"address": d.address}));
+                    if ui
+                        .small_button(app.i18n.t("action-printer-settings"))
+                        .clicked()
+                    {
+                        crate::paper::open_device(app, Some(d.address.clone()));
+                    }
+                    if ui.small_button(app.i18n.t("action-disconnect")).clicked()
+                        && app
+                            .run_reporting("device.disconnect", json!({"address": d.address}))
+                            .ok
+                        && app.ui.detected.as_ref().and_then(|x| x["address"].as_str())
+                            == Some(d.address.as_str())
+                    {
+                        app.ui.detected = None;
                     }
                 });
             }
+            crate::paper::banner(app, ui);
             for d in app.ui.scanned.clone() {
                 let address = d["address"].as_str().unwrap_or("").to_owned();
                 if connected.iter().any(|c| c.address == address) {
@@ -772,8 +785,12 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                 }
                 ui.horizontal(|ui| {
                     ui.label(format!("{} — {address}", d["name"].as_str().unwrap_or("?")));
-                    if ui.small_button(app.i18n.t("action-connect")).clicked() {
-                        app.run_reporting("device.connect", json!({"address": address}));
+                    if ui.small_button(app.i18n.t("action-connect")).clicked()
+                        && app
+                            .run_reporting("device.connect", json!({"address": address}))
+                            .ok
+                    {
+                        crate::paper::detect(app, Some(&address));
                     }
                 });
             }

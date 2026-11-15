@@ -1,7 +1,10 @@
 //! Driver trait and shared raster preparation.
 
 use labely_core::Bitmap1;
-use labely_core::services::{DeviceError, DeviceStatus, JobControl, PrintReport, PrintRequest};
+use labely_core::document::MediaType;
+use labely_core::services::{
+    DeviceError, DeviceSettings, DeviceStatus, JobControl, PrintReport, PrintRequest,
+};
 
 use crate::registry::{Model, PrintDirection};
 
@@ -26,6 +29,24 @@ pub trait Driver: Send {
         job: &PrintRequest,
         control: &JobControl,
     ) -> Result<PrintReport, DeviceError>;
+    /// Calibrate the label sensor for `media`.
+    fn calibrate(&mut self, media: MediaType) -> Result<(), DeviceError> {
+        let _ = media;
+        Err(DeviceError::Unavailable(
+            "this printer does not support calibration".into(),
+        ))
+    }
+    /// Read the settings the driver knows; unknown ones are `None`.
+    fn settings(&mut self) -> Result<DeviceSettings, DeviceError> {
+        Ok(DeviceSettings::default())
+    }
+    /// Apply the `Some` fields of `patch`.
+    fn set_settings(&mut self, patch: &DeviceSettings) -> Result<(), DeviceError> {
+        let _ = patch;
+        Err(DeviceError::Unavailable(
+            "this printer has no settings that Labely can change".into(),
+        ))
+    }
     fn close(&mut self);
 }
 

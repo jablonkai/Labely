@@ -21,6 +21,8 @@ pub struct SimLog {
     pub page_size_len: Option<usize>,
     /// Reassembled pages (as sent, head orientation) with their copy count.
     pub pages: Vec<(Bitmap1, u16)>,
+    /// Label type byte of each calibration request.
+    pub calibrations: Vec<u8>,
 }
 
 /// Simulator settings.
@@ -89,6 +91,9 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
     let mut printed: u16 = 0;
     let mut total: u16 = 0;
     let mut skip_next_reply = false;
+    let mut auto_off: u8 = 2;
+    // [bluetooth, power]
+    let mut sound = [true, true];
     while let Ok(bytes) = peer.rx.recv() {
         // The decoder skips the Connect pre-byte while looking for the header.
         dec.push(&bytes);
@@ -111,6 +116,29 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                     reply(&peer, cmd::STATUS_DATA_RESP, &b)
                 }
                 cmd::PRINTER_INFO if b0 == 8 => reply(&peer, 0x48, &cfg.model_code.to_be_bytes()),
+                cmd::PRINTER_INFO if b0 == 7 => reply(&peer, 0x47, &[auto_off]),
+                cmd::SET_AUTO_OFF => {
+                    let valid = (1..=4).contains(&b0);
+                    if valid {
+                        auto_off = b0;
+                    }
+                    reply(&peer, cmd::SET_AUTO_OFF_RESP, &[u8::from(valid)])
+                }
+                cmd::CALIBRATE => {
+                    l.calibrations.push(b0);
+                    reply(&peer, cmd::CALIBRATE_RESP, &[1])
+                }
+                cmd::SOUND if p.payload.len() >= 3 => {
+                    let slot = usize::from(p.payload[1] == 2);
+                    if p.payload[0] == 1 {
+                        sound[slot] = p.payload[2] != 0;
+                    }
+                    reply(
+                        &peer,
+                        cmd::SOUND_RESP,
+                        &[p.payload[0], p.payload[1], u8::from(sound[slot])],
+                    )
+                }
                 cmd::PRINTER_INFO => reply(&peer, cmd::PRINTER_INFO + b0, &[0]),
                 cmd::HEARTBEAT => match b0 {
                     4 => reply(&peer, cmd::HEARTBEAT_ADV2, &[0, 0, 4, 30, 0, 0, 1, 0, 0]),

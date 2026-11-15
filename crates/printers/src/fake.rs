@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use labely_core::Bitmap1;
-use labely_core::services::{DeviceError, DeviceStatus, JobControl, PrintReport, PrintRequest};
+use labely_core::document::MediaType;
+use labely_core::services::{
+    DeviceError, DeviceSettings, DeviceStatus, JobControl, PrintReport, PrintRequest,
+};
 use serde::Serialize;
 
 use crate::driver::{Driver, Identity, prepare_for_head};
@@ -19,6 +22,8 @@ pub struct FakePrinter {
     jobs: u32,
     /// Simulated time per printed page, so queue, progress and cancel can be watched.
     page_delay: Duration,
+    settings: DeviceSettings,
+    calibrations: u32,
 }
 
 #[derive(Serialize)]
@@ -45,6 +50,12 @@ impl FakePrinter {
             model,
             jobs: 0,
             page_delay: Duration::ZERO,
+            settings: DeviceSettings {
+                auto_off_level: Some(2),
+                sound_power: Some(true),
+                sound_bluetooth: Some(true),
+            },
+            calibrations: 0,
         }
     }
 
@@ -146,6 +157,36 @@ impl Driver for FakePrinter {
             pages_printed: total,
             duration_ms: started.elapsed().as_millis() as u64,
         })
+    }
+
+    /// Writes `<dir>/calibrate-NNNN.json` so tests can see the request.
+    fn calibrate(&mut self, media: MediaType) -> Result<(), DeviceError> {
+        self.calibrations += 1;
+        let path = self
+            .dir
+            .join(format!("calibrate-{:04}.json", self.calibrations));
+        let json = serde_json::to_vec(&serde_json::json!({ "media": media })).map_err(io)?;
+        std::fs::write(path, json).map_err(io)
+    }
+
+    fn settings(&mut self) -> Result<DeviceSettings, DeviceError> {
+        Ok(self.settings.clone())
+    }
+
+    fn set_settings(&mut self, patch: &DeviceSettings) -> Result<(), DeviceError> {
+        if let Some(l) = patch.auto_off_level {
+            if !(1..=4).contains(&l) {
+                return Err(DeviceError::Other(format!("auto-off level {l} is not 1–4")));
+            }
+            self.settings.auto_off_level = Some(l);
+        }
+        if let Some(v) = patch.sound_power {
+            self.settings.sound_power = Some(v);
+        }
+        if let Some(v) = patch.sound_bluetooth {
+            self.settings.sound_bluetooth = Some(v);
+        }
+        Ok(())
     }
 
     fn close(&mut self) {}

@@ -146,8 +146,9 @@ Binding: any string property may be a template "{{column}}", "{{serial}}", "{{no
 ### 3.4 `doc.check` rules
 
 The command returns `[{rule, severity, element_id?, message, hint}]`. Rule ids are listed in
-[`docs/agents/tools.md`](agents/tools.md#doccheck-rules). Paper *size* versus RFID needs the
-label paper database (Phase 3); until then only the media type is compared.
+[`docs/agents/tools.md`](agents/tools.md#doccheck-rules). Paper size versus RFID uses the label
+paper library (ADR-0020): sizes are compared when the RFID barcode is linked to a paper,
+otherwise only the media type.
 
 - text overflow or text auto-shrunk below 5 pt at the device dpi
 - element outside the printable area or margins

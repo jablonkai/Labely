@@ -5,14 +5,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{DEFAULT_DPI, render_options_for};
 use crate::command::{Command, CommandError, CommandMeta, Ctx, ErrorCode};
+use crate::document::MediaType;
 use crate::jobs::{JobSpec, JobState};
-use crate::services::{DeviceInfo, DeviceStatus, PrintRequest};
+use crate::services::{DeviceInfo, DeviceSettings, DeviceStatus, PrintRequest};
 
 /// Longest allowed scan.
 pub const MAX_SCAN_MS: u64 = 60_000;
 
 /// Explicit address, else the single connected device.
-fn pick_address(ctx: &Ctx<'_>, address: Option<String>) -> Result<String, CommandError> {
+pub(crate) fn pick_address(ctx: &Ctx<'_>, address: Option<String>) -> Result<String, CommandError> {
     if let Some(a) = address {
         return Ok(a);
     }
@@ -191,6 +192,156 @@ impl Command for DeviceStatusCmd {
         let address = pick_address(ctx, p.address)?;
         let status = ctx.services().devices.status(&address)?;
         Ok(StatusOutput { address, status })
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CalibrateParams {
+    /// Printer address; defaults to the single connected printer.
+    #[serde(default)]
+    pub address: Option<String>,
+    /// Paper type to calibrate for; defaults to the active document's label media, else gap.
+    #[serde(default)]
+    pub media: Option<MediaType>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct CalibrateOutput {
+    pub address: String,
+    pub media: MediaType,
+}
+
+/// `device.calibrate`
+#[derive(Debug)]
+pub struct DeviceCalibrate;
+
+impl Command for DeviceCalibrate {
+    const ID: &'static str = "device.calibrate";
+    type Params = CalibrateParams;
+    type Output = CalibrateOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::device(
+            "Calibrate paper",
+            "Calibrate the printer's label sensor: it feeds labels until it finds a label \
+             edge (gap or black mark). Run it after loading a new kind of paper when labels \
+             print out of position. media defaults to the active label's. Feeds paper, so \
+             it needs print permission like print.submit.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: CalibrateParams) -> Result<CalibrateOutput, CommandError> {
+        let address = pick_address(ctx, p.address)?;
+        let media = p
+            .media
+            .or_else(|| ctx.doc(None).ok().map(|d| d.label.media))
+            .unwrap_or_default();
+        if media == MediaType::Continuous {
+            return Err(CommandError::bad_params(
+                "continuous paper has no label edge to calibrate on",
+            )
+            .with_param("media")
+            .with_accepted(["gap", "black_mark", "transparent"].map(String::from)));
+        }
+        if ctx.session().jobs().is_busy() {
+            return Err(CommandError::new(
+                ErrorCode::DeviceUnavailable,
+                "print jobs are queued or printing",
+            )
+            .with_hint("wait for the jobs to finish (job.list) or cancel them"));
+        }
+        ctx.services().devices.calibrate(&address, media)?;
+        Ok(CalibrateOutput { address, media })
+    }
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct SettingsOutput {
+    pub address: String,
+    /// Settings the printer reported; missing ones are unsupported or unknown.
+    pub settings: DeviceSettings,
+}
+
+/// `device.settings`
+#[derive(Debug)]
+pub struct DeviceSettingsCmd;
+
+impl Command for DeviceSettingsCmd {
+    const ID: &'static str = "device.settings";
+    type Params = AddressParams;
+    type Output = SettingsOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::device(
+            "Printer settings",
+            "Read the printer's settings: auto_off_level (1–4; NIIMBOT 15, 30, 45, 60 min), \
+             sound_power and sound_bluetooth beeps. Settings the printer does not report are \
+             left out.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: AddressParams) -> Result<SettingsOutput, CommandError> {
+        let address = pick_address(ctx, p.address)?;
+        let settings = ctx.services().devices.settings(&address)?;
+        Ok(SettingsOutput { address, settings })
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetSettingsParams {
+    /// Printer address; defaults to the single connected printer.
+    #[serde(default)]
+    pub address: Option<String>,
+    /// Auto power-off level 1–4 (1 = shortest).
+    #[serde(default)]
+    pub auto_off_level: Option<u8>,
+    /// Beep on power on and off.
+    #[serde(default)]
+    pub sound_power: Option<bool>,
+    /// Beep when a Bluetooth host connects.
+    #[serde(default)]
+    pub sound_bluetooth: Option<bool>,
+}
+
+/// `device.set_settings`
+#[derive(Debug)]
+pub struct DeviceSetSettings;
+
+impl Command for DeviceSetSettings {
+    const ID: &'static str = "device.set_settings";
+    type Params = SetSettingsParams;
+    type Output = SettingsOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::device(
+            "Change printer settings",
+            "Change printer settings; only the given fields change. auto_off_level 1–4, \
+             sound_power and sound_bluetooth on/off. Returns the settings read back.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: SetSettingsParams) -> Result<SettingsOutput, CommandError> {
+        let address = pick_address(ctx, p.address)?;
+        if let Some(l) = p.auto_off_level
+            && !(1..=4).contains(&l)
+        {
+            return Err(
+                CommandError::bad_params("auto_off_level must be 1–4").with_param("auto_off_level")
+            );
+        }
+        let patch = DeviceSettings {
+            auto_off_level: p.auto_off_level,
+            sound_power: p.sound_power,
+            sound_bluetooth: p.sound_bluetooth,
+        };
+        if patch == DeviceSettings::default() {
+            return Err(CommandError::bad_params("no setting to change")
+                .with_hint("pass auto_off_level, sound_power or sound_bluetooth"));
+        }
+        let settings = ctx.services().devices.set_settings(&address, &patch)?;
+        Ok(SettingsOutput { address, settings })
     }
 }
 

@@ -81,11 +81,11 @@ stored as a command half-word, RX code passed to `jcSendCommand`). One-way means
 | 24 | 34 | Motor drive / feed | 1 byte | bool | V:jc `jcSetMotorDrive` | Vendor-only |
 | 25 | 35 | Auto paper delivery | 1 byte | bool | V:jc `jcSetAutoPaperDelivery` | Vendor-only |
 | 26 | 36 | Set language | 1 byte | bool | V:jc `setPrinterLanguageType` | Confirmed |
-| 27 | 37 | Set auto-off time | 1 byte (1–4) | bool | V:jc `setPrinterAutoShutDownTime`; O:nbl enumerations.ts:84-93 | Confirmed |
+| 27 | 37 | Set auto-off time | 1 byte (1–4; OSS names them 15, 30, 45, 60 min). Read back with PrinterInfo type 7 | bool | V:jc `setPrinterAutoShutDownTime`; O:nbl enumerations.ts:84-93 | Confirmed |
 | 28 | 38 | Printer reset (settings) | `01` | bool | V:jc `setPrinterReset` | Confirmed |
 | 2C | 3C | Set print mode (thermal / thermal-transfer) | 1 byte | bool | V:jc `setPrintMode` (B32, P1, M1 classes) | Vendor-only |
 | 2D | 3D | Set label material | 3 bytes | bool | V:jc `Cb32Printer::setPrintMaterial`; O:nbl commands.ts:74 | Confirmed |
-| 8E | 8F | Label positioning calibration | 1 byte | — | V:jc `setPrintPaper`; O:nbl commands.ts:13 | Confirmed |
+| 8E | 8F | Label positioning calibration | 1 byte: label type (section 8). UNCERTAIN: the byte's meaning is inferred from the vendor name `setPrintPaper`; Labely sends the label type and waits up to 20 s for any 8F reply | — | V:jc `setPrintPaper`; O:nbl commands.ts:13 | Confirmed |
 | 58 | 68 | Sound settings | 3 bytes `[1 set / 2 get][1 BT-connect / 2 power][on]` | 3 bytes, byte 2 = state | O:nbl packet_generator.ts:97-103 | OSS-only |
 | 01 | 02 | **PrintStart** | Length depends on the protocol class (section 5) | `01` = OK | V:jc `jcSetPrintAllTime`; O:nbl packet_generator.ts:213-236 | Confirmed |
 | 03 | 04 | PageStart | `01` | bool | V:jc `jcSetPagePrint` @0xd28a4/0xd2968; O:nbl packet_generator.ts:242 | Confirmed |
@@ -371,3 +371,5 @@ The C2 connect result 90 (0x5A) means firmware errors [E: O:nbl enumerations.ts:
 11. USB VID:PID, and whether 115200 and 230400 both work.
 12. `blindZone` field order and whether the printer clips the 0.5 mm side margins in hardware.
 13. Status A3 reply length (4, 8 or 10 bytes) and the error-byte position.
+14. Calibration (0x8E): is the payload the label type, and what does the 0x8F reply carry? Does the B21 Pro answer only after feeding?
+15. Do the B21 Pro sound settings (0x58) and auto-off read-back (PrinterInfo 7) answer?

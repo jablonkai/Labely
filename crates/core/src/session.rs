@@ -108,6 +108,8 @@ pub struct Session {
     policy: Policy,
     /// Root of the local template library (`template.*`), if the frontend set one.
     template_dir: Option<PathBuf>,
+    /// The user's paper library file (`paper.*`), if the frontend set one.
+    paper_file: Option<PathBuf>,
     /// Print queue and history (`print.submit`, `job.*`).
     jobs: crate::jobs::PrintQueue,
 }
@@ -133,6 +135,7 @@ impl Session {
             registry: Registry::builtin(),
             policy: Policy::default(),
             template_dir: None,
+            paper_file: None,
             jobs,
         }
     }
@@ -160,6 +163,25 @@ impl Session {
 
     pub fn template_dir(&self) -> Option<&std::path::Path> {
         self.template_dir.as_deref()
+    }
+
+    /// Set the file holding the user's papers and RFID barcode links (ADR-0020). Like the
+    /// template library it is addressed by id, so it is not subject to the policy's file
+    /// roots. Without it only the bundled papers are available.
+    pub fn set_paper_file(&mut self, path: Option<PathBuf>) {
+        self.paper_file = path;
+    }
+
+    pub fn paper_file(&self) -> Option<&std::path::Path> {
+        self.paper_file.as_deref()
+    }
+
+    /// The user's papers, or an empty library when no paper file is set.
+    pub fn user_papers(&self) -> Result<crate::paper::UserPapers, crate::CommandError> {
+        match &self.paper_file {
+            Some(p) => crate::paper::UserPapers::load(p),
+            None => Ok(crate::paper::UserPapers::default()),
+        }
     }
 
     /// Set the print-history directory (ADR-0019); `None` keeps no history. Like the template
@@ -274,7 +296,7 @@ impl Session {
             Ok(v) => v,
             Err(e) => return Envelope::failure(e),
         };
-        if id.starts_with("print.")
+        if (id.starts_with("print.") || id == "device.calibrate")
             && let Err(e) = self.policy.check_print(id)
         {
             return Envelope::failure(e);

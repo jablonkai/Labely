@@ -11,6 +11,7 @@ pub mod history;
 pub mod images;
 pub mod jobs;
 pub mod meta;
+pub mod paper;
 pub mod render;
 pub mod selection;
 pub mod table;

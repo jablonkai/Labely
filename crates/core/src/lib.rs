@@ -10,6 +10,7 @@ pub mod document;
 pub mod envelope;
 pub mod file;
 pub mod jobs;
+pub mod paper;
 pub mod pdf;
 pub mod policy;
 pub mod raster;

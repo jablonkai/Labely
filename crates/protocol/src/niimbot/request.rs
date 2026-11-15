@@ -134,6 +134,42 @@ pub fn set_label_type(kind: LabelType) -> Packet {
     Packet::small(cmd::SET_LABEL_TYPE, &[kind as u8])
 }
 
+/// Auto-off levels accepted by SetAutoOff (0x27), docs/protocol.md §2.
+pub const AUTO_OFF_LEVELS: std::ops::RangeInclusive<u8> = 1..=4;
+
+/// SetAutoOff (0x27): `level` 1–4 (see [`AUTO_OFF_LEVELS`]). Read back with PrinterInfo
+/// type 7.
+pub fn set_auto_off(level: u8) -> Packet {
+    Packet::small(cmd::SET_AUTO_OFF, &[level])
+}
+
+/// Label positioning calibration (0x8E): the printer feeds labels until its gap or
+/// black-mark sensor finds the label edge. The payload is the label type (§8).
+pub fn calibrate(kind: LabelType) -> Packet {
+    Packet::small(cmd::CALIBRATE, &[kind as u8])
+}
+
+/// Which beep a sound setting (0x58) controls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[repr(u8)]
+pub enum SoundKind {
+    /// Beep when a Bluetooth host connects.
+    Bluetooth = 1,
+    /// Beep on power on and off.
+    Power = 2,
+}
+
+/// Read a sound setting (0x58 `[2, kind, 0]`).
+pub fn sound_get(kind: SoundKind) -> Packet {
+    Packet::small(cmd::SOUND, &[2, kind as u8, 0])
+}
+
+/// Turn a sound on or off (0x58 `[1, kind, on]`).
+pub fn sound_set(kind: SoundKind, on: bool) -> Packet {
+    Packet::small(cmd::SOUND, &[1, kind as u8, u8::from(on)])
+}
+
 /// PrintStart payload shapes (docs/protocol.md §5.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrintStart {
@@ -248,6 +284,9 @@ pub fn expected_response(request_cmd: u8, first_payload_byte: Option<u8>) -> Opt
         cmd::PAPER_INFO => cmd::PAPER_INFO_RESP,
         cmd::SET_DENSITY => cmd::SET_DENSITY_RESP,
         cmd::SET_LABEL_TYPE => cmd::SET_LABEL_TYPE_RESP,
+        cmd::SET_AUTO_OFF => cmd::SET_AUTO_OFF_RESP,
+        cmd::CALIBRATE => cmd::CALIBRATE_RESP,
+        cmd::SOUND => cmd::SOUND_RESP,
         cmd::PRINT_START => cmd::PRINT_START_RESP,
         cmd::PAGE_START => cmd::PAGE_START_RESP,
         cmd::SET_PAGE_SIZE => cmd::SET_PAGE_SIZE_RESP,
@@ -298,6 +337,18 @@ mod tests {
             set_page_size(PageSizeFormat::Len6, 1, 2, 3).payload.len(),
             6
         );
+    }
+
+    #[test]
+    fn device_settings_layouts() {
+        assert_eq!(set_auto_off(2).payload, vec![2]);
+        assert_eq!(calibrate(LabelType::Gap).payload, vec![1]);
+        assert_eq!(calibrate(LabelType::BlackMark).cmd, 0x8E);
+        assert_eq!(sound_get(SoundKind::Power).payload, vec![2, 2, 0]);
+        assert_eq!(sound_set(SoundKind::Bluetooth, true).payload, vec![1, 1, 1]);
+        assert_eq!(expected_response(cmd::CALIBRATE, Some(1)), Some(0x8F));
+        assert_eq!(expected_response(cmd::SOUND, Some(2)), Some(0x68));
+        assert_eq!(expected_response(cmd::SET_AUTO_OFF, Some(1)), Some(0x37));
     }
 
     #[test]

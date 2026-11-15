@@ -35,6 +35,11 @@ Hints:
 | `doc.get` | query | doc_id |
 | `doc.set_label` | edit | name, width_mm, height_mm, corner_radius_mm, media, printer_model, density |
 | `doc.check` | query | dpi, margin_mm, address, doc_id |
+| `paper.list` | query | query (id, name, `50x30`, barcode), model, media, custom → papers [{id, name, width_mm, height_mm, corner_radius_mm, media, custom, barcodes}] |
+| `paper.apply` | edit | id → label |
+| `paper.add` | edit | name, width_mm, height_mm, corner_radius_mm, media, barcode → paper with its `my:` id |
+| `paper.delete` | edit | id (`my:` only) → unlinked |
+| `paper.link`, `paper.unlink` | edit | barcode, id → previous |
 | `template.list` | query | query, folder → library, folders, templates [{ref, name, folder, starter, width_mm, height_mm, printer_model}] |
 | `template.new` | edit | ref (`starter:<id>` or `my:[<folder>/]<name>`), name |
 | `template.save` | edit | name, folder, overwrite, doc_id → ref |
@@ -85,6 +90,10 @@ Hints:
 | `device.scan` | device | timeout_ms |
 | `device.list` | device | |
 | `device.connect`, `.disconnect`, `.status` | device | address |
+| `paper.detect` | device | address, doc_id → rfid, barcode, media, remaining, paper, matches_label |
+| `device.calibrate` | device | address, media (default: the label's) |
+| `device.settings` | device | address → settings {auto_off_level, sound_power, sound_bluetooth} |
+| `device.set_settings` | device | address, auto_off_level (1–4), sound_power, sound_bluetooth → settings |
 | `print.submit` | device | address, copies, density, records, count, copies_column, wait → job_id, state |
 | `job.list` | query | → paused, jobs [{id, state, address, doc_name, pages_done, pages_total, error, …}] |
 | `job.get` | query | id |
@@ -113,6 +122,15 @@ running job and starts no new one; a waited `print.submit` on a paused queue fai
 2 s per call, so poll it. `job.*` commands are not gated by "Allow agents to print". The print
 history (`job.history*`) keeps every job that reached a printer, with a snapshot of the
 document; it is not limited by the file roots, and its writes cannot be undone.
+
+Label paper: `std:` papers are Labely's bundled sizes, `my:` papers are the user's. The printer
+reads a barcode from the roll's RFID tag; `paper.link` remembers which paper that barcode is,
+so `paper.detect` and the `paper_mismatch` check recognise the roll next time. To use the
+loaded paper: `paper.detect`, then `paper.apply {id}` when `matches_label` is false; for an
+unknown barcode, `paper.link {barcode, id}` (or `paper.add {…, barcode}`) first. Paper library
+writes are not undoable or journaled and are not limited by the file roots.
+`device.calibrate` feeds labels, so like `print.*` it needs "Allow agents to print".
+Settings a printer does not report are left out of `device.settings`.
 
 Printer addresses:
 - `ble:<id>`
@@ -148,7 +166,7 @@ pins it. Pin it for reproducible previews and tests.
 | `label_too_wide` | error | The label is wider than the model's print width. |
 | `dpi_mismatch` | warning | The check dpi differs from the model's dpi. |
 | `density_out_of_range` | error | The density is outside the model's range. |
-| `paper_mismatch` | warning | The printer's RFID paper media differs from the label media. |
+| `paper_mismatch` | warning | The printer's RFID paper differs from the label: size and media when its barcode is linked to a paper, else media only. The hint names the `paper.apply` id. |
 | `binding_invalid` | error | A date binding has a bad offset or format, e.g. `{{now+3q}}`. |
 | `binding_missing` | warning | A `{{name}}` matches no data column, serial or variable. |
 | `binding_empty` | info | A bound variable is empty, or a bound column is empty in some records. |

@@ -67,6 +67,8 @@ pub fn show(app: &mut LabelyApp, ctx: &Context) {
             Dialog::Templates(g) => crate::templates::gallery(app, ui, g),
             Dialog::SaveTemplate(f) => crate::templates::save(app, ui, f),
             Dialog::History(v) => crate::jobs::history(app, ui, v),
+            Dialog::Papers(v) => crate::paper::library(app, ui, v),
+            Dialog::Device(v) => crate::paper::device(app, ui, v),
             Dialog::Print => print(app, ui),
             Dialog::About => about(app, ui),
         };
