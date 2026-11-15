@@ -8,6 +8,7 @@ use serde_json::{Map, Value, json};
 
 use crate::app::LabelyApp;
 use crate::menu;
+use crate::prefs::Units;
 
 /// Element type → the command that creates it (its params schema describes the props).
 fn add_command(kind: &str) -> &'static str {
@@ -150,7 +151,14 @@ fn schema_type(schema: &Value) -> Option<&str> {
 }
 
 /// One property editor row. Returns a new value when edited.
-fn prop_editor(ui: &mut Ui, label: &str, schema: &Value, value: &Value) -> Option<Value> {
+/// `units` is set for lengths stored in mm: they are shown and typed in that unit.
+fn prop_editor(
+    ui: &mut Ui,
+    label: &str,
+    schema: &Value,
+    value: &Value,
+    units: Option<Units>,
+) -> Option<Value> {
     let lbl = ui
         .label(label)
         .on_hover_text(
@@ -189,10 +197,11 @@ fn prop_editor(ui: &mut Ui, label: &str, schema: &Value, value: &Value) -> Optio
             }
             (Some("number"), _) => {
                 let mut n = value.as_f64().unwrap_or(0.0);
-                ui.add(egui::DragValue::new(&mut n).speed(0.1).max_decimals(2))
-                    .labelled_by(lbl)
-                    .changed()
-                    .then(|| json!(n))
+                let drag = match units {
+                    Some(u) => length_drag(&mut n, u),
+                    None => egui::DragValue::new(&mut n).speed(0.1).max_decimals(2),
+                };
+                ui.add(drag).labelled_by(lbl).changed().then(|| json!(n))
             }
             (Some("integer"), _) => {
                 let mut n = value.as_i64().unwrap_or(0);
@@ -219,6 +228,28 @@ fn prop_editor(ui: &mut Ui, label: &str, schema: &Value, value: &Value) -> Optio
     };
     ui.end_row();
     out
+}
+
+/// A drag field for a length kept in mm, shown and typed in `units`.
+pub fn length_drag(mm: &mut f64, units: Units) -> egui::DragValue<'_> {
+    egui::DragValue::new(mm)
+        .speed(0.1)
+        .custom_formatter(move |v, _| {
+            let s = format!("{:.*}", units.decimals(), units.from_mm(v));
+            let s = s.trim_end_matches('0').trim_end_matches('.');
+            if s.is_empty() || s == "-" {
+                "0".to_owned()
+            } else {
+                s.to_owned()
+            }
+        })
+        .custom_parser(move |t| units.parse(t))
+        .suffix(format!(" {}", units.symbol()))
+}
+
+/// The unit for a property key: lengths end in `_mm`.
+fn units_for(key: &str, units: Units) -> Option<Units> {
+    key.ends_with("_mm").then_some(units)
 }
 
 const FRAME_FIELDS: &[&str] = &["x_mm", "y_mm", "width_mm", "height_mm", "rotation_deg"];
@@ -266,7 +297,9 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
             egui::Grid::new("frame").num_columns(2).show(ui, |ui| {
                 let name_schema = json!({"type": "string"});
                 let name = whole.get("name").cloned().unwrap_or(json!(""));
-                if let Some(v) = prop_editor(ui, &app.i18n.t("prop-name"), &name_schema, &name) {
+                if let Some(v) =
+                    prop_editor(ui, &app.i18n.t("prop-name"), &name_schema, &name, None)
+                {
                     edits.push(("name".into(), v));
                 }
                 for f in FRAME_FIELDS {
@@ -275,13 +308,16 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                         .cloned()
                         .unwrap_or(json!({"type": "number"}));
                     let label = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
-                    if let Some(v) = prop_editor(ui, &label, &s, &whole[*f]) {
+                    if let Some(v) =
+                        prop_editor(ui, &label, &s, &whole[*f], units_for(f, app.units()))
+                    {
                         edits.push(((*f).into(), v));
                     }
                 }
                 for f in ["locked", "hidden", "flip_h", "flip_v"] {
                     let label = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
-                    if let Some(v) = prop_editor(ui, &label, &json!({"type": "boolean"}), &whole[f])
+                    if let Some(v) =
+                        prop_editor(ui, &label, &json!({"type": "boolean"}), &whole[f], None)
                     {
                         edits.push((f.into(), v));
                     }
@@ -323,13 +359,14 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                             .map(|i| i.name)
                             .collect();
                         let s = json!({"enum": names});
-                        if let Some(v) = prop_editor(ui, "icon", &s, &value) {
+                        if let Some(v) = prop_editor(ui, "icon", &s, &value, None) {
                             edits.push((key.clone(), v));
                         }
                         continue;
                     }
-                    let label = key.replace('_', " ");
-                    if let Some(v) = prop_editor(ui, &label, s, &value) {
+                    let label = key.strip_suffix("_mm").unwrap_or(key).replace('_', " ");
+                    if let Some(v) = prop_editor(ui, &label, s, &value, units_for(key, app.units()))
+                    {
                         edits.push((key.clone(), v));
                     }
                 }
@@ -468,6 +505,7 @@ fn label_properties(app: &mut LabelyApp, ui: &mut Ui, doc: &labely_core::Documen
             &app.i18n.t("prop-name"),
             &json!({"type": "string"}),
             &json!(doc.name),
+            None,
         ) {
             edits.push(("name".into(), v));
         }
@@ -480,7 +518,7 @@ fn label_properties(app: &mut LabelyApp, ui: &mut Ui, doc: &labely_core::Documen
         ] {
             let s = props.get(f).cloned().unwrap_or(json!({"type": "number"}));
             let text = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
-            if let Some(v) = prop_editor(ui, &text, &s, &label[f]) {
+            if let Some(v) = prop_editor(ui, &text, &s, &label[f], units_for(f, app.units())) {
                 edits.push((f.into(), v));
             }
         }
@@ -870,7 +908,84 @@ pub fn welcome(app: &mut LabelyApp, ui: &mut Ui) {
         {
             menu::invoke(app, "doc.open");
         }
+        if !app.prefs.recent.is_empty() {
+            ui.add_space(16.0);
+            ui.label(RichText::new(app.i18n.t("menu-recent")).strong());
+            let mut open = None;
+            for path in &app.prefs.recent {
+                let name = path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                );
+                if ui
+                    .link(name)
+                    .on_hover_text(path.display().to_string())
+                    .clicked()
+                {
+                    open = Some(path.clone());
+                }
+            }
+            if let Some(path) = open {
+                app.open_recent(&path);
+            }
+        }
     });
+}
+
+/// One tab per open document: click to switch, × to close, + for a new label.
+pub fn doc_tabs(app: &mut LabelyApp, ui: &mut Ui) {
+    let docs = app
+        .run("doc.list", json!({}))
+        .result
+        .and_then(|r| r.get("docs").cloned())
+        .and_then(|d| d.as_array().cloned())
+        .unwrap_or_default();
+    let mut activate = None;
+    let mut close = None;
+    egui::ScrollArea::horizontal().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            for d in &docs {
+                let id = d["doc_id"].as_str().unwrap_or_default().to_owned();
+                let name = d["name"].as_str().unwrap_or_default();
+                let dirty = if d["dirty"].as_bool() == Some(true) {
+                    " •"
+                } else {
+                    ""
+                };
+                let active = d["active"].as_bool() == Some(true);
+                let tab = ui
+                    .selectable_label(active, format!("{name}{dirty}"))
+                    .on_hover_text(d["path"].as_str().unwrap_or(name));
+                if tab.clicked() {
+                    activate = Some(id.clone());
+                }
+                if tab.middle_clicked() {
+                    close = Some(id.clone());
+                }
+                if ui
+                    .small_button("×")
+                    .on_hover_text(app.i18n.t("cmd-doc-close"))
+                    .clicked()
+                {
+                    close = Some(id);
+                }
+                ui.separator();
+            }
+            if ui
+                .small_button("+")
+                .on_hover_text(menu::command_label(&app.i18n, "doc.new"))
+                .clicked()
+            {
+                menu::invoke(app, "doc.new");
+            }
+        });
+    });
+    if let Some(id) = activate {
+        app.activate(&id);
+    }
+    if let Some(id) = close {
+        app.request_close(&id);
+    }
 }
 
 /// The print raster at one screen point per dot.

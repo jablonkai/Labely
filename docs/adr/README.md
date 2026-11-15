@@ -23,3 +23,4 @@
 | [0019](0019-print-queue-and-history.md) | Print queue and print history | proposed |
 | [0020](0020-paper-library-and-device-settings.md) | Label paper library, RFID detection, calibration and printer settings | proposed |
 | [0021](0021-print-transforms-and-code128-sets.md) | Print offset, mirror and output direction; Code 128 sets and GS1-128 | proposed |
+| [0022](0022-tabs-recent-clipboard-units.md) | Document tabs, recent files, clipboard, rulers and units | proposed |

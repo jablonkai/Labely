@@ -32,8 +32,11 @@ Hints:
 | `doc.open` | edit | path |
 | `doc.save` | query | path, doc_id |
 | `doc.close` | edit | doc_id |
+| `doc.list` | query | → docs (doc_id, name, path, dirty, active) in open order |
+| `doc.activate` | edit | doc_id (not undoable) |
 | `doc.get` | query | doc_id |
 | `doc.set_label` | edit | name, width_mm, height_mm, corner_radius_mm, media, printer_model, density |
+| `doc.rotate_label` | edit | direction (cw/ccw), rotate_content (default true) |
 | `doc.check` | query | dpi, margin_mm, address, doc_id |
 | `paper.list` | query | query (id, name, `50x30`, barcode), model, media, custom → papers [{id, name, width_mm, height_mm, corner_radius_mm, media, custom, barcodes}] |
 | `paper.apply` | edit | id → label |
@@ -66,6 +69,7 @@ Hints:
 | `element.move` / `.resize` / `.rotate` | edit | id, x_mm, y_mm / width_mm, height_mm / rotation_deg |
 | `element.delete` | edit | ids |
 | `element.duplicate` | edit | id, dx_mm, dy_mm |
+| `element.paste` | edit | elements (as in doc.get), assets, dx_mm, dy_mm → ids |
 | `element.reorder` | edit | id, to (front, back, forward, backward) |
 | `element.align` | edit | ids, edge (left, center, right, top, middle, bottom), to (selection, label; default selection for 2+ ids) → moved |
 | `element.distribute` | edit | ids (3+), axis (horizontal, vertical) → moved |

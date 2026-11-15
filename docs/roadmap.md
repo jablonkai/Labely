@@ -89,7 +89,7 @@ Phase 3 lands in slices, one pull request each.
 | 3.5a Printing | print queue (pause, resume, cancel), local print history with reopen (ADR-0019) | done |
 | 3.5b Device | label paper library, RFID barcode links and detection, calibration, auto-off and sound settings (ADR-0020) | done |
 | 3.6a Print and codes | print offset, mirror, 180° output direction; Code 128 A/B/C and GS1-128 (ADR-0021) | done |
-| 3.6b Shell | document tabs, recent files, rulers, printable-area overlay, rotate paper, clipboard, inch units | open |
+| 3.6b Shell | document tabs, recent files, rulers, printable-area overlay, rotate paper, clipboard, inch units (ADR-0022) | done |
 | 3.6c Text and data | grow-to-fit text, max-length guard, font picker, drag-to-bind and element from column, rich text spans, image crop, linked mirror copies | open |
 
 ## Phase 4: Android shell + AppFunctions

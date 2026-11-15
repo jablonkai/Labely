@@ -2,7 +2,7 @@
 //! turn a menu pick into a command (adding defaults, asking for a file, opening a dialog).
 
 use egui::{Context, Key, KeyboardShortcut, Modifiers, Ui};
-use labely_core::Registry;
+use labely_core::{ElementId, Registry};
 use labely_i18n::{I18n, Lang};
 use serde_json::{Value, json};
 
@@ -92,6 +92,26 @@ pub fn menu_bar(app: &mut LabelyApp, ui: &mut Ui) {
 /// Studio-only items (view state, settings) after the generated ones.
 fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
     match menu {
+        "file" => {
+            ui.separator();
+            let recent = app.prefs.recent.clone();
+            ui.add_enabled_ui(!recent.is_empty(), |ui| {
+                ui.menu_button(app.i18n.t("menu-recent"), |ui| {
+                    for path in &recent {
+                        if ui.button(path.display().to_string()).clicked() {
+                            app.open_recent(path);
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui.button(app.i18n.t("action-clear-recent")).clicked() {
+                        app.prefs.recent.clear();
+                        app.save_prefs();
+                        ui.close();
+                    }
+                });
+            });
+        }
         "insert" => {
             ui.separator();
             let has_doc = app.session.active_doc_id().is_some();
@@ -123,6 +143,39 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
         }
         "edit" => {
             ui.separator();
+            let has_sel = !app.selection().is_empty();
+            for (key, sc, cut) in [("action-copy", Key::C, false), ("action-cut", Key::X, true)] {
+                let text = ui
+                    .ctx()
+                    .format_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, sc));
+                if ui
+                    .add_enabled(
+                        has_sel,
+                        egui::Button::new(app.i18n.t(key)).shortcut_text(text),
+                    )
+                    .clicked()
+                {
+                    let ctx = ui.ctx().clone();
+                    copy_selection(app, &ctx, cut);
+                    ui.close();
+                }
+            }
+            let text = ui
+                .ctx()
+                .format_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::V));
+            let can_paste = app.ui.clipboard.is_some() && app.session.active_doc_id().is_some();
+            if ui
+                .add_enabled(
+                    can_paste,
+                    egui::Button::new(app.i18n.t("action-paste")).shortcut_text(text),
+                )
+                .clicked()
+            {
+                if let Some((_, text)) = app.ui.clipboard.clone() {
+                    paste_text(app, &text);
+                }
+                ui.close();
+            }
             if ui
                 .add_enabled(
                     app.session.active_doc_id().is_some(),
@@ -166,6 +219,19 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
         }
         "view" => {
             ui.separator();
+            ui.checkbox(&mut app.ui.show_rulers, app.i18n.t("action-show-rulers"));
+            ui.menu_button(app.i18n.t("menu-units"), |ui| {
+                for u in crate::prefs::Units::ALL {
+                    if ui
+                        .radio(app.prefs.units == u, app.i18n.t(u.key()))
+                        .clicked()
+                    {
+                        app.prefs.units = u;
+                        app.save_prefs();
+                        ui.close();
+                    }
+                }
+            });
             ui.checkbox(&mut app.ui.show_grid, app.i18n.t("action-show-grid"));
             ui.horizontal(|ui| {
                 ui.label(app.i18n.t("prop-grid-mm"));
@@ -264,6 +330,16 @@ pub fn shortcuts(app: &mut LabelyApp, ctx: &Context) {
     if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
         app.select(&[]);
     }
+    // Cmd+C/X/V reach egui as clipboard events, not key presses.
+    let events = ctx.input(|i| i.events.clone());
+    for ev in events {
+        match ev {
+            egui::Event::Copy => copy_selection(app, ctx, false),
+            egui::Event::Cut => copy_selection(app, ctx, true),
+            egui::Event::Paste(text) => paste_text(app, &text),
+            _ => {}
+        }
+    }
     let step = if ctx.input(|i| i.modifiers.shift) {
         5.0
     } else {
@@ -284,6 +360,101 @@ pub fn shortcuts(app: &mut LabelyApp, ctx: &Context) {
     });
     if d != (0.0, 0.0) {
         nudge(app, d.0, d.1);
+    }
+}
+
+/// Marker of studio clipboard text.
+pub const CLIPBOARD_FORMAT: &str = "labely/elements";
+
+/// Put the selected elements (and the images they use) on the clipboard as JSON.
+pub fn copy_selection(app: &mut LabelyApp, ctx: &Context, cut: bool) {
+    let ids = app.selection();
+    let (Some(doc), Some(doc_id)) = (app.session.doc(None), app.session.active_doc_id()) else {
+        return;
+    };
+    if ids.is_empty() {
+        return;
+    }
+    let elements: Vec<_> = doc.elements().filter(|e| ids.contains(&e.id)).collect();
+    let mut assets = serde_json::Map::new();
+    for e in &elements {
+        if let labely_core::ElementKind::Image(img) = &e.kind
+            && let Some(a) = doc.assets.get(&img.asset)
+        {
+            assets.insert(img.asset.clone(), json!(a));
+        }
+    }
+    let text = json!({
+        "format": CLIPBOARD_FORMAT,
+        "elements": elements,
+        "assets": assets,
+    })
+    .to_string();
+    let doc_id = doc_id.to_owned();
+    ctx.copy_text(text.clone());
+    app.ui.clipboard = Some((doc_id, text));
+    if cut {
+        app.run_reporting("element.delete", json!({ "ids": ids }));
+    }
+}
+
+/// Paste studio clipboard text; any other text becomes a text element.
+pub fn paste_text(app: &mut LabelyApp, text: &str) {
+    let Some(doc_id) = app.session.active_doc_id().map(str::to_owned) else {
+        return;
+    };
+    let parsed: Option<Value> = serde_json::from_str(text).ok();
+    let Some(v) = parsed.filter(|v| v["format"] == CLIPBOARD_FORMAT) else {
+        let t = text.trim();
+        if !t.is_empty() {
+            let mut p = json!({"x_mm": 1, "y_mm": 1, "width_mm": 30, "height_mm": 8});
+            p["text"] = json!(t);
+            add(app, "element.add_text", p);
+        }
+        return;
+    };
+    // Into the document it came from, a paste lands 1 mm off the originals.
+    let same_doc = app
+        .ui
+        .clipboard
+        .as_ref()
+        .is_some_and(|(d, t)| *d == doc_id && t == text);
+    let offset = if same_doc { 1.0 } else { 0.0 };
+    let env = app.run_reporting(
+        "element.paste",
+        json!({
+            "elements": v["elements"],
+            "assets": v["assets"],
+            "dx_mm": offset,
+            "dy_mm": offset,
+        }),
+    );
+    if let Some(ids) = env
+        .result
+        .as_ref()
+        .and_then(|r| r.get("ids"))
+        .and_then(Value::as_array)
+    {
+        let ids: Vec<ElementId> = ids
+            .iter()
+            .filter_map(Value::as_u64)
+            .map(ElementId)
+            .collect();
+        app.select(&ids);
+    }
+    // Pasting again moves on by another millimetre.
+    if same_doc
+        && let Some(mut v) = serde_json::from_str::<Value>(text).ok()
+        && let Some(els) = v["elements"].as_array_mut()
+    {
+        for e in els {
+            for k in ["x_mm", "y_mm"] {
+                if let Some(n) = e[k].as_f64() {
+                    e[k] = json!(n + 1.0);
+                }
+            }
+        }
+        app.ui.clipboard = Some((doc_id, v.to_string()));
     }
 }
 
@@ -363,6 +534,16 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
             }
         }
         "doc.save" => save(app),
+        "doc.close" => {
+            if let Some(id) = app.session.active_doc_id().map(str::to_owned) {
+                app.request_close(&id);
+            }
+        }
+        "doc.rotate_label" => {
+            if app.run_reporting("doc.rotate_label", json!({})).ok {
+                app.ui.fit_pending = true;
+            }
+        }
         "template.new" => {
             app.ui.dialog = Some(Dialog::Templates(crate::templates::Gallery::default()));
         }

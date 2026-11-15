@@ -17,8 +17,21 @@ fn options() -> StudioOptions {
         // Never write the real app-data history from tests.
         history_dir: Some(std::env::temp_dir().join("labely-studio-test-history")),
         paper_file: Some(std::env::temp_dir().join("labely-studio-test-papers.json")),
+        prefs_file: Some(fresh_prefs()),
         ..StudioOptions::default()
     }
+}
+
+/// A prefs file of its own per test: tests run in parallel.
+fn fresh_prefs() -> std::path::PathBuf {
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let p = std::env::temp_dir().join(format!(
+        "labely-studio-test-prefs-{}-{n}.json",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&p);
+    p
 }
 
 fn harness(app: LabelyApp) -> Harness<'static, LabelyApp> {
@@ -590,5 +603,192 @@ fn paper_library_and_printer_settings() {
     assert_eq!(
         h.state().ui.status.as_ref().map(|s| s.text.as_str()),
         Some("Calibration done.")
+    );
+}
+
+fn new_doc(h: &mut Harness<'_, LabelyApp>, name: &str) {
+    let env = h.state_mut().run(
+        "doc.new",
+        json!({"name": name, "width_mm": 40, "height_mm": 20}),
+    );
+    assert!(env.ok, "{:?}", env.error);
+    h.run();
+}
+
+#[test]
+fn tabs_switch_and_close_with_confirmation() {
+    let mut h = harness(LabelyApp::new(None, options()));
+    h.run();
+    new_doc(&mut h, "Alpha");
+    new_doc(&mut h, "Beta");
+    assert_eq!(h.state().session.doc(None).unwrap().name, "Beta");
+    // Never-saved documents carry the unsaved mark, as in the window title.
+    h.get_by_label("Alpha •").click();
+    h.run();
+    assert_eq!(h.state().session.doc(None).unwrap().name, "Alpha");
+
+    // An edited document asks before closing; "Cancel" keeps it, "Don't save" closes it.
+    h.state_mut().run(
+        "element.add_rect",
+        json!({"x_mm": 1, "y_mm": 1, "width_mm": 5, "height_mm": 5}),
+    );
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::W);
+    h.run();
+    h.get_by_label("Cancel").click();
+    h.run();
+    assert_eq!(h.state().session.doc_ids().count(), 2);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::W);
+    h.run();
+    h.get_by_label("Don’t save").click();
+    h.run();
+    let names: Vec<_> = h
+        .state()
+        .session
+        .doc_ids()
+        .map(|id| h.state().session.doc(Some(id)).unwrap().name.clone())
+        .collect();
+    assert_eq!(names, ["Beta"]);
+    // An empty new document closes without asking.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::W);
+    h.run();
+    assert_eq!(h.state().session.doc_ids().count(), 0);
+}
+
+#[test]
+fn recent_files_are_remembered() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("shelf.labely");
+    let opts = options();
+    let prefs = opts.prefs_file.clone().unwrap();
+    let mut h = harness(LabelyApp::new(None, opts.clone()));
+    h.run();
+    new_doc(&mut h, "Shelf");
+    assert!(h.state_mut().run("doc.save", json!({"path": file})).ok);
+    h.state_mut().run("doc.close", json!({}));
+    h.run();
+
+    // A new studio run sees the file on the welcome panel.
+    let mut h = harness(LabelyApp::new(
+        None,
+        StudioOptions {
+            prefs_file: Some(prefs),
+            ..opts
+        },
+    ));
+    h.run();
+    assert_eq!(h.state().prefs.recent, std::slice::from_ref(&file));
+    h.get_by_label("shelf.labely").click();
+    h.run();
+    assert_eq!(h.state().session.doc(None).unwrap().name, "Shelf");
+
+    // A file that is gone leaves the list.
+    h.state_mut().run("doc.close", json!({}));
+    std::fs::remove_file(&file).unwrap();
+    h.run();
+    h.get_by_label("shelf.labely").click();
+    h.run();
+    assert!(h.state().prefs.recent.is_empty());
+    assert!(h.state().session.active_doc_id().is_none());
+}
+
+#[test]
+fn copy_and_paste_elements_between_documents() {
+    let mut h = harness(LabelyApp::new(None, options()));
+    h.run();
+    new_doc(&mut h, "From");
+    let env = h.state_mut().run(
+        "element.add_rect",
+        json!({"x_mm": 2, "y_mm": 3, "width_mm": 5, "height_mm": 5}),
+    );
+    let id = env.created[0];
+    h.state_mut().select(&[id]);
+    h.run();
+    h.event(egui::Event::Copy);
+    h.run();
+    let (_, text) = h.state().ui.clipboard.clone().expect("copied");
+    assert!(text.contains("labely/elements"));
+
+    // Into the same document: 1 mm off the original, selected.
+    h.event(egui::Event::Paste(text.clone()));
+    h.run();
+    assert_eq!(element_count(&h), 2);
+    let sel = h.state().selection();
+    let e = h
+        .state()
+        .session
+        .doc(None)
+        .unwrap()
+        .element(sel[0])
+        .unwrap()
+        .clone();
+    assert_eq!((e.x_mm, e.y_mm), (3.0, 4.0));
+
+    // Into another document: in place.
+    new_doc(&mut h, "To");
+    h.event(egui::Event::Paste(text));
+    h.run();
+    assert_eq!(element_count(&h), 1);
+    let e = h
+        .state()
+        .session
+        .doc(None)
+        .unwrap()
+        .elements()
+        .next()
+        .unwrap()
+        .clone();
+    assert_eq!((e.x_mm, e.y_mm), (2.0, 3.0));
+
+    // Cut removes the original; plain text becomes a text element.
+    h.state_mut().select(&[e.id]);
+    h.event(egui::Event::Cut);
+    h.run();
+    assert_eq!(element_count(&h), 0);
+    h.event(egui::Event::Paste("hello".into()));
+    h.run();
+    assert_eq!(element_count(&h), 1);
+}
+
+#[test]
+fn rotate_paper_overlay_and_units() {
+    let mut h = harness(LabelyApp::new(None, options()));
+    h.run();
+    let env = h.state_mut().run(
+        "doc.new",
+        json!({"width_mm": 60, "height_mm": 30, "printer_model": "niimbot.b21_pro"}),
+    );
+    assert!(env.ok);
+    h.run();
+    // The B21 Pro head is 591 dots at 300 dpi ≈ 50.04 mm, centred on the 60 mm label.
+    let app = h.state();
+    let (a, b) =
+        labely_studio::canvas::printable_span(app, app.session.doc(None).unwrap()).unwrap();
+    assert!(
+        (a - 4.98).abs() < 0.01 && (b - 55.02).abs() < 0.01,
+        "{a} {b}"
+    );
+
+    h.get_all_by_label("Label").next().unwrap().click();
+    h.run();
+    h.get_by_label("Rotate label paper").click();
+    h.run();
+    let label = h.state().session.doc(None).unwrap().label.clone();
+    assert_eq!((label.width_mm, label.height_mm), (30.0, 60.0));
+    let app = h.state();
+    assert!(labely_studio::canvas::printable_span(app, app.session.doc(None).unwrap()).is_none());
+
+    // Inches: the label width field shows inches and reads typed inches back as mm.
+    h.state_mut().prefs.units = labely_studio::prefs::Units::Inch;
+    h.run();
+    assert!(h.query_by_label("1.181 in").is_some() || h.query_by_value("1.181 in").is_some());
+    // At 8 px/mm: minor ticks every 1/16 in (12.7 px), labels every 1/4 in (50.8 px).
+    assert_eq!(
+        labely_studio::canvas::ruler_steps(labely_studio::prefs::Units::Inch, 8.0),
+        (25.4 / 16.0, 6.35)
+    );
+    assert_eq!(
+        labely_studio::canvas::ruler_steps(labely_studio::prefs::Units::Mm, 8.0),
+        (1.0, 5.0)
     );
 }

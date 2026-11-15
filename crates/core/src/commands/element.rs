@@ -981,6 +981,139 @@ impl Command for Duplicate {
     }
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PasteParams {
+    #[serde(default)]
+    pub doc_id: Option<String>,
+    /// Elements as `doc.get` returns them; their ids are replaced.
+    pub elements: Vec<Element>,
+    /// Image assets the elements use that the document may not have, keyed by sha256 hex.
+    #[serde(default)]
+    pub assets: std::collections::BTreeMap<String, Asset>,
+    /// Horizontal offset, mm (default 0).
+    #[serde(default)]
+    pub dx_mm: Option<f64>,
+    /// Vertical offset, mm (default 0).
+    #[serde(default)]
+    pub dy_mm: Option<f64>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct PasteOutput {
+    /// Ids of the new elements, in the order given.
+    pub ids: Vec<ElementId>,
+}
+
+/// Most elements pasted at once.
+pub const MAX_PASTE: usize = 1000;
+
+/// `element.paste`
+#[derive(Debug)]
+pub struct Paste;
+
+impl Command for Paste {
+    const ID: &'static str = "element.paste";
+    type Params = PasteParams;
+    type Output = PasteOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::edit(
+            "Paste",
+            "Insert copies of elements (JSON as in doc.get, e.g. from another document) on top \
+             of the z-order, offset by dx_mm/dy_mm. New ids are assigned, groups among the \
+             pasted elements are kept as new groups, and locks are cleared. Images need their \
+             asset in the document or in `assets`. Returns {ids}.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: PasteParams) -> Result<PasteOutput, CommandError> {
+        if p.elements.is_empty() || p.elements.len() > MAX_PASTE {
+            return Err(CommandError::bad_params(format!(
+                "paste 1–{MAX_PASTE} elements, got {}",
+                p.elements.len()
+            ))
+            .with_param("elements"));
+        }
+        let dx = check_mm("dx_mm", p.dx_mm.unwrap_or(0.0), false)?;
+        let dy = check_mm("dy_mm", p.dy_mm.unwrap_or(0.0), false)?;
+        for (key, asset) in &p.assets {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&asset.data_base64)
+                .map_err(|e| {
+                    CommandError::bad_params(format!("asset {key}: invalid base64: {e}"))
+                        .with_param("assets")
+                })?;
+            if sha256_hex(&bytes) != *key {
+                return Err(CommandError::bad_params(format!(
+                    "asset {key}: the key is not the sha256 of its data"
+                ))
+                .with_param("assets"));
+            }
+        }
+        let doc = ctx.doc_mut(p.doc_id.as_deref())?;
+        let mut groups = std::collections::BTreeMap::new();
+        let mut new = Vec::with_capacity(p.elements.len());
+        for mut e in p.elements {
+            if let ElementKind::Image(img) = &e.kind
+                && !doc.assets.contains_key(&img.asset)
+                && !p.assets.contains_key(&img.asset)
+            {
+                return Err(CommandError::not_found(format!(
+                    "image asset {} is not in the document or in `assets`",
+                    img.asset
+                ))
+                .with_param("assets"));
+            }
+            e.x_mm += dx;
+            e.y_mm += dy;
+            e.rotation_deg = e.rotation_deg.rem_euclid(360.0);
+            e.locked = false;
+            validate_element(&e)?;
+            new.push(e);
+        }
+        let mut ids = Vec::with_capacity(new.len());
+        for e in &mut new {
+            e.id = doc.alloc_id();
+            ids.push(e.id);
+        }
+        for e in &mut new {
+            if let Some(g) = e.group {
+                let fresh = *groups.entry(g).or_insert_with(|| {
+                    let id = doc.next_id;
+                    doc.next_id += 1;
+                    id
+                });
+                e.group = Some(fresh);
+            }
+        }
+        // A group of one is no group.
+        let mut counts = std::collections::BTreeMap::<u64, usize>::new();
+        for g in new.iter().filter_map(|e| e.group) {
+            *counts.entry(g).or_default() += 1;
+        }
+        for e in &mut new {
+            if e.group.is_some_and(|g| counts.get(&g) == Some(&1)) {
+                e.group = None;
+            }
+        }
+        for e in &new {
+            if let ElementKind::Image(img) = &e.kind
+                && let Some(a) = p.assets.get(&img.asset)
+            {
+                doc.assets
+                    .entry(img.asset.clone())
+                    .or_insert_with(|| a.clone());
+            }
+        }
+        if doc.pages.is_empty() {
+            doc.pages.push(Page::default());
+        }
+        doc.pages[0].elements.extend(new);
+        Ok(PasteOutput { ids })
+    }
+}
+
 /// Z-order target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

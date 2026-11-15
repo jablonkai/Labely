@@ -8,6 +8,7 @@ use labely_core::{Document, Element, ElementId};
 use serde_json::json;
 
 use crate::app::{Gesture, LabelyApp, Raster};
+use crate::prefs::Units;
 
 /// An element frame in mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -199,6 +200,130 @@ fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) 
     }
 }
 
+/// The printable band across the label width, mm, when the printhead is narrower than the
+/// label (`None` when everything prints or no model is set). Same rule as `doc.check`.
+pub fn printable_span(app: &LabelyApp, doc: &Document) -> Option<(f64, f64)> {
+    let id = doc.label.printer_model.as_deref()?;
+    let m = app
+        .session
+        .services()
+        .devices
+        .models()
+        .into_iter()
+        .find(|m| m.id == id)?;
+    let head_mm = f64::from(m.head_dots) * 25.4 / f64::from(m.dpi);
+    (doc.label.width_mm > head_mm + 0.01).then(|| {
+        let left = (doc.label.width_mm - head_mm) / 2.0;
+        (left, left + head_mm)
+    })
+}
+
+/// Ruler thickness, points.
+pub const RULER: f32 = 18.0;
+
+/// Tick spacing for rulers: (minor, labelled) in mm, so minor ticks are ≥ 5 px and labels
+/// ≥ 40 px apart.
+pub fn ruler_steps(units: Units, zoom: f32) -> (f64, f64) {
+    let steps: &[f64] = match units {
+        Units::Mm => &[0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0],
+        Units::Inch => &[
+            25.4 / 16.0,
+            25.4 / 8.0,
+            25.4 / 4.0,
+            25.4 / 2.0,
+            25.4,
+            50.8,
+            127.0,
+            254.0,
+        ],
+    };
+    let px = |mm: f64| mm * f64::from(zoom);
+    let pick = |min: f64| {
+        steps
+            .iter()
+            .copied()
+            .find(|s| px(*s) >= min)
+            .unwrap_or(steps[steps.len() - 1])
+    };
+    (pick(5.0), pick(40.0))
+}
+
+/// Rulers along the top and left of `area`, zero at the label's top-left corner.
+fn rulers(painter: &egui::Painter, ui: &Ui, area: Rect, view: &View, units: Units) {
+    let vis = ui.visuals();
+    let bg = vis.panel_fill;
+    let ink = vis.weak_text_color();
+    let font = egui::FontId::proportional(9.0);
+    let top = Rect::from_min_size(area.min, vec2(area.width(), RULER));
+    let left = Rect::from_min_size(area.min, vec2(RULER, area.height()));
+    painter.rect_filled(top, 0.0, bg);
+    painter.rect_filled(left, 0.0, bg);
+    let (minor, major) = ruler_steps(units, view.zoom);
+    let stroke = Stroke::new(0.5, ink);
+    let label = |mm: f64| {
+        let v = units.from_mm(mm);
+        let s = format!("{v:.2}");
+        s.trim_end_matches('0').trim_end_matches('.').to_owned()
+    };
+    // Horizontal ruler.
+    let (start, _) = view.to_mm(pos2(top.left() + RULER, 0.0));
+    let (end, _) = view.to_mm(pos2(top.right(), 0.0));
+    let mut i = (start / minor).floor() as i64;
+    while (i as f64) * minor <= end {
+        let mm = i as f64 * minor;
+        let x = view.to_screen(mm, 0.0).x;
+        let is_major = ((mm / major).round() * major - mm).abs() < 1e-6;
+        let len = if is_major { RULER * 0.6 } else { RULER * 0.25 };
+        if x >= top.left() + RULER {
+            painter.line_segment([pos2(x, top.bottom() - len), pos2(x, top.bottom())], stroke);
+            if is_major {
+                painter.text(
+                    pos2(x + 2.0, top.top() + 1.0),
+                    egui::Align2::LEFT_TOP,
+                    label(mm),
+                    font.clone(),
+                    ink,
+                );
+            }
+        }
+        i += 1;
+    }
+    // Vertical ruler.
+    let (_, start) = view.to_mm(pos2(0.0, left.top() + RULER));
+    let (_, end) = view.to_mm(pos2(0.0, left.bottom()));
+    let mut i = (start / minor).floor() as i64;
+    while (i as f64) * minor <= end {
+        let mm = i as f64 * minor;
+        let y = view.to_screen(0.0, mm).y;
+        let is_major = ((mm / major).round() * major - mm).abs() < 1e-6;
+        let len = if is_major { RULER * 0.6 } else { RULER * 0.25 };
+        if y >= left.top() + RULER {
+            painter.line_segment([pos2(left.right() - len, y), pos2(left.right(), y)], stroke);
+            if is_major {
+                painter.text(
+                    pos2(left.left() + 1.0, y + 1.0),
+                    egui::Align2::LEFT_TOP,
+                    label(mm),
+                    font.clone(),
+                    ink,
+                );
+            }
+        }
+        i += 1;
+    }
+    let corner = Rect::from_min_size(area.min, Vec2::splat(RULER));
+    painter.rect_filled(corner, 0.0, bg);
+    painter.text(
+        corner.center(),
+        egui::Align2::CENTER_CENTER,
+        units.symbol(),
+        font,
+        ink,
+    );
+    painter.line_segment([top.left_bottom(), top.right_bottom()], stroke);
+    painter.line_segment([left.right_top(), left.right_bottom()], stroke);
+}
+
 /// Draw the canvas and handle its input.
 pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     let Some(doc) = app.session.doc_arc(None) else {
@@ -269,6 +394,23 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
         Stroke::new(1.0, Color32::GRAY),
         StrokeKind::Outside,
     );
+    if let Some((x0, x1)) = printable_span(app, &doc) {
+        // Outside the printhead: shaded, with a dashed edge.
+        let shade = Color32::from_rgba_unmultiplied(220, 60, 60, 36);
+        let edge = Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 40, 40, 160));
+        for (a, b) in [(0.0, x0), (x1, doc.label.width_mm)] {
+            let r = Rect::from_min_max(
+                view.to_screen(a, 0.0),
+                view.to_screen(b, doc.label.height_mm),
+            );
+            painter.rect_filled(r, 0.0, shade);
+        }
+        for x in [x0, x1] {
+            let top = view.to_screen(x, 0.0);
+            let bottom = view.to_screen(x, doc.label.height_mm);
+            painter.add(egui::Shape::dashed_line(&[top, bottom], edge, 4.0, 3.0));
+        }
+    }
 
     let selection = app.selection();
     let accent = ui.visuals().selection.stroke.color;
@@ -328,6 +470,9 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
             egui::FontId::proportional(11.0),
             Color32::from_black_alpha(110),
         );
+    }
+    if app.ui.show_rulers {
+        rulers(&painter, ui, area, &view, app.units());
     }
 
     // Input.

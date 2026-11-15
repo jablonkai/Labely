@@ -546,6 +546,99 @@ expression: r
       "undoable": false
     },
     {
+      "description": "List the open documents in the order they were opened: doc_id, name, path, dirty and which one is active.",
+      "id": "doc.list",
+      "journal": false,
+      "kind": "query",
+      "label": "Open documents",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "docs": {
+            "description": "Open documents in the order they were opened.",
+            "items": {
+              "properties": {
+                "active": {
+                  "type": "boolean"
+                },
+                "dirty": {
+                  "type": "boolean"
+                },
+                "doc_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "doc_id",
+                "name",
+                "path",
+                "dirty",
+                "active"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "docs"
+        ],
+        "title": "ListOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "ListParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Make an open document the active one; commands without doc_id then act on it.",
+      "id": "doc.activate",
+      "journal": true,
+      "kind": "edit",
+      "label": "Switch document",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "active": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "ActivateOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_id"
+        ],
+        "title": "ActivateParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
       "description": "Create a new, unsaved document from a template (`ref` from template.list) and make it active. Returns {doc_id, name}.",
       "id": "template.new",
       "journal": true,
@@ -2281,6 +2374,127 @@ expression: r
           }
         },
         "title": "SetLabelParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Turn the label a quarter turn (direction cw or ccw): width and height swap. With rotate_content (default true) every element turns with it about the label, so the design keeps its look; with false the elements stay where they are.",
+      "id": "doc.rotate_label",
+      "journal": true,
+      "kind": "edit",
+      "label": "Rotate label paper",
+      "menu": "label",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "additionalProperties": false,
+            "description": "Physical label stock.",
+            "properties": {
+              "corner_radius_mm": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "density": {
+                "description": "Preferred density; the model default is used when absent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "height_mm": {
+                "description": "Length along the feed, mm.",
+                "format": "double",
+                "type": "number"
+              },
+              "media": {
+                "default": "gap",
+                "description": "Media type of the label stock.",
+                "enum": [
+                  "gap",
+                  "black_mark",
+                  "continuous",
+                  "transparent"
+                ],
+                "type": "string"
+              },
+              "printer_model": {
+                "description": "Registry id of the intended printer model, e.g. `niimbot.b21_pro`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "width_mm": {
+                "description": "Width across the printhead, mm.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "width_mm",
+              "height_mm",
+              "corner_radius_mm",
+              "media"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "SetLabelOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "anyOf": [
+              {
+                "description": "Turn direction for `doc.rotate_label`.",
+                "oneOf": [
+                  {
+                    "const": "cw",
+                    "description": "A quarter turn clockwise.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "ccw",
+                    "description": "A quarter turn anticlockwise.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Quarter-turn direction (default `cw`)."
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rotate_content": {
+            "default": null,
+            "description": "Turn the elements with the paper (default true). With false only the label size swaps.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "title": "RotateLabelParams",
         "type": "object"
       },
       "undoable": true
@@ -8632,6 +8846,761 @@ expression: r
         "type": "object"
       },
       "shortcut": "Ctrl+D",
+      "undoable": true
+    },
+    {
+      "description": "Insert copies of elements (JSON as in doc.get, e.g. from another document) on top of the z-order, offset by dx_mm/dy_mm. New ids are assigned, groups among the pasted elements are kept as new groups, and locks are cleared. Images need their asset in the document or in `assets`. Returns {ids}.",
+      "id": "element.paste",
+      "journal": true,
+      "kind": "edit",
+      "label": "Paste",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "ids": {
+            "description": "Ids of the new elements, in the order given.",
+            "items": {
+              "description": "Stable element id, unique within a document.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "PasteOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "assets": {
+            "additionalProperties": {
+              "additionalProperties": false,
+              "description": "Embedded binary asset.",
+              "properties": {
+                "data_base64": {
+                  "description": "Standard base64 of the bytes.",
+                  "type": "string"
+                },
+                "mime": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "mime",
+                "data_base64"
+              ],
+              "type": "object"
+            },
+            "default": {},
+            "description": "Image assets the elements use that the document may not have, keyed by sha256 hex.",
+            "type": "object"
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dx_mm": {
+            "default": null,
+            "description": "Horizontal offset, mm (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "dy_mm": {
+            "default": null,
+            "description": "Vertical offset, mm (default 0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "elements": {
+            "description": "Elements as `doc.get` returns them; their ids are replaced.",
+            "items": {
+              "description": "A positioned element. The frame is the unrotated box; rotation is about its centre.",
+              "oneOf": [
+                {
+                  "properties": {
+                    "align": {
+                      "default": "left",
+                      "enum": [
+                        "left",
+                        "center",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "bold": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "direction": {
+                      "description": "Horizontal, or vertical: one character per row, top to bottom.",
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "horizontal"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "vertical",
+                          "description": "Characters stacked top to bottom; each source line is separated by a blank row.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "fit": {
+                      "default": "none",
+                      "description": "How text reacts when it does not fit its box.",
+                      "oneOf": [
+                        {
+                          "const": "none",
+                          "description": "Keep the size; overflow is reported by `doc.check`.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "shrink",
+                          "description": "Shrink the font until the text fits.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "font_family": {
+                      "default": "Noto Sans",
+                      "type": "string"
+                    },
+                    "font_size_pt": {
+                      "default": 12.0,
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "invert": {
+                      "default": false,
+                      "description": "White text on black.",
+                      "type": "boolean"
+                    },
+                    "italic": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "letter_spacing_mm": {
+                      "default": 0.0,
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "line_spacing": {
+                      "default": 1.0,
+                      "description": "Line height multiplier.",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "text": {
+                      "description": "Text; may contain `{{variable}}` bindings and newlines.",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "text",
+                      "type": "string"
+                    },
+                    "underline": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "valign": {
+                      "default": "top",
+                      "enum": [
+                        "top",
+                        "middle",
+                        "bottom"
+                      ],
+                      "type": "string"
+                    },
+                    "wrap": {
+                      "default": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "text"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "human_readable": {
+                      "default": "below",
+                      "enum": [
+                        "none",
+                        "below",
+                        "above"
+                      ],
+                      "type": "string"
+                    },
+                    "symbology": {
+                      "default": "code128",
+                      "description": "1D symbologies.",
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "code39",
+                            "code93",
+                            "ean13",
+                            "ean8",
+                            "upc_a",
+                            "upc_e",
+                            "itf",
+                            "codabar"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "code128",
+                          "description": "Code 128, code set chosen automatically.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "code128_a",
+                          "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "code128_b",
+                          "description": "Code 128 forced to code set B (printable ASCII).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "code128_c",
+                          "description": "Code 128 forced to code set C (an even number of digits).",
+                          "type": "string"
+                        },
+                        {
+                          "const": "gs1_128",
+                          "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "text_size_pt": {
+                      "default": 8.0,
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "type": {
+                      "const": "barcode",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "data"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "ecc": {
+                      "default": "M",
+                      "description": "QR error-correction level.",
+                      "enum": [
+                        "L",
+                        "M",
+                        "Q",
+                        "H"
+                      ],
+                      "type": "string"
+                    },
+                    "symbology": {
+                      "default": "qr",
+                      "description": "2D symbologies.",
+                      "enum": [
+                        "qr",
+                        "data_matrix",
+                        "pdf417",
+                        "aztec"
+                      ],
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "code2d",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "data"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "asset": {
+                      "description": "Key into [`Document::assets`].",
+                      "type": "string"
+                    },
+                    "brightness": {
+                      "default": 0.0,
+                      "description": "-1.0 … 1.0",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "contrast": {
+                      "default": 0.0,
+                      "description": "-1.0 … 1.0",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "dither": {
+                      "default": "floyd_steinberg",
+                      "description": "1-bit conversion for images.",
+                      "enum": [
+                        "threshold",
+                        "floyd_steinberg",
+                        "atkinson",
+                        "bayer"
+                      ],
+                      "type": "string"
+                    },
+                    "fit": {
+                      "default": "contain",
+                      "enum": [
+                        "contain",
+                        "cover",
+                        "stretch"
+                      ],
+                      "type": "string"
+                    },
+                    "invert": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "threshold": {
+                      "default": 128,
+                      "description": "0–255 cut-off for `threshold` and the gray point for dithering.",
+                      "format": "uint8",
+                      "maximum": 255,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": {
+                      "const": "image",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "asset"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "corner_radius_mm": {
+                      "default": 0.0,
+                      "description": "Rect only.",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "fill": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "stroke_mm": {
+                      "default": 0.3,
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "type": {
+                      "const": "rect",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "corner_radius_mm": {
+                      "default": 0.0,
+                      "description": "Rect only.",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "fill": {
+                      "default": false,
+                      "type": "boolean"
+                    },
+                    "stroke_mm": {
+                      "default": 0.3,
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "type": {
+                      "const": "ellipse",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "A line from the frame's top-left `(x, y)` to `(x + width, y + height)`.",
+                  "properties": {
+                    "dash_mm": {
+                      "description": "Dash and gap length in mm; solid when absent.",
+                      "items": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "stroke_mm": {
+                      "default": 0.3,
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "type": {
+                      "const": "line",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "A grid that fills its frame. Column widths and row heights are relative weights, so resizing\nthe element scales the table.",
+                  "properties": {
+                    "align": {
+                      "default": "center",
+                      "description": "Default cell alignment.",
+                      "enum": [
+                        "left",
+                        "center",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "cells": {
+                      "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
+                      "items": {
+                        "items": {
+                          "additionalProperties": false,
+                          "description": "One table cell. Style fields override the table defaults.",
+                          "properties": {
+                            "align": {
+                              "enum": [
+                                "left",
+                                "center",
+                                "right",
+                                null
+                              ],
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "bold": {
+                              "type": "boolean"
+                            },
+                            "font_size_pt": {
+                              "format": "double",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "invert": {
+                              "description": "White text on a black cell.",
+                              "type": "boolean"
+                            },
+                            "text": {
+                              "description": "Cell text; may contain `{{name}}` bindings and newlines.",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "type": "array"
+                    },
+                    "column_widths": {
+                      "description": "Relative column widths (weights > 0).",
+                      "items": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "font_family": {
+                      "default": "Noto Sans",
+                      "type": "string"
+                    },
+                    "font_size_pt": {
+                      "default": 8.0,
+                      "description": "Default cell font size; text shrinks to fit its cell.",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "merges": {
+                      "description": "Merged cell ranges; the top-left cell's content fills the range.",
+                      "items": {
+                        "additionalProperties": false,
+                        "description": "A rectangular block of cells, 0-based.",
+                        "properties": {
+                          "col": {
+                            "format": "uint",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "cols": {
+                            "format": "uint",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "row": {
+                            "format": "uint",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "rows": {
+                            "format": "uint",
+                            "minimum": 0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "row",
+                          "col",
+                          "rows",
+                          "cols"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "row_heights": {
+                      "description": "Relative row heights (weights > 0).",
+                      "items": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "stroke_mm": {
+                      "default": 0.3,
+                      "description": "Grid line width in mm; 0 hides the lines.",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "type": {
+                      "const": "table",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "column_widths",
+                    "row_heights",
+                    "cells"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "A built-in icon from the bundled set (`labely-render` lists the names).",
+                  "properties": {
+                    "icon": {
+                      "description": "Icon name, e.g. `fragile`, `keep_dry`, `this_way_up`, `recycle`.",
+                      "type": "string"
+                    },
+                    "invert": {
+                      "type": "boolean"
+                    },
+                    "keep_aspect": {
+                      "default": true,
+                      "description": "Keep the icon's aspect ratio inside the frame (default true).",
+                      "type": "boolean"
+                    },
+                    "type": {
+                      "const": "icon",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "icon"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "description": "A frame drawn just inside the element's box.",
+                  "properties": {
+                    "corner_radius_mm": {
+                      "default": 0.0,
+                      "description": "Corner radius in mm (single, double, thick_thin, dashed, dotted).",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "stroke_mm": {
+                      "default": 0.5,
+                      "description": "Line width in mm.",
+                      "format": "double",
+                      "type": "number"
+                    },
+                    "style": {
+                      "default": "single",
+                      "description": "Decorative frame styles.",
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "single",
+                            "double",
+                            "dashed",
+                            "dotted"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "thick_thin",
+                          "description": "A thick outer line and a thin inner line.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "corners",
+                          "description": "Corner brackets only.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "ticket",
+                          "description": "Concave (ticket-style) corners.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "scallop",
+                          "description": "Scalloped edge.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "type": {
+                      "const": "border",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                }
+              ],
+              "properties": {
+                "flip_h": {
+                  "description": "Mirror left–right inside the frame (before rotation).",
+                  "type": "boolean"
+                },
+                "flip_v": {
+                  "description": "Mirror top–bottom inside the frame (before rotation).",
+                  "type": "boolean"
+                },
+                "group": {
+                  "description": "Group id shared by grouped elements (`element.group`); groups are flat.",
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "height_mm": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "hidden": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "id": {
+                  "description": "Stable element id, unique within a document.",
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "locked": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rotation_deg": {
+                  "default": 0.0,
+                  "format": "double",
+                  "type": "number"
+                },
+                "width_mm": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "x_mm": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "y_mm": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "x_mm",
+                "y_mm",
+                "width_mm",
+                "height_mm"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "elements"
+        ],
+        "title": "PasteParams",
+        "type": "object"
+      },
       "undoable": true
     },
     {
