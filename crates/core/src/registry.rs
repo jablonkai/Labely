@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
 use crate::commands::{
-    arrange, data, decor, device, doc, element, export, history, images, jobs, meta, render,
+    arrange, data, decor, device, doc, element, export, history, images, jobs, meta, paper, render,
     selection, table, template, variable,
 };
 use crate::schema::{output_schema, params_schema};
@@ -306,6 +306,12 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<template::TemplateFolder>(),
         Entry::of::<doc::DocGet>(),
         Entry::of::<doc::DocSetLabel>().in_menu("label", None),
+        Entry::of::<paper::PaperList>().in_menu("label", None),
+        Entry::of::<paper::PaperApply>(),
+        Entry::of::<paper::PaperAdd>(),
+        Entry::of::<paper::PaperDelete>(),
+        Entry::of::<paper::PaperLink>(),
+        Entry::of::<paper::PaperUnlink>(),
         Entry::of::<render::DocCheck>().in_menu("label", Some("Ctrl+K")),
         Entry::of::<element::AddText>().in_menu("insert", Some("T")),
         Entry::of::<element::AddBarcode>().in_menu("insert", Some("B")),
@@ -353,6 +359,10 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<device::DeviceConnect>(),
         Entry::of::<device::DeviceDisconnect>(),
         Entry::of::<device::DeviceStatusCmd>(),
+        Entry::of::<paper::PaperDetect>().in_menu("print", None),
+        Entry::of::<device::DeviceCalibrate>().in_menu("print", None),
+        Entry::of::<device::DeviceSettingsCmd>(),
+        Entry::of::<device::DeviceSetSettings>(),
         Entry::of::<device::PrintSubmit>().in_menu("print", Some("Ctrl+P")),
         Entry::of::<jobs::JobList>(),
         Entry::of::<jobs::JobGet>(),

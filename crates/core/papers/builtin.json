@@ -1,0 +1,331 @@
+{
+ "version": 1,
+ "papers": [
+  {
+   "id": "std:12x22",
+   "name": "12 × 22 mm",
+   "width_mm": 12,
+   "height_mm": 22,
+   "media": "gap"
+  },
+  {
+   "id": "std:12x30",
+   "name": "12 × 30 mm",
+   "width_mm": 12,
+   "height_mm": 30,
+   "media": "gap"
+  },
+  {
+   "id": "std:12x40",
+   "name": "12 × 40 mm",
+   "width_mm": 12,
+   "height_mm": 40,
+   "media": "gap"
+  },
+  {
+   "id": "std:14x22",
+   "name": "14 × 22 mm",
+   "width_mm": 14,
+   "height_mm": 22,
+   "media": "gap"
+  },
+  {
+   "id": "std:14x30",
+   "name": "14 × 30 mm",
+   "width_mm": 14,
+   "height_mm": 30,
+   "media": "gap"
+  },
+  {
+   "id": "std:14x40",
+   "name": "14 × 40 mm",
+   "width_mm": 14,
+   "height_mm": 40,
+   "media": "gap"
+  },
+  {
+   "id": "std:14x50",
+   "name": "14 × 50 mm",
+   "width_mm": 14,
+   "height_mm": 50,
+   "media": "gap"
+  },
+  {
+   "id": "std:15x30",
+   "name": "15 × 30 mm",
+   "width_mm": 15,
+   "height_mm": 30,
+   "media": "gap"
+  },
+  {
+   "id": "std:15x50",
+   "name": "15 × 50 mm",
+   "width_mm": 15,
+   "height_mm": 50,
+   "media": "gap"
+  },
+  {
+   "id": "std:20x10",
+   "name": "20 × 10 mm",
+   "width_mm": 20,
+   "height_mm": 10,
+   "media": "gap"
+  },
+  {
+   "id": "std:20x20",
+   "name": "20 × 20 mm",
+   "width_mm": 20,
+   "height_mm": 20,
+   "media": "gap"
+  },
+  {
+   "id": "std:25x15",
+   "name": "25 × 15 mm",
+   "width_mm": 25,
+   "height_mm": 15,
+   "media": "gap"
+  },
+  {
+   "id": "std:25x25",
+   "name": "25 × 25 mm",
+   "width_mm": 25,
+   "height_mm": 25,
+   "media": "gap"
+  },
+  {
+   "id": "std:30x15",
+   "name": "30 × 15 mm",
+   "width_mm": 30,
+   "height_mm": 15,
+   "media": "gap"
+  },
+  {
+   "id": "std:30x20",
+   "name": "30 × 20 mm",
+   "width_mm": 30,
+   "height_mm": 20,
+   "media": "gap"
+  },
+  {
+   "id": "std:30x30",
+   "name": "30 × 30 mm",
+   "width_mm": 30,
+   "height_mm": 30,
+   "media": "gap"
+  },
+  {
+   "id": "std:30x40",
+   "name": "30 × 40 mm",
+   "width_mm": 30,
+   "height_mm": 40,
+   "media": "gap"
+  },
+  {
+   "id": "std:40x20",
+   "name": "40 × 20 mm",
+   "width_mm": 40,
+   "height_mm": 20,
+   "media": "gap"
+  },
+  {
+   "id": "std:40x30",
+   "name": "40 × 30 mm",
+   "width_mm": 40,
+   "height_mm": 30,
+   "media": "gap"
+  },
+  {
+   "id": "std:40x40",
+   "name": "40 × 40 mm",
+   "width_mm": 40,
+   "height_mm": 40,
+   "media": "gap"
+  },
+  {
+   "id": "std:40x60",
+   "name": "40 × 60 mm",
+   "width_mm": 40,
+   "height_mm": 60,
+   "media": "gap"
+  },
+  {
+   "id": "std:40x80",
+   "name": "40 × 80 mm",
+   "width_mm": 40,
+   "height_mm": 80,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x15",
+   "name": "50 × 15 mm",
+   "width_mm": 50,
+   "height_mm": 15,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x20",
+   "name": "50 × 20 mm",
+   "width_mm": 50,
+   "height_mm": 20,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x25",
+   "name": "50 × 25 mm",
+   "width_mm": 50,
+   "height_mm": 25,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x30",
+   "name": "50 × 30 mm",
+   "width_mm": 50,
+   "height_mm": 30,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x40",
+   "name": "50 × 40 mm",
+   "width_mm": 50,
+   "height_mm": 40,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x50",
+   "name": "50 × 50 mm",
+   "width_mm": 50,
+   "height_mm": 50,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x70",
+   "name": "50 × 70 mm",
+   "width_mm": 50,
+   "height_mm": 70,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x80",
+   "name": "50 × 80 mm",
+   "width_mm": 50,
+   "height_mm": 80,
+   "media": "gap"
+  },
+  {
+   "id": "std:25x25-round",
+   "name": "25 × 25 mm, rounded",
+   "width_mm": 25,
+   "height_mm": 25,
+   "corner_radius_mm": 3,
+   "media": "gap"
+  },
+  {
+   "id": "std:30x30-round",
+   "name": "30 × 30 mm, rounded",
+   "width_mm": 30,
+   "height_mm": 30,
+   "corner_radius_mm": 3,
+   "media": "gap"
+  },
+  {
+   "id": "std:40x40-round",
+   "name": "40 × 40 mm, rounded",
+   "width_mm": 40,
+   "height_mm": 40,
+   "corner_radius_mm": 4,
+   "media": "gap"
+  },
+  {
+   "id": "std:50x50-round",
+   "name": "50 × 50 mm, rounded",
+   "width_mm": 50,
+   "height_mm": 50,
+   "corner_radius_mm": 4,
+   "media": "gap"
+  },
+  {
+   "id": "std:30x20-clear",
+   "name": "30 × 20 mm, transparent",
+   "width_mm": 30,
+   "height_mm": 20,
+   "media": "transparent"
+  },
+  {
+   "id": "std:40x30-clear",
+   "name": "40 × 30 mm, transparent",
+   "width_mm": 40,
+   "height_mm": 30,
+   "media": "transparent"
+  },
+  {
+   "id": "std:50x30-clear",
+   "name": "50 × 30 mm, transparent",
+   "width_mm": 50,
+   "height_mm": 30,
+   "media": "transparent"
+  },
+  {
+   "id": "std:40x30-mark",
+   "name": "40 × 30 mm, black mark",
+   "width_mm": 40,
+   "height_mm": 30,
+   "media": "black_mark"
+  },
+  {
+   "id": "std:50x30-mark",
+   "name": "50 × 30 mm, black mark",
+   "width_mm": 50,
+   "height_mm": 30,
+   "media": "black_mark"
+  },
+  {
+   "id": "std:12-roll",
+   "name": "12 mm continuous roll",
+   "width_mm": 12,
+   "height_mm": 30,
+   "media": "continuous"
+  },
+  {
+   "id": "std:15-roll",
+   "name": "15 mm continuous roll",
+   "width_mm": 15,
+   "height_mm": 30,
+   "media": "continuous"
+  },
+  {
+   "id": "std:20-roll",
+   "name": "20 mm continuous roll",
+   "width_mm": 20,
+   "height_mm": 30,
+   "media": "continuous"
+  },
+  {
+   "id": "std:25-roll",
+   "name": "25 mm continuous roll",
+   "width_mm": 25,
+   "height_mm": 40,
+   "media": "continuous"
+  },
+  {
+   "id": "std:30-roll",
+   "name": "30 mm continuous roll",
+   "width_mm": 30,
+   "height_mm": 40,
+   "media": "continuous"
+  },
+  {
+   "id": "std:40-roll",
+   "name": "40 mm continuous roll",
+   "width_mm": 40,
+   "height_mm": 40,
+   "media": "continuous"
+  },
+  {
+   "id": "std:50-roll",
+   "name": "50 mm continuous roll",
+   "width_mm": 50,
+   "height_mm": 40,
+   "media": "continuous"
+  }
+ ]
+}

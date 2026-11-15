@@ -38,7 +38,7 @@ pub struct DocIdOutput {
     pub doc_id: String,
 }
 
-fn validate_label(l: &LabelSpec) -> Result<(), CommandError> {
+pub(crate) fn validate_label(l: &LabelSpec) -> Result<(), CommandError> {
     check_mm("width_mm", l.width_mm, true)?;
     check_mm("height_mm", l.height_mm, true)?;
     check_mm("corner_radius_mm", l.corner_radius_mm, false)?;

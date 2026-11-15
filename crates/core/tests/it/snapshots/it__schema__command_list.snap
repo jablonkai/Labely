@@ -2258,7 +2258,505 @@ expression: r
       "undoable": true
     },
     {
-      "description": "Find print problems. Rules: out_of_bounds, in_margin (with margin_mm), outside_printable, label_too_wide, dpi_mismatch, density_out_of_range, paper_mismatch (RFID media of the printer), binding_missing, binding_empty, render_failed, text_overflow, text_shrunk (< 5 pt is a warning), encode_failed, module_too_narrow (< 2 dots), quiet_zone, code_unreadable (render, decode, compare), bad_asset, font_fallback, low_contrast. Returns {ok, dpi, issues:[{rule, severity, element_id?, message, hint}]}; ok is false when any issue has severity error.",
+      "description": "List label papers: Labely's bundled sizes (`std:…`) and the user's own (`my:…`), with any RFID barcodes linked to them. Filter by query (id, name, `50x30`, barcode), model (fits the printer's width), media and custom. Sizes in mm.",
+      "id": "paper.list",
+      "journal": false,
+      "kind": "query",
+      "label": "Label papers",
+      "menu": "label",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "papers": {
+            "items": {
+              "description": "A paper as listed: the paper plus where it comes from and its linked barcodes.",
+              "properties": {
+                "barcodes": {
+                  "description": "RFID barcodes linked to this paper.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "corner_radius_mm": {
+                  "default": 0.0,
+                  "format": "double",
+                  "type": "number"
+                },
+                "custom": {
+                  "description": "True for the user's own papers (`my:`), false for bundled ones (`std:`).",
+                  "type": "boolean"
+                },
+                "height_mm": {
+                  "description": "Length along the feed, mm (the default length for continuous rolls).",
+                  "format": "double",
+                  "type": "number"
+                },
+                "id": {
+                  "description": "`std:<…>` (bundled) or `my:<…>` (user).",
+                  "type": "string"
+                },
+                "media": {
+                  "default": "gap",
+                  "description": "Media type of the label stock.",
+                  "enum": [
+                    "gap",
+                    "black_mark",
+                    "continuous",
+                    "transparent"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "width_mm": {
+                  "description": "Width across the printhead, mm.",
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "width_mm",
+                "height_mm",
+                "corner_radius_mm",
+                "media",
+                "custom"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "papers"
+        ],
+        "title": "ListOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "custom": {
+            "default": null,
+            "description": "Only the user's papers (true) or only bundled ones (false).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "media": {
+            "default": null,
+            "description": "Media type of the label stock.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "default": null,
+            "description": "Only papers that fit this printer model (width ≤ its print width), e.g.\n`niimbot.b21_pro`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "default": null,
+            "description": "Search in id, name, size (`50x30`) and linked RFID barcodes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "ListParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Set the label's width, height, corner radius and media from a paper. Elements keep their positions. Undoable.",
+      "id": "paper.apply",
+      "journal": true,
+      "kind": "edit",
+      "label": "Use label paper",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "label": {
+            "additionalProperties": false,
+            "description": "Physical label stock.",
+            "properties": {
+              "corner_radius_mm": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "density": {
+                "description": "Preferred density; the model default is used when absent.",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "height_mm": {
+                "description": "Length along the feed, mm.",
+                "format": "double",
+                "type": "number"
+              },
+              "media": {
+                "default": "gap",
+                "description": "Media type of the label stock.",
+                "enum": [
+                  "gap",
+                  "black_mark",
+                  "continuous",
+                  "transparent"
+                ],
+                "type": "string"
+              },
+              "printer_model": {
+                "description": "Registry id of the intended printer model, e.g. `niimbot.b21_pro`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "width_mm": {
+                "description": "Width across the printhead, mm.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "width_mm",
+              "height_mm",
+              "corner_radius_mm",
+              "media"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "ApplyOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Paper id from paper.list or paper.detect.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "ApplyParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
+      "description": "Add a paper to the user's library. Sizes in mm; media defaults to gap. Returns the paper with its new `my:` id. With `barcode`, also links that RFID barcode to it. Not undoable; remove it with paper.delete.",
+      "id": "paper.add",
+      "journal": false,
+      "kind": "edit",
+      "label": "Add label paper",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A paper as listed: the paper plus where it comes from and its linked barcodes.",
+        "properties": {
+          "barcodes": {
+            "description": "RFID barcodes linked to this paper.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "corner_radius_mm": {
+            "default": 0.0,
+            "format": "double",
+            "type": "number"
+          },
+          "custom": {
+            "description": "True for the user's own papers (`my:`), false for bundled ones (`std:`).",
+            "type": "boolean"
+          },
+          "height_mm": {
+            "description": "Length along the feed, mm (the default length for continuous rolls).",
+            "format": "double",
+            "type": "number"
+          },
+          "id": {
+            "description": "`std:<…>` (bundled) or `my:<…>` (user).",
+            "type": "string"
+          },
+          "media": {
+            "default": "gap",
+            "description": "Media type of the label stock.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "width_mm": {
+            "description": "Width across the printhead, mm.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "width_mm",
+          "height_mm",
+          "corner_radius_mm",
+          "media",
+          "custom"
+        ],
+        "title": "PaperEntry",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "barcode": {
+            "default": null,
+            "description": "Also link this RFID barcode to the new paper.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "corner_radius_mm": {
+            "default": null,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "height_mm": {
+            "description": "Length along the feed, mm.",
+            "format": "double",
+            "type": "number"
+          },
+          "media": {
+            "default": null,
+            "description": "Default `gap`.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "width_mm": {
+            "description": "Width across the printhead, mm.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "width_mm",
+          "height_mm"
+        ],
+        "title": "AddParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Delete one of the user's papers (`my:…`) and its barcode links. Bundled papers cannot be deleted. Cannot be undone.",
+      "id": "paper.delete",
+      "journal": false,
+      "kind": "edit",
+      "label": "Delete label paper",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "unlinked": {
+            "description": "Barcode links removed with it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "unlinked"
+        ],
+        "title": "DeleteOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Paper id from paper.list.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "IdParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Remember that rolls with this RFID barcode are paper `id`, so paper.detect and doc.check recognise them. Replaces an existing link. Not undoable.",
+      "id": "paper.link",
+      "journal": false,
+      "kind": "edit",
+      "label": "Link RFID paper",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "barcode": {
+            "type": "string"
+          },
+          "id": {
+            "description": "Linked paper id; absent after paper.unlink.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous": {
+            "description": "The paper it was linked to before, if any.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "barcode"
+        ],
+        "title": "LinkOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "barcode": {
+            "description": "RFID barcode, as reported by device.status or paper.detect.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Paper id to link it to (bundled or user).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "barcode",
+          "id"
+        ],
+        "title": "LinkParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Forget an RFID barcode link. Not undoable.",
+      "id": "paper.unlink",
+      "journal": false,
+      "kind": "edit",
+      "label": "Unlink RFID paper",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "barcode": {
+            "type": "string"
+          },
+          "id": {
+            "description": "Linked paper id; absent after paper.unlink.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous": {
+            "description": "The paper it was linked to before, if any.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "barcode"
+        ],
+        "title": "LinkOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "barcode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "barcode"
+        ],
+        "title": "UnlinkParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Find print problems. Rules: out_of_bounds, in_margin (with margin_mm), outside_printable, label_too_wide, dpi_mismatch, density_out_of_range, paper_mismatch (the printer's RFID paper: size when the barcode is linked in the paper library, else media), binding_missing, binding_empty, render_failed, text_overflow, text_shrunk (< 5 pt is a warning), encode_failed, module_too_narrow (< 2 dots), quiet_zone, code_unreadable (render, decode, compare), bad_asset, font_fallback, low_contrast. Returns {ok, dpi, issues:[{rule, severity, element_id?, message, hint}]}; ok is false when any issue has severity error.",
       "id": "doc.check",
       "journal": false,
       "kind": "query",
@@ -10122,6 +10620,382 @@ expression: r
           }
         },
         "title": "AddressParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Read the loaded roll's RFID tag and look its barcode up in the paper library. Returns {rfid, barcode, media, remaining, paper?, matches_label?}. When paper is found and matches_label is false, paper.apply {id} sets the label to it. An unknown barcode can be linked with paper.link.",
+      "id": "paper.detect",
+      "journal": false,
+      "kind": "device",
+      "label": "Detect label paper",
+      "menu": "print",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "barcode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matches_label": {
+            "description": "Whether the document's label matches the paper (size and media), or only the media\nwhen the paper is unknown. Absent without a document or tag.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "media": {
+            "description": "Media type the tag reports.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paper": {
+            "description": "The linked paper; absent when the barcode is not linked yet (use paper.link).",
+            "properties": {
+              "barcodes": {
+                "description": "RFID barcodes linked to this paper.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "corner_radius_mm": {
+                "default": 0.0,
+                "format": "double",
+                "type": "number"
+              },
+              "custom": {
+                "description": "True for the user's own papers (`my:`), false for bundled ones (`std:`).",
+                "type": "boolean"
+              },
+              "height_mm": {
+                "description": "Length along the feed, mm (the default length for continuous rolls).",
+                "format": "double",
+                "type": "number"
+              },
+              "id": {
+                "description": "`std:<…>` (bundled) or `my:<…>` (user).",
+                "type": "string"
+              },
+              "media": {
+                "default": "gap",
+                "description": "Media type of the label stock.",
+                "enum": [
+                  "gap",
+                  "black_mark",
+                  "continuous",
+                  "transparent"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "width_mm": {
+                "description": "Width across the printhead, mm.",
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "width_mm",
+              "height_mm",
+              "corner_radius_mm",
+              "media",
+              "custom"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "remaining": {
+            "description": "Labels left on the roll (total − used), as the tag reports it.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rfid": {
+            "description": "False when the printer reported no RFID tag (no paper, or paper without a tag).",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "rfid"
+        ],
+        "title": "DetectOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Printer address; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "description": "Document to compare with (default: the active one, if any).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "DetectParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Calibrate the printer's label sensor: it feeds labels until it finds a label edge (gap or black mark). Run it after loading a new kind of paper when labels print out of position. media defaults to the active label's. Feeds paper, so it needs print permission like print.submit.",
+      "id": "device.calibrate",
+      "journal": false,
+      "kind": "device",
+      "label": "Calibrate paper",
+      "menu": "print",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "media": {
+            "description": "Media type of the label stock.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "media"
+        ],
+        "title": "CalibrateOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Printer address; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "media": {
+            "default": null,
+            "description": "Paper type to calibrate for; defaults to the active document's label media, else gap.",
+            "enum": [
+              "gap",
+              "black_mark",
+              "continuous",
+              "transparent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "CalibrateParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Read the printer's settings: auto_off_level (1–4; NIIMBOT 15, 30, 45, 60 min), sound_power and sound_bluetooth beeps. Settings the printer does not report are left out.",
+      "id": "device.settings",
+      "journal": false,
+      "kind": "device",
+      "label": "Printer settings",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "settings": {
+            "description": "Settings the printer reported; missing ones are unsupported or unknown.",
+            "properties": {
+              "auto_off_level": {
+                "description": "Auto power-off level 1–4 (1 = shortest; NIIMBOT: 15, 30, 45, 60 min).",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "sound_bluetooth": {
+                "description": "Beep when a Bluetooth host connects.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "sound_power": {
+                "description": "Beep on power on and off.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "address",
+          "settings"
+        ],
+        "title": "SettingsOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Device address, e.g. `ble:…`, `usb:…`; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "AddressParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
+      "description": "Change printer settings; only the given fields change. auto_off_level 1–4, sound_power and sound_bluetooth on/off. Returns the settings read back.",
+      "id": "device.set_settings",
+      "journal": false,
+      "kind": "device",
+      "label": "Change printer settings",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "settings": {
+            "description": "Settings the printer reported; missing ones are unsupported or unknown.",
+            "properties": {
+              "auto_off_level": {
+                "description": "Auto power-off level 1–4 (1 = shortest; NIIMBOT: 15, 30, 45, 60 min).",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "sound_bluetooth": {
+                "description": "Beep when a Bluetooth host connects.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "sound_power": {
+                "description": "Beep on power on and off.",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "address",
+          "settings"
+        ],
+        "title": "SettingsOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": null,
+            "description": "Printer address; defaults to the single connected printer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "auto_off_level": {
+            "default": null,
+            "description": "Auto power-off level 1–4 (1 = shortest).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "sound_bluetooth": {
+            "default": null,
+            "description": "Beep when a Bluetooth host connects.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "sound_power": {
+            "default": null,
+            "description": "Beep on power on and off.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "title": "SetSettingsParams",
         "type": "object"
       },
       "undoable": false

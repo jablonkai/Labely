@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use labely_core::commands::interpolate;
 use labely_core::document::{Document, ElementKind, MediaType, TextFit};
 use labely_core::services::{
-    DecodedCode, DeviceError, DeviceHub, DeviceInfo, DeviceStatus, JobControl, ModelInfo,
-    PaperInfo, PrintReport, PrintRequest, RenderError, RenderIssue, RenderOptions, RenderOutput,
-    Renderer, Services,
+    DecodedCode, DeviceError, DeviceHub, DeviceInfo, DeviceSettings, DeviceStatus, JobControl,
+    ModelInfo, PaperInfo, PrintReport, PrintRequest, RenderError, RenderIssue, RenderOptions,
+    RenderOutput, Renderer, Services,
 };
 use labely_core::{Bitmap1, Session};
 
@@ -309,6 +309,9 @@ struct HubState {
     hold: bool,
     /// Prints currently blocked by `hold`.
     held: usize,
+    /// Media of each calibration, in order.
+    calibrations: Vec<MediaType>,
+    settings: DeviceSettings,
 }
 
 /// One fake printer at [`FAKE_ADDRESS`]; records every [`PrintRequest`].
@@ -330,6 +333,11 @@ impl FakeDeviceHub {
     /// Paper reported by `status` (RFID).
     pub fn set_paper(&self, paper: Option<PaperInfo>) {
         lock(&self.state).paper = paper;
+    }
+
+    /// Media of each `calibrate` call so far.
+    pub fn calibrations(&self) -> Vec<MediaType> {
+        lock(&self.state).calibrations.clone()
     }
 
     /// Make the next `print` fail with `err`.
@@ -449,6 +457,36 @@ impl DeviceHub for FakeDeviceHub {
             pages_printed,
             duration_ms: 0,
         })
+    }
+
+    fn calibrate(&self, address: &str, media: MediaType) -> Result<(), DeviceError> {
+        self.require(address)?;
+        lock(&self.state).calibrations.push(media);
+        Ok(())
+    }
+
+    fn settings(&self, address: &str) -> Result<DeviceSettings, DeviceError> {
+        self.require(address)?;
+        Ok(lock(&self.state).settings.clone())
+    }
+
+    fn set_settings(
+        &self,
+        address: &str,
+        patch: &DeviceSettings,
+    ) -> Result<DeviceSettings, DeviceError> {
+        self.require(address)?;
+        let mut st = lock(&self.state);
+        if patch.auto_off_level.is_some() {
+            st.settings.auto_off_level = patch.auto_off_level;
+        }
+        if patch.sound_power.is_some() {
+            st.settings.sound_power = patch.sound_power;
+        }
+        if patch.sound_bluetooth.is_some() {
+            st.settings.sound_bluetooth = patch.sound_bluetooth;
+        }
+        Ok(st.settings.clone())
     }
 }
 

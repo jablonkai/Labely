@@ -101,6 +101,20 @@ pub fn model_id(p: &Packet) -> Result<u16, ParseError> {
     }
 }
 
+/// Auto-off level from a PrinterInfo type 7 reply (0x47).
+pub fn auto_off(p: &Packet) -> Result<u8, ParseError> {
+    check(p, cmd::PRINTER_INFO + 7)?;
+    need(p, 1)?;
+    Ok(p.payload[0])
+}
+
+/// Sound setting reply (0x68): `[mode, kind, on]`.
+pub fn sound(p: &Packet) -> Result<bool, ParseError> {
+    check(p, cmd::SOUND_RESP)?;
+    need(p, 3)?;
+    Ok(p.payload[2] != 0)
+}
+
 /// Generic boolean setter / page reply.
 pub fn ok(p: &Packet, expected: u8) -> Result<bool, ParseError> {
     check(p, expected)?;
@@ -351,6 +365,18 @@ mod tests {
 
     fn pk(cmd: u8, payload: &[u8]) -> Packet {
         Packet::small(cmd, payload)
+    }
+
+    #[test]
+    fn settings_replies() {
+        assert_eq!(auto_off(&pk(0x47, &[3])).unwrap(), 3);
+        assert!(auto_off(&pk(0x47, &[])).is_err());
+        assert!(sound(&pk(0x68, &[2, 2, 1])).unwrap());
+        assert!(!sound(&pk(0x68, &[2, 1, 0])).unwrap());
+        assert!(matches!(
+            sound(&pk(cmd::NOT_SUPPORTED, &[])),
+            Err(ParseError::NotSupported)
+        ));
     }
 
     #[test]

@@ -87,7 +87,7 @@ Phase 3 lands in slices, one pull request each.
 | 3.3 Editor | align, distribute, group, lock, snapping, grid, shortcuts, label colour (ADR-0017) | done |
 | 3.4 Templates | starter set, local library and folders, PNG/PDF export, image and multi-image import (ADR-0018) | done |
 | 3.5a Printing | print queue (pause, resume, cancel), local print history with reopen (ADR-0019) | done |
-| 3.5b Device | label paper database, RFID auto-match, calibration, device settings | next |
+| 3.5b Device | label paper library, RFID barcode links and detection, calibration, auto-off and sound settings (ADR-0020) | done |
 
 ## Phase 4: Android shell + AppFunctions
 

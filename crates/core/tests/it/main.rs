@@ -10,6 +10,7 @@ mod elements;
 mod file;
 mod history;
 mod jobs;
+mod paper;
 mod phase2;
 mod schema;
 mod templates;

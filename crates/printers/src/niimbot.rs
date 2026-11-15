@@ -4,11 +4,11 @@ use std::time::{Duration, Instant};
 
 use labely_core::document::MediaType;
 use labely_core::services::{
-    DeviceError, DeviceStatus, JobControl, PaperInfo, PrintReport, PrintRequest,
+    DeviceError, DeviceSettings, DeviceStatus, JobControl, PaperInfo, PrintReport, PrintRequest,
 };
 use labely_protocol::RasterView;
 use labely_protocol::niimbot::job::{self, JobSettings, PrintTask, Retry, Step};
-use labely_protocol::niimbot::request::{self, HeartbeatType, InfoType, LabelType};
+use labely_protocol::niimbot::request::{self, HeartbeatType, InfoType, LabelType, SoundKind};
 use labely_protocol::niimbot::response::{self, ConnectResult, ParseError, ProtocolVersion};
 use labely_protocol::niimbot::{Decoder, Packet, cmd};
 use labely_transport::{Transport, TransportError};
@@ -20,6 +20,10 @@ use crate::registry::{Model, Registry};
 /// Reply timeout for one request.
 const REPLY_TIMEOUT: Duration = Duration::from_millis(2000);
 const CONNECT_ATTEMPTS: u32 = 5;
+/// Calibration feeds labels until the sensor finds an edge; allow it time.
+const CALIBRATE_TIMEOUT: Duration = Duration::from_secs(20);
+/// Settings reads are optional; give up quickly on firmware that ignores them.
+const SETTING_TIMEOUT: Duration = Duration::from_millis(800);
 /// Model ids whose lid bit is inverted (docs/protocol.md §9).
 const LID_INVERTED: &[u16] = &[
     512, 513, 514, 2304, 1792, 3584, 5120, 2560, 3840, 4352, 272, 273, 274,
@@ -144,6 +148,50 @@ impl NiimbotDriver {
             self.decoder.push(&bytes);
         }
         let _ = self.decoder.drain_packets();
+    }
+
+    /// Send `packet` and parse the reply with `parse`; `None` if the printer does not answer
+    /// or does not support the request.
+    fn try_read<T>(
+        &mut self,
+        packet: &Packet,
+        expect: u8,
+        parse: impl Fn(&Packet) -> Result<T, ParseError>,
+    ) -> Result<Option<T>, DeviceError> {
+        self.send(packet)?;
+        match self.wait_for(expect, SETTING_TIMEOUT) {
+            Ok(p) => match parse(&p) {
+                Ok(v) => Ok(Some(v)),
+                Err(e) => {
+                    debug!(cmd = packet.cmd, %e, "setting not readable");
+                    Ok(None)
+                }
+            },
+            Err(DeviceError::Timeout(_)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Send a setter and require a positive reply.
+    fn set(&mut self, packet: &Packet, expect: u8, what: &str) -> Result<(), DeviceError> {
+        let reply = self.exchange(packet, expect)?;
+        let accepted = match response::ok(&reply, expect) {
+            Ok(v) => v,
+            Err(ParseError::NotSupported) => {
+                return Err(DeviceError::Unavailable(format!(
+                    "this printer does not support changing {what}"
+                )));
+            }
+            Err(e) => return Err(parse_err(e)),
+        };
+        if accepted {
+            Ok(())
+        } else {
+            Err(DeviceError::Printer {
+                message: format!("the printer rejected the {what} change"),
+                hint: "check the value is supported by this model".into(),
+            })
+        }
     }
 
     fn resolve_task(&self, model: &Model) -> Result<PrintTask, DeviceError> {
@@ -383,6 +431,80 @@ impl Driver for NiimbotDriver {
             pages_printed: printed?,
             duration_ms: started.elapsed().as_millis() as u64,
         })
+    }
+
+    fn calibrate(&mut self, media: MediaType) -> Result<(), DeviceError> {
+        self.drain_input();
+        self.send(&request::calibrate(label_type(media)))?;
+        let reply = self.wait_for(cmd::CALIBRATE_RESP, CALIBRATE_TIMEOUT)?;
+        match response::check(&reply, cmd::CALIBRATE_RESP) {
+            Ok(p) => {
+                debug!(payload = ?p.payload, "calibration done");
+                Ok(())
+            }
+            Err(ParseError::NotSupported) => Err(DeviceError::Unavailable(
+                "this printer does not support calibration".into(),
+            )),
+            Err(e) => Err(parse_err(e)),
+        }
+    }
+
+    fn settings(&mut self) -> Result<DeviceSettings, DeviceError> {
+        self.drain_input();
+        let auto_off_level = self.try_read(
+            &request::printer_info(InfoType::AutoOff),
+            InfoType::AutoOff.response_cmd(),
+            response::auto_off,
+        )?;
+        let sound_power = self.try_read(
+            &request::sound_get(SoundKind::Power),
+            cmd::SOUND_RESP,
+            response::sound,
+        )?;
+        let sound_bluetooth = self.try_read(
+            &request::sound_get(SoundKind::Bluetooth),
+            cmd::SOUND_RESP,
+            response::sound,
+        )?;
+        Ok(DeviceSettings {
+            auto_off_level: auto_off_level.filter(|l| request::AUTO_OFF_LEVELS.contains(l)),
+            sound_power,
+            sound_bluetooth,
+        })
+    }
+
+    fn set_settings(&mut self, patch: &DeviceSettings) -> Result<(), DeviceError> {
+        self.drain_input();
+        if let Some(level) = patch.auto_off_level {
+            if !request::AUTO_OFF_LEVELS.contains(&level) {
+                return Err(DeviceError::Other(format!(
+                    "auto-off level {level} is not 1–4"
+                )));
+            }
+            self.set(
+                &request::set_auto_off(level),
+                cmd::SET_AUTO_OFF_RESP,
+                "the auto-off time",
+            )?;
+        }
+        for (kind, value) in [
+            (SoundKind::Power, patch.sound_power),
+            (SoundKind::Bluetooth, patch.sound_bluetooth),
+        ] {
+            if let Some(on) = value {
+                let reply = self.exchange(&request::sound_set(kind, on), cmd::SOUND_RESP)?;
+                match response::check(&reply, cmd::SOUND_RESP) {
+                    Ok(_) => {}
+                    Err(ParseError::NotSupported) => {
+                        return Err(DeviceError::Unavailable(
+                            "this printer does not support sound settings".into(),
+                        ));
+                    }
+                    Err(e) => return Err(parse_err(e)),
+                }
+            }
+        }
+        Ok(())
     }
 
     fn close(&mut self) {

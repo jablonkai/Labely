@@ -41,7 +41,12 @@ pub struct StudioOptions {
     pub template_dir: Option<PathBuf>,
     /// Print history; default `<app-data>/history`.
     pub history_dir: Option<PathBuf>,
+    /// The user's papers and RFID links; default `<app-data>/papers.json`.
+    pub paper_file: Option<PathBuf>,
 }
+
+/// File name of the user's paper library under `<app-data>`.
+pub const PAPER_FILE: &str = "papers.json";
 
 impl Default for StudioOptions {
     fn default() -> Self {
@@ -55,6 +60,7 @@ impl Default for StudioOptions {
             connection_file: None,
             template_dir: None,
             history_dir: None,
+            paper_file: None,
         }
     }
 }
@@ -99,6 +105,8 @@ pub enum Dialog {
     Templates(crate::templates::Gallery),
     SaveTemplate(crate::templates::SaveForm),
     History(crate::jobs::HistoryView),
+    Papers(crate::paper::PaperView),
+    Device(crate::paper::DeviceView),
     Print,
     About,
 }
@@ -137,6 +145,8 @@ pub struct UiState {
     pub print: dialogs::PrintForm,
     /// Last `device.scan` result.
     pub scanned: Vec<Value>,
+    /// Last `paper.detect` result with an RFID tag.
+    pub detected: Option<Value>,
     pub allow_agent_print: bool,
     /// Recent agent commands, newest last.
     pub agent_log: VecDeque<String>,
@@ -171,6 +181,7 @@ impl Default for UiState {
             check: None,
             print: dialogs::PrintForm::default(),
             scanned: Vec::new(),
+            detected: None,
             allow_agent_print: false,
             agent_log: VecDeque::new(),
             last_view: None,
@@ -257,6 +268,12 @@ impl LabelyApp {
             .clone()
             .unwrap_or_else(|| labely_mcp::connection::data_dir().join("history"));
         app.session.set_history_dir(Some(history));
+        let papers = app
+            .opts
+            .paper_file
+            .clone()
+            .unwrap_or_else(|| labely_mcp::connection::data_dir().join(PAPER_FILE));
+        app.session.set_paper_file(Some(papers));
         if let Some(path) = app.opts.open.clone() {
             app.run_reporting("doc.open", json!({ "path": path }));
         }

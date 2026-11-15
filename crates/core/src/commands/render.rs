@@ -254,20 +254,49 @@ pub fn check_document(ctx: &Ctx<'_>, doc: &Document, o: &CheckOptions) -> Vec<Ch
         }
     }
 
-    if let Some(paper) = &o.paper
-        && let Some(media) = paper.media
-        && media != label.media
-    {
-        issues.push(CheckIssue::new(
-            "paper_mismatch",
-            Severity::Warning,
-            None,
-            format!(
-                "the printer reports {media:?} paper (RFID {}), the label is set to {:?}",
-                paper.barcode, label.media
-            ),
-            "set the label media with doc.set_label or load matching paper",
-        ));
+    if let Some(paper) = &o.paper {
+        let known = super::paper::linked_paper(&*ctx.session, &paper.barcode);
+        match known {
+            Some(k) if !k.matches(label) => issues.push(CheckIssue::new(
+                "paper_mismatch",
+                Severity::Warning,
+                None,
+                format!(
+                    "the printer has {} loaded ({} × {} mm, {:?}; RFID {}), the label is \
+                     {} × {} mm, {:?}",
+                    k.name,
+                    k.width_mm,
+                    k.height_mm,
+                    k.media,
+                    paper.barcode,
+                    label.width_mm,
+                    label.height_mm,
+                    label.media
+                ),
+                &format!(
+                    "use the loaded paper with paper.apply {{\"id\": \"{}\"}}",
+                    k.id
+                ),
+            )),
+            Some(_) => {}
+            None => {
+                if let Some(media) = paper.media
+                    && media != label.media
+                {
+                    issues.push(CheckIssue::new(
+                        "paper_mismatch",
+                        Severity::Warning,
+                        None,
+                        format!(
+                            "the printer reports {media:?} paper (RFID {}), the label is set \
+                             to {:?}",
+                            paper.barcode, label.media
+                        ),
+                        "set the label media with doc.set_label or load matching paper",
+                    ));
+                }
+            }
+        }
     }
 
     // Bindings: `{{name}}` must name a column, serial or variable, and should not be empty.
@@ -675,7 +704,7 @@ impl Command for DocCheck {
             "Check document",
             "Find print problems. Rules: out_of_bounds, in_margin (with margin_mm), \
              outside_printable, label_too_wide, dpi_mismatch, density_out_of_range, \
-             paper_mismatch (RFID media of the printer), binding_missing, binding_empty, \
+             paper_mismatch (the printer's RFID paper: size when the barcode is linked in the paper library, else media), binding_missing, binding_empty, \
              render_failed, text_overflow, text_shrunk (< 5 pt is a warning), encode_failed, \
              module_too_narrow (< 2 dots), quiet_zone, code_unreadable (render, decode, \
              compare), bad_asset, font_fallback, low_contrast. Returns {ok, dpi, \

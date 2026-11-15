@@ -54,7 +54,10 @@ fn enabled(app: &LabelyApp, id: &str) -> bool {
     let has_doc = app.session.active_doc_id().is_some();
     let has_sel = !app.selection().is_empty();
     match id {
-        "doc.new" | "doc.open" | "template.new" | "device.scan" => true,
+        "doc.new" | "doc.open" | "template.new" | "device.scan" | "paper.list" => true,
+        "paper.detect" | "device.calibrate" => {
+            !app.session.services().devices.connected().is_empty()
+        }
         "history.undo" => app.session.can_undo(None),
         "history.redo" => app.session.can_redo(None),
         "element.delete" | "element.duplicate" | "element.reorder" | "element.ungroup"
@@ -393,6 +396,15 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
         "render.preview" => app.ui.show_preview = !app.ui.show_preview,
         "print.submit" => app.ui.dialog = Some(Dialog::Print),
         "job.history" => crate::jobs::open_history(app),
+        "paper.list" => crate::paper::open_library(app, None),
+        "paper.detect" => {
+            app.ui.show_printers = true;
+            crate::paper::detect(app, None);
+            if app.ui.detected.is_none() {
+                app.set_status(app.i18n.t("status-no-rfid"), false);
+            }
+        }
+        "device.calibrate" => crate::paper::open_device(app, None),
         "device.scan" => {
             app.ui.show_printers = true;
             scan(app);

@@ -30,6 +30,12 @@ pub mod cmd {
     pub const SET_DENSITY_RESP: u8 = 0x31;
     pub const SET_LABEL_TYPE: u8 = 0x23;
     pub const SET_LABEL_TYPE_RESP: u8 = 0x33;
+    pub const SET_AUTO_OFF: u8 = 0x27;
+    pub const SET_AUTO_OFF_RESP: u8 = 0x37;
+    pub const CALIBRATE: u8 = 0x8E;
+    pub const CALIBRATE_RESP: u8 = 0x8F;
+    pub const SOUND: u8 = 0x58;
+    pub const SOUND_RESP: u8 = 0x68;
     pub const PRINT_START: u8 = 0x01;
     pub const PRINT_START_RESP: u8 = 0x02;
     pub const PAGE_START: u8 = 0x03;

@@ -8,6 +8,7 @@ pub mod jobs;
 pub mod mcp_host;
 pub mod menu;
 pub mod panels;
+pub mod paper;
 pub mod templates;
 
 pub use app::{LabelyApp, StudioOptions};

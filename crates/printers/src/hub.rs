@@ -6,9 +6,10 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
+use labely_core::document::MediaType;
 use labely_core::services::{
-    DeviceError, DeviceHub, DeviceInfo, DeviceStatus, JobControl, ModelInfo, PrintReport,
-    PrintRequest,
+    DeviceError, DeviceHub, DeviceInfo, DeviceSettings, DeviceStatus, JobControl, ModelInfo,
+    PrintReport, PrintRequest,
 };
 
 use crate::driver::Driver;
@@ -286,5 +287,28 @@ impl DeviceHub for Hub {
         let c = self.conn(address)?;
         let mut c = locked(&c)?;
         c.driver.print(&job, control)
+    }
+
+    fn calibrate(&self, address: &str, media: MediaType) -> Result<(), DeviceError> {
+        let c = self.conn(address)?;
+        let mut c = try_locked(&c, address)?;
+        c.driver.calibrate(media)
+    }
+
+    fn settings(&self, address: &str) -> Result<DeviceSettings, DeviceError> {
+        let c = self.conn(address)?;
+        let mut c = try_locked(&c, address)?;
+        c.driver.settings()
+    }
+
+    fn set_settings(
+        &self,
+        address: &str,
+        patch: &DeviceSettings,
+    ) -> Result<DeviceSettings, DeviceError> {
+        let c = self.conn(address)?;
+        let mut c = try_locked(&c, address)?;
+        c.driver.set_settings(patch)?;
+        c.driver.settings()
     }
 }

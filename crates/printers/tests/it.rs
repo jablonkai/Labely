@@ -186,3 +186,57 @@ fn hub_stays_responsive_while_printing() {
     assert!(hub.status(&addr).is_ok());
     hub.disconnect(&addr).unwrap();
 }
+
+#[test]
+fn settings_and_calibration_through_simulator() {
+    use labely_core::services::DeviceSettings;
+    let (sim, transport) = Simulator::start(SimConfig::b21_pro());
+    let mut drv = NiimbotDriver::new(Box::new(transport));
+    drv.connect().unwrap();
+
+    let s = drv.settings().unwrap();
+    assert_eq!(s.auto_off_level, Some(2));
+    assert_eq!(s.sound_power, Some(true));
+    assert_eq!(s.sound_bluetooth, Some(true));
+
+    drv.set_settings(&DeviceSettings {
+        auto_off_level: Some(4),
+        sound_power: Some(false),
+        sound_bluetooth: None,
+    })
+    .unwrap();
+    let s = drv.settings().unwrap();
+    assert_eq!(s.auto_off_level, Some(4));
+    assert_eq!(s.sound_power, Some(false));
+    assert_eq!(s.sound_bluetooth, Some(true));
+
+    let bad = drv.set_settings(&DeviceSettings {
+        auto_off_level: Some(9),
+        ..DeviceSettings::default()
+    });
+    assert!(bad.is_err());
+
+    drv.calibrate(MediaType::BlackMark).unwrap();
+    assert_eq!(sim.log().calibrations, vec![2]);
+}
+
+#[test]
+fn hub_settings_on_fake_printer() {
+    use labely_core::services::DeviceSettings;
+    let dir = tempfile::tempdir().unwrap();
+    let hub = Hub::new();
+    let address = format!("fake:{}", dir.path().display());
+    hub.connect(&address).unwrap();
+    let s = hub
+        .set_settings(
+            &address,
+            &DeviceSettings {
+                auto_off_level: Some(3),
+                ..DeviceSettings::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(s.auto_off_level, Some(3));
+    hub.calibrate(&address, MediaType::Gap).unwrap();
+    assert!(dir.path().join("calibrate-0001.json").exists());
+}
