@@ -9,7 +9,7 @@ pub mod niimbot;
 pub mod registry;
 pub mod sim;
 
-pub use driver::{Driver, Identity, Progress};
+pub use driver::{Driver, Identity};
 pub use hub::Hub;
 pub use registry::{Model, Registry};
 

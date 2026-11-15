@@ -10,8 +10,8 @@ use serde_json::Value;
 
 use crate::command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
 use crate::commands::{
-    arrange, data, decor, device, doc, element, export, history, images, meta, render, selection,
-    table, template, variable,
+    arrange, data, decor, device, doc, element, export, history, images, jobs, meta, render,
+    selection, table, template, variable,
 };
 use crate::schema::{output_schema, params_schema};
 
@@ -354,6 +354,17 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<device::DeviceDisconnect>(),
         Entry::of::<device::DeviceStatusCmd>(),
         Entry::of::<device::PrintSubmit>().in_menu("print", Some("Ctrl+P")),
+        Entry::of::<jobs::JobList>(),
+        Entry::of::<jobs::JobGet>(),
+        Entry::of::<jobs::JobWait>(),
+        Entry::of::<jobs::JobCancel>(),
+        Entry::of::<jobs::JobPause>(),
+        Entry::of::<jobs::JobResume>(),
+        Entry::of::<jobs::JobClear>(),
+        Entry::of::<jobs::JobHistory>().in_menu("print", None),
+        Entry::of::<jobs::JobHistoryDelete>(),
+        Entry::of::<jobs::JobHistoryClear>(),
+        Entry::of::<jobs::JobHistoryOpen>(),
     ]
 }
 

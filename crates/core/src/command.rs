@@ -257,6 +257,7 @@ impl From<DeviceError> for CommandError {
                     e.with_hint(hint)
                 }
             }
+            DeviceError::Cancelled => Self::new(ErrorCode::Cancelled, message),
             DeviceError::Other(_) => Self::new(ErrorCode::DeviceError, message),
         }
     }

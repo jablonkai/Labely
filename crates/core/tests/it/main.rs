@@ -9,6 +9,7 @@ mod device;
 mod elements;
 mod file;
 mod history;
+mod jobs;
 mod phase2;
 mod schema;
 mod templates;

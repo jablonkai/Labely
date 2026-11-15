@@ -212,6 +212,7 @@ impl Ctx {
 fn run(cli: Cli) -> Result<()> {
     let mut session = Session::new(labely_printers::default_services());
     session.set_template_dir(Some(labely_mcp::connection::data_dir().join("templates")));
+    session.set_history_dir(Some(labely_mcp::connection::data_dir().join("history")));
     let mut ctx = Ctx {
         session,
         json: cli.json,
@@ -460,6 +461,7 @@ fn mcp(
         policy.allow_print = allow_print;
         let mut session = Session::with_policy(labely_printers::default_services(), policy);
         session.set_template_dir(Some(conn::data_dir().join("templates")));
+        session.set_history_dir(Some(conn::data_dir().join("history")));
         let server = LabelyMcp::new(std::sync::Arc::new(LocalExecutor::new(session)));
         labely_mcp::serve_stdio(server).await?;
         Ok(())

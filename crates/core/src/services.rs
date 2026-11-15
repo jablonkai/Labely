@@ -2,6 +2,7 @@
 //! and `labely-printers` implement them; `labely-testkit` provides fakes.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -200,8 +201,48 @@ pub enum DeviceError {
     Printer { message: String, hint: String },
     #[error("timed out: {0}")]
     Timeout(String),
+    /// The job was cancelled through its [`JobControl`].
+    #[error("print cancelled")]
+    Cancelled,
     #[error("{0}")]
     Other(String),
+}
+
+/// Shared between a running print and whoever queued it: progress out, cancel in.
+#[derive(Debug, Default)]
+pub struct JobControl {
+    cancel: AtomicBool,
+    done: AtomicU32,
+    total: AtomicU32,
+}
+
+impl JobControl {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Ask the driver to stop at the next page boundary.
+    pub fn cancel(&self) {
+        self.cancel.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.load(Ordering::SeqCst)
+    }
+
+    /// Report progress (called by drivers).
+    pub fn set_progress(&self, done: u32, total: u32) {
+        self.total.store(total, Ordering::SeqCst);
+        self.done.store(done, Ordering::SeqCst);
+    }
+
+    /// `(pages_done, pages_total)` reported so far.
+    pub fn progress(&self) -> (u32, u32) {
+        (
+            self.done.load(Ordering::SeqCst),
+            self.total.load(Ordering::SeqCst),
+        )
+    }
 }
 
 /// Printer management.
@@ -215,8 +256,14 @@ pub trait DeviceHub: Send + Sync {
     fn connect(&self, address: &str) -> Result<DeviceInfo, DeviceError>;
     fn disconnect(&self, address: &str) -> Result<(), DeviceError>;
     fn status(&self, address: &str) -> Result<DeviceStatus, DeviceError>;
-    /// Print and block until done.
-    fn print(&self, address: &str, job: PrintRequest) -> Result<PrintReport, DeviceError>;
+    /// Print and block until done. Drivers report progress to `control` and stop with
+    /// [`DeviceError::Cancelled`] at the next page boundary once it is cancelled.
+    fn print(
+        &self,
+        address: &str,
+        job: PrintRequest,
+        control: &JobControl,
+    ) -> Result<PrintReport, DeviceError>;
 }
 
 /// Services available to commands.

@@ -1,13 +1,14 @@
 //! `DeviceHub` implementation: one connection (and driver) per address.
 //!
-//! Address schemes: `fake:<dir>[?model=<id>]`, `sim:[<model id>]`, `ble:<peripheral id>`,
+//! Address schemes: `fake:<dir>[?model=<id>&delay_ms=<n>]`, `sim:[<model id>]`, `ble:<peripheral id>`,
 //! `usb:<serial port>`.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use labely_core::services::{
-    DeviceError, DeviceHub, DeviceInfo, DeviceStatus, ModelInfo, PrintReport, PrintRequest,
+    DeviceError, DeviceHub, DeviceInfo, DeviceStatus, JobControl, ModelInfo, PrintReport,
+    PrintRequest,
 };
 
 use crate::driver::Driver;
@@ -25,11 +26,15 @@ struct Connection {
     _sim: Option<Simulator>,
 }
 
+type Shared = Arc<Mutex<Connection>>;
+
 /// The default device hub.
 #[derive(Default)]
 pub struct Hub {
     registry: Registry,
-    conns: Mutex<BTreeMap<String, Arc<Mutex<Connection>>>>,
+    /// Device info lives beside the connection lock, so listing devices never waits for a
+    /// running print.
+    conns: Mutex<BTreeMap<String, (DeviceInfo, Shared)>>,
 }
 
 impl std::fmt::Debug for Hub {
@@ -43,6 +48,19 @@ impl std::fmt::Debug for Hub {
 fn locked<T>(m: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>, DeviceError> {
     m.lock()
         .map_err(|_| DeviceError::Other("device lock poisoned".into()))
+}
+
+/// Lock a connection without waiting: it is busy while a job prints on it.
+fn try_locked<'a>(
+    m: &'a Mutex<Connection>,
+    address: &str,
+) -> Result<std::sync::MutexGuard<'a, Connection>, DeviceError> {
+    m.try_lock().map_err(|e| match e {
+        std::sync::TryLockError::WouldBlock => DeviceError::Unavailable(format!(
+            "{address} is busy printing; try again when the job is done"
+        )),
+        std::sync::TryLockError::Poisoned(_) => DeviceError::Other("device lock poisoned".into()),
+    })
 }
 
 impl Hub {
@@ -74,14 +92,32 @@ impl Hub {
         let (mut driver, sim): (Box<dyn Driver>, Option<Simulator>) = match scheme {
             "fake" => {
                 let (dir, query) = rest.split_once('?').unwrap_or((rest, ""));
-                let model_id = query.strip_prefix("model=");
+                let mut model_id = None;
+                let mut delay_ms = 0u64;
+                for pair in query.split('&').filter(|p| !p.is_empty()) {
+                    match pair.split_once('=') {
+                        Some(("model", v)) => model_id = Some(v),
+                        Some(("delay_ms", v)) => {
+                            delay_ms = v.parse().map_err(|_| {
+                                DeviceError::NotFound(format!("'{address}': bad delay_ms"))
+                            })?;
+                        }
+                        _ => {
+                            return Err(DeviceError::NotFound(format!(
+                                "'{address}': unknown option '{pair}' (use model=, delay_ms=)"
+                            )));
+                        }
+                    }
+                }
                 let model = self.model_or_default(model_id)?;
                 let dir = if dir.is_empty() {
                     "labely-fake-out"
                 } else {
                     dir
                 };
-                (Box::new(FakePrinter::new(dir, model)), None)
+                let fake = FakePrinter::new(dir, model)
+                    .with_page_delay(std::time::Duration::from_millis(delay_ms.min(10_000)));
+                (Box::new(fake), None)
             }
             "sim" => {
                 let model = self.model_or_default(Some(rest))?;
@@ -150,7 +186,7 @@ impl Hub {
     fn conn(&self, address: &str) -> Result<Arc<Mutex<Connection>>, DeviceError> {
         locked(&self.conns)?
             .get(address)
-            .cloned()
+            .map(|(_, c)| c.clone())
             .ok_or_else(|| DeviceError::NotFound(format!("{address} is not connected")))
     }
 }
@@ -211,44 +247,44 @@ impl DeviceHub for Hub {
         let Ok(conns) = self.conns.lock() else {
             return Vec::new();
         };
-        conns
-            .values()
-            .filter_map(|c| c.lock().ok().map(|c| c.info.clone()))
-            .collect()
+        conns.values().map(|(info, _)| info.clone()).collect()
     }
 
     fn connect(&self, address: &str) -> Result<DeviceInfo, DeviceError> {
-        if let Ok(c) = self.conn(address) {
-            return Ok(locked(&c)?.info.clone());
+        if let Some((info, _)) = locked(&self.conns)?.get(address) {
+            return Ok(info.clone());
         }
         let conn = self.open(address)?;
         let info = conn.info.clone();
-        locked(&self.conns)?.insert(address.to_owned(), Arc::new(Mutex::new(conn)));
+        locked(&self.conns)?.insert(
+            address.to_owned(),
+            (info.clone(), Arc::new(Mutex::new(conn))),
+        );
         Ok(info)
     }
 
     fn disconnect(&self, address: &str) -> Result<(), DeviceError> {
-        let removed = locked(&self.conns)?.remove(address);
-        match removed {
-            Some(c) => {
-                locked(&c)?.driver.close();
-                Ok(())
-            }
-            None => Err(DeviceError::NotFound(format!("{address} is not connected"))),
-        }
+        let c = self.conn(address)?;
+        let mut conn = try_locked(&c, address)?;
+        conn.driver.close();
+        locked(&self.conns)?.remove(address);
+        Ok(())
     }
 
     fn status(&self, address: &str) -> Result<DeviceStatus, DeviceError> {
         let c = self.conn(address)?;
-        let mut c = locked(&c)?;
+        let mut c = try_locked(&c, address)?;
         c.driver.status()
     }
 
-    fn print(&self, address: &str, job: PrintRequest) -> Result<PrintReport, DeviceError> {
+    fn print(
+        &self,
+        address: &str,
+        job: PrintRequest,
+        control: &JobControl,
+    ) -> Result<PrintReport, DeviceError> {
         let c = self.conn(address)?;
         let mut c = locked(&c)?;
-        c.driver.print(&job, &mut |p| {
-            tracing::info!(done = p.pages_done, total = p.pages_total, "print progress")
-        })
+        c.driver.print(&job, control)
     }
 }

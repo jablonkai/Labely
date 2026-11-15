@@ -66,6 +66,7 @@ pub fn show(app: &mut LabelyApp, ctx: &Context) {
             Dialog::NewDoc(form) => new_doc(app, ui, form),
             Dialog::Templates(g) => crate::templates::gallery(app, ui, g),
             Dialog::SaveTemplate(f) => crate::templates::save(app, ui, f),
+            Dialog::History(v) => crate::jobs::history(app, ui, v),
             Dialog::Print => print(app, ui),
             Dialog::About => about(app, ui),
         };
@@ -192,7 +193,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                     .run_reporting("device.connect", json!({"address": form.address}))
                     .ok;
             if ok {
-                let mut p = json!({"address": form.address, "copies": form.copies});
+                let mut p = json!({"address": form.address, "copies": form.copies, "wait": false});
                 if form.density > 0 {
                     p["density"] = json!(form.density);
                 }
@@ -204,7 +205,8 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                     p["count"] = json!(form.count);
                 }
                 if app.run_reporting("print.submit", p).ok {
-                    app.set_status(app.i18n.t("status-printed"), false);
+                    app.set_status(app.i18n.t("status-queued"), false);
+                    app.ui.show_printers = true;
                     close = true;
                 }
             }

@@ -14,6 +14,8 @@ fn options() -> StudioOptions {
         mcp: false,
         native_dialogs: false,
         lang: Lang::En,
+        // Never write the real app-data history from tests.
+        history_dir: Some(std::env::temp_dir().join("labely-studio-test-history")),
         ..StudioOptions::default()
     }
 }
@@ -457,4 +459,57 @@ fn template_gallery_open_save_and_manage() {
     h.get_by_label("Delete").click();
     h.run();
     assert!(!dir.path().join("Shop/Price tag.labely").exists());
+}
+
+#[test]
+fn print_queue_panel_and_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            history_dir: Some(dir.path().join("history")),
+            ..options()
+        },
+    );
+    assert!(
+        app.run(
+            "doc.new",
+            json!({"name": "Queue test", "width_mm": 30, "height_mm": 20})
+        )
+        .ok
+    );
+    app.ui.print.address = format!("fake:{}", dir.path().join("out").display());
+    app.ui.dialog = Some(labely_studio::app::Dialog::Print);
+    let mut h = harness(app);
+    h.run();
+    // The dialog's Print button queues the job and opens the printers panel.
+    h.get_all_by_label("Print").last().unwrap().click();
+    // Fixed steps: the UI keeps repainting while the job is busy.
+    h.run_steps(3);
+    assert!(h.state().ui.dialog.is_none());
+    assert!(h.state().ui.show_printers);
+    let job = h.state().session.jobs().list()[0].id.clone();
+    h.state().session.jobs().wait(&job, None).unwrap();
+    h.run();
+    assert!(h.query_by_label("Print jobs").is_some());
+    assert!(
+        h.state()
+            .ui
+            .status
+            .as_ref()
+            .is_some_and(|s| s.text == "Printed: Queue test"),
+        "{:?}",
+        h.state().ui.status
+    );
+    assert!(dir.path().join("out/job-0001/page-01.png").is_file());
+
+    // History dialog: the entry reopens the printed document.
+    h.get_by_label("Print history…").click();
+    h.run();
+    assert!(h.query_by_label("Queue test").is_some());
+    h.get_by_label("Open").click();
+    h.run();
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(h.state().session.doc(None).unwrap().name, "Queue test");
+    assert_eq!(h.state().session.doc_ids().count(), 2);
 }

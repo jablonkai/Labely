@@ -108,6 +108,8 @@ pub struct Session {
     policy: Policy,
     /// Root of the local template library (`template.*`), if the frontend set one.
     template_dir: Option<PathBuf>,
+    /// Print queue and history (`print.submit`, `job.*`).
+    jobs: crate::jobs::PrintQueue,
 }
 
 impl std::fmt::Debug for Session {
@@ -122,6 +124,7 @@ impl std::fmt::Debug for Session {
 
 impl Session {
     pub fn new(services: Services) -> Self {
+        let jobs = crate::jobs::PrintQueue::new(services.devices.clone());
         Self {
             state: State::default(),
             journal: Vec::new(),
@@ -130,6 +133,7 @@ impl Session {
             registry: Registry::builtin(),
             policy: Policy::default(),
             template_dir: None,
+            jobs,
         }
     }
 
@@ -156,6 +160,17 @@ impl Session {
 
     pub fn template_dir(&self) -> Option<&std::path::Path> {
         self.template_dir.as_deref()
+    }
+
+    /// Set the print-history directory (ADR-0019); `None` keeps no history. Like the template
+    /// library it is addressed by entry id, so it is not subject to the policy's file roots.
+    pub fn set_history_dir(&mut self, dir: Option<PathBuf>) {
+        self.jobs.set_history_dir(dir);
+    }
+
+    /// The print queue, shared with its worker thread.
+    pub fn jobs(&self) -> &crate::jobs::PrintQueue {
+        &self.jobs
     }
 
     /// Selected element ids of a document (default: active) that still exist.

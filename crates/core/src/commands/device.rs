@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{DEFAULT_DPI, render_options_for};
 use crate::command::{Command, CommandError, CommandMeta, Ctx, ErrorCode};
+use crate::jobs::{JobSpec, JobState};
 use crate::services::{DeviceInfo, DeviceStatus, PrintRequest};
 
 /// Longest allowed scan.
@@ -216,6 +217,10 @@ pub struct PrintParams {
     /// Column holding each record's copy count (0 skips the record); overrides `copies`.
     #[serde(default)]
     pub copies_column: Option<String>,
+    /// Wait until the job has printed (default true). With false the job is queued and the
+    /// command returns at once; follow it with job.get or job.wait.
+    #[serde(default)]
+    pub wait: Option<bool>,
 }
 
 /// Most distinct labels (records × pages, with per-record copies expanded) in one job.
@@ -291,9 +296,14 @@ fn plan_labels(
 
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct PrintOutput {
+    /// Queue id for job.get, job.wait and job.cancel.
+    pub job_id: String,
+    /// `done` after a waited print; `queued` or `printing` with `wait: false`.
+    pub state: JobState,
     pub address: String,
     /// Distinct labels rendered (records or count, times pages).
     pub labels: u32,
+    /// Pages printed so far (0 while queued).
     pub pages_printed: u32,
     pub duration_ms: u64,
     pub copies: u16,
@@ -316,8 +326,9 @@ impl Command for PrintSubmit {
             "Render and print at the connected model's dpi: one label per data record \
              (`records` like `1,3,5-7`, default all) or `count` labels without data, with \
              bindings and serials filled in. copies 1–999 (default 1) or per record from \
-             `copies_column`; density defaults to the label's, else the model's. Blocks until \
-             done. Run doc.check first.",
+             `copies_column`; density defaults to the label's, else the model's. Jobs go \
+             through the print queue; by default the command waits until the job has \
+             printed, `wait: false` returns {job_id} at once. Run doc.check first.",
         )
     }
 
@@ -400,20 +411,47 @@ impl Command for PrintSubmit {
                 pages.push(out.bitmap);
             }
         }
-        let report = devices.print(
-            &address,
-            PrintRequest {
-                pages,
-                copies: if uniform { copies } else { 1 },
-                density,
-                media: doc.label.media,
-            },
-        )?;
+        let distinct = (labels.len() * doc.pages.len()) as u32;
+        let request = PrintRequest {
+            pages,
+            copies: if uniform { copies } else { 1 },
+            density,
+            media: doc.label.media,
+        };
+        let spec = JobSpec {
+            address: address.clone(),
+            model: model.as_ref().map(|m| m.id.clone()),
+            labels: distinct,
+            copies,
+            density,
+            pages_total: (request.pages.len() * usize::from(request.copies)) as u32,
+            doc,
+        };
+        let queue = ctx.session().jobs().clone();
+        if p.wait.unwrap_or(true) && queue.is_paused() {
+            return Err(CommandError::bad_params(
+                "the print queue is paused; a waited print would never start",
+            )
+            .with_param("wait")
+            .with_hint("run job.resume, or pass wait: false to queue the job"));
+        }
+        let job = queue.submit(spec, request)?;
+        let job = if p.wait.unwrap_or(true) {
+            let done = queue.wait(&job.id, None)?;
+            if let Some(e) = done.error {
+                return Err(e);
+            }
+            done
+        } else {
+            job
+        };
         Ok(PrintOutput {
+            job_id: job.id,
+            state: job.state,
             address,
-            labels: (labels.len() * doc.pages.len()) as u32,
-            pages_printed: report.pages_printed,
-            duration_ms: report.duration_ms,
+            labels: distinct,
+            pages_printed: job.pages_done,
+            duration_ms: job.duration_ms.unwrap_or(0),
             copies,
             density,
             dpi,

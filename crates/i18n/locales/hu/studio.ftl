@@ -217,3 +217,23 @@ template-jar = Befőttesüveg
 template-cable-flag = Kábelzászló
 template-wifi = Wi-Fi
 template-shipping = Szállítás
+
+## Nyomtatási sor és előzmények
+cmd-job-history = Nyomtatási előzmények…
+panel-jobs = Nyomtatási feladatok
+jobs-none = Még nincs nyomtatási feladat.
+jobs-paused = A sor szünetel: a várakozó feladatok nem indulnak.
+job-queued = várakozik
+job-printing = nyomtat
+job-done = kész
+job-failed = sikertelen
+job-cancelled = megszakítva
+action-pause = Szünet
+action-resume = Folytatás
+action-clear-finished = Befejezettek törlése
+action-clear-history = Előzmények törlése
+history-title = Nyomtatási előzmények
+history-empty = Még nem nyomtattál semmit.
+history-pages = { $count } oldal
+status-queued = Nyomtatási sorba téve.
+status-job-done = Kinyomtatva: { $name }

@@ -1,7 +1,7 @@
 //! Driver trait and shared raster preparation.
 
 use labely_core::Bitmap1;
-use labely_core::services::{DeviceError, DeviceStatus, PrintReport, PrintRequest};
+use labely_core::services::{DeviceError, DeviceStatus, JobControl, PrintReport, PrintRequest};
 
 use crate::registry::{Model, PrintDirection};
 
@@ -14,21 +14,17 @@ pub struct Identity {
     pub protocol: Option<u8>,
 }
 
-/// Print progress callback payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Progress {
-    pub pages_done: u32,
-    pub pages_total: u32,
-}
-
 /// A printer driver bound to one connection.
 pub trait Driver: Send {
     fn connect(&mut self) -> Result<Identity, DeviceError>;
     fn status(&mut self) -> Result<DeviceStatus, DeviceError>;
+    /// Print `job`, reporting progress to `control`. Once `control` is cancelled the driver
+    /// stops at the next page boundary, leaves the printer idle and returns
+    /// [`DeviceError::Cancelled`].
     fn print(
         &mut self,
         job: &PrintRequest,
-        progress: &mut dyn FnMut(Progress),
+        control: &JobControl,
     ) -> Result<PrintReport, DeviceError>;
     fn close(&mut self);
 }

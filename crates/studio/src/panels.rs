@@ -780,6 +780,8 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
             if connected.is_empty() && app.ui.scanned.is_empty() {
                 ui.label(RichText::new(app.i18n.t("printers-none")).weak());
             }
+            ui.separator();
+            crate::jobs::queue_section(app, ui);
         });
 }
 

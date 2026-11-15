@@ -9,6 +9,7 @@ pub mod element;
 pub mod export;
 pub mod history;
 pub mod images;
+pub mod jobs;
 pub mod meta;
 pub mod render;
 pub mod selection;

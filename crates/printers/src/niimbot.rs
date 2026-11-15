@@ -3,7 +3,9 @@
 use std::time::{Duration, Instant};
 
 use labely_core::document::MediaType;
-use labely_core::services::{DeviceError, DeviceStatus, PaperInfo, PrintReport, PrintRequest};
+use labely_core::services::{
+    DeviceError, DeviceStatus, JobControl, PaperInfo, PrintReport, PrintRequest,
+};
 use labely_protocol::RasterView;
 use labely_protocol::niimbot::job::{self, JobSettings, PrintTask, Retry, Step};
 use labely_protocol::niimbot::request::{self, HeartbeatType, InfoType, LabelType};
@@ -12,7 +14,7 @@ use labely_protocol::niimbot::{Decoder, Packet, cmd};
 use labely_transport::{Transport, TransportError};
 use tracing::{debug, trace};
 
-use crate::driver::{Driver, Identity, Progress, prepare_for_head};
+use crate::driver::{Driver, Identity, prepare_for_head};
 use crate::registry::{Model, Registry};
 
 /// Reply timeout for one request.
@@ -161,11 +163,23 @@ impl NiimbotDriver {
     fn run_steps(
         &mut self,
         steps: &[Step],
-        progress: &mut dyn FnMut(Progress),
+        control: &JobControl,
+        total: u32,
     ) -> Result<u32, DeviceError> {
         let gap = self.transport.packet_gap();
         let mut printed = 0u32;
+        // Stop between pages, never inside one: before the job starts, and after
+        // PrintStart or a PageEnd has been answered.
+        let mut at_boundary = true;
         for step in steps {
+            if at_boundary && control.is_cancelled() {
+                return Err(DeviceError::Cancelled);
+            }
+            at_boundary = matches!(
+                step,
+                Step::Exchange { packet, .. }
+                    if packet.cmd == cmd::PRINT_START || packet.cmd == cmd::PAGE_END
+            );
             match step {
                 Step::Send(p) => {
                     self.send(p)?;
@@ -218,10 +232,10 @@ impl NiimbotDriver {
                         if st.page != last_page {
                             last_page = st.page;
                             last_change = Instant::now();
-                            progress(Progress {
-                                pages_done: u32::from(st.page),
-                                pages_total: u32::from(*total_pages),
-                            });
+                            control.set_progress(u32::from(st.page), total);
+                        }
+                        if control.is_cancelled() && st.page < *total_pages {
+                            return Err(DeviceError::Cancelled);
                         }
                         if st.page >= *total_pages {
                             printed = u32::from(st.page);
@@ -331,7 +345,7 @@ impl Driver for NiimbotDriver {
     fn print(
         &mut self,
         job: &PrintRequest,
-        progress: &mut dyn FnMut(Progress),
+        control: &JobControl,
     ) -> Result<PrintReport, DeviceError> {
         let started = Instant::now();
         let model = self.model.clone().ok_or_else(|| {
@@ -358,7 +372,9 @@ impl Driver for NiimbotDriver {
         let steps =
             job::build(task, &settings, &views).map_err(|e| DeviceError::Other(e.to_string()))?;
         self.drain_input();
-        let printed = self.run_steps(&steps, progress);
+        let total = job.pages.len() as u32 * u32::from(settings.copies);
+        control.set_progress(0, total);
+        let printed = self.run_steps(&steps, control, total);
         if printed.is_err() {
             // Best effort: leave the printer idle.
             let _ = self.exchange(&request::print_end(), cmd::PRINT_END_RESP);
