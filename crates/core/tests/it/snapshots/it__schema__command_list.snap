@@ -1418,12 +1418,21 @@ expression: r
                             "properties": {
                               "align": {
                                 "default": "left",
-                                "enum": [
-                                  "left",
-                                  "center",
-                                  "right"
-                                ],
-                                "type": "string"
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
                               },
                               "bold": {
                                 "default": false,
@@ -1913,12 +1922,21 @@ expression: r
                               "align": {
                                 "default": "center",
                                 "description": "Default cell alignment.",
-                                "enum": [
-                                  "left",
-                                  "center",
-                                  "right"
-                                ],
-                                "type": "string"
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
                               },
                               "cells": {
                                 "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -1928,15 +1946,27 @@ expression: r
                                     "description": "One table cell. Style fields override the table defaults.",
                                     "properties": {
                                       "align": {
-                                        "enum": [
-                                          "left",
-                                          "center",
-                                          "right",
-                                          null
-                                        ],
-                                        "type": [
-                                          "string",
-                                          "null"
+                                        "anyOf": [
+                                          {
+                                            "oneOf": [
+                                              {
+                                                "enum": [
+                                                  "left",
+                                                  "center",
+                                                  "right"
+                                                ],
+                                                "type": "string"
+                                              },
+                                              {
+                                                "const": "justify",
+                                                "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                                "type": "string"
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
                                         ]
                                       },
                                       "bold": {
@@ -3273,17 +3303,29 @@ expression: r
         "additionalProperties": false,
         "properties": {
           "align": {
-            "default": null,
-            "enum": [
-              "left",
-              "center",
-              "right",
-              null
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "justify",
+                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "type": [
-              "string",
-              "null"
-            ]
+            "default": null
           },
           "bold": {
             "default": null,
@@ -4303,18 +4345,30 @@ expression: r
         "additionalProperties": false,
         "properties": {
           "align": {
-            "default": null,
-            "description": "Default cell alignment (default `center`).",
-            "enum": [
-              "left",
-              "center",
-              "right",
-              null
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "enum": [
+                      "left",
+                      "center",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "justify",
+                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "type": [
-              "string",
-              "null"
-            ]
+            "default": null,
+            "description": "Default cell alignment (default `center`)."
           },
           "cells": {
             "default": null,
@@ -4697,12 +4751,21 @@ expression: r
                 "properties": {
                   "align": {
                     "default": "left",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "bold": {
                     "default": false,
@@ -5192,12 +5255,21 @@ expression: r
                   "align": {
                     "default": "center",
                     "description": "Default cell alignment.",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "cells": {
                     "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -5207,15 +5279,27 @@ expression: r
                         "description": "One table cell. Style fields override the table defaults.",
                         "properties": {
                           "align": {
-                            "enum": [
-                              "left",
-                              "center",
-                              "right",
-                              null
-                            ],
-                            "type": [
-                              "string",
-                              "null"
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           },
                           "bold": {
@@ -5649,17 +5733,29 @@ expression: r
                 "description": "Change a cell's text or style; absent fields stay as they are.",
                 "properties": {
                   "align": {
-                    "default": null,
-                    "enum": [
-                      "left",
-                      "center",
-                      "right",
-                      null
+                    "anyOf": [
+                      {
+                        "oneOf": [
+                          {
+                            "enum": [
+                              "left",
+                              "center",
+                              "right"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "const": "justify",
+                            "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
                     ],
-                    "type": [
-                      "string",
-                      "null"
-                    ]
+                    "default": null
                   },
                   "bold": {
                     "default": null,
@@ -5943,6 +6039,54 @@ expression: r
       "undoable": false
     },
     {
+      "description": "Load a TTF, OTF or TTC font file for this session, so its families can be used as a text or table `font_family`. Documents store only the family name: a label that uses the font renders with it only where the font is loaded or installed.",
+      "id": "font.add",
+      "journal": false,
+      "kind": "ui",
+      "label": "Add font file",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "added": {
+            "description": "Family names the file added, usable as `font_family`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "fonts": {
+            "description": "Every family now available, sorted.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "added",
+          "fonts"
+        ],
+        "title": "FontAddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "description": "Font file: TrueType (.ttf), OpenType (.otf) or a collection (.ttc), at most 64 MiB.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "FontAddParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
       "description": "Decode the barcodes and 2D codes in an image (path or data_base64). Each result gives kind, symbology and text, ready for element.add_barcode or add_code2d.",
       "id": "code.decode",
       "journal": false,
@@ -6024,12 +6168,21 @@ expression: r
                 "properties": {
                   "align": {
                     "default": "left",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "bold": {
                     "default": false,
@@ -6519,12 +6672,21 @@ expression: r
                   "align": {
                     "default": "center",
                     "description": "Default cell alignment.",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "cells": {
                     "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -6534,15 +6696,27 @@ expression: r
                         "description": "One table cell. Style fields override the table defaults.",
                         "properties": {
                           "align": {
-                            "enum": [
-                              "left",
-                              "center",
-                              "right",
-                              null
-                            ],
-                            "type": [
-                              "string",
-                              "null"
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           },
                           "bold": {
@@ -6909,12 +7083,21 @@ expression: r
                 "properties": {
                   "align": {
                     "default": "left",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "bold": {
                     "default": false,
@@ -7404,12 +7587,21 @@ expression: r
                   "align": {
                     "default": "center",
                     "description": "Default cell alignment.",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "cells": {
                     "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -7419,15 +7611,27 @@ expression: r
                         "description": "One table cell. Style fields override the table defaults.",
                         "properties": {
                           "align": {
-                            "enum": [
-                              "left",
-                              "center",
-                              "right",
-                              null
-                            ],
-                            "type": [
-                              "string",
-                              "null"
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           },
                           "bold": {
@@ -7800,12 +8004,21 @@ expression: r
                 "properties": {
                   "align": {
                     "default": "left",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "bold": {
                     "default": false,
@@ -8295,12 +8508,21 @@ expression: r
                   "align": {
                     "default": "center",
                     "description": "Default cell alignment.",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "cells": {
                     "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -8310,15 +8532,27 @@ expression: r
                         "description": "One table cell. Style fields override the table defaults.",
                         "properties": {
                           "align": {
-                            "enum": [
-                              "left",
-                              "center",
-                              "right",
-                              null
-                            ],
-                            "type": [
-                              "string",
-                              "null"
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           },
                           "bold": {
@@ -8691,12 +8925,21 @@ expression: r
                 "properties": {
                   "align": {
                     "default": "left",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "bold": {
                     "default": false,
@@ -9186,12 +9429,21 @@ expression: r
                   "align": {
                     "default": "center",
                     "description": "Default cell alignment.",
-                    "enum": [
-                      "left",
-                      "center",
-                      "right"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "justify",
+                        "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "cells": {
                     "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -9201,15 +9453,27 @@ expression: r
                         "description": "One table cell. Style fields override the table defaults.",
                         "properties": {
                           "align": {
-                            "enum": [
-                              "left",
-                              "center",
-                              "right",
-                              null
-                            ],
-                            "type": [
-                              "string",
-                              "null"
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "left",
+                                      "center",
+                                      "right"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "justify",
+                                    "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           },
                           "bold": {
@@ -9837,12 +10101,21 @@ expression: r
                   "properties": {
                     "align": {
                       "default": "left",
-                      "enum": [
-                        "left",
-                        "center",
-                        "right"
-                      ],
-                      "type": "string"
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "left",
+                            "center",
+                            "right"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "justify",
+                          "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                          "type": "string"
+                        }
+                      ]
                     },
                     "bold": {
                       "default": false,
@@ -10302,12 +10575,21 @@ expression: r
                     "align": {
                       "default": "center",
                       "description": "Default cell alignment.",
-                      "enum": [
-                        "left",
-                        "center",
-                        "right"
-                      ],
-                      "type": "string"
+                      "oneOf": [
+                        {
+                          "enum": [
+                            "left",
+                            "center",
+                            "right"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "const": "justify",
+                          "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                          "type": "string"
+                        }
+                      ]
                     },
                     "cells": {
                       "description": "Row-major cells: `row_heights.len()` rows of `column_widths.len()` cells.",
@@ -10317,15 +10599,27 @@ expression: r
                           "description": "One table cell. Style fields override the table defaults.",
                           "properties": {
                             "align": {
-                              "enum": [
-                                "left",
-                                "center",
-                                "right",
-                                null
-                              ],
-                              "type": [
-                                "string",
-                                "null"
+                              "anyOf": [
+                                {
+                                  "oneOf": [
+                                    {
+                                      "enum": [
+                                        "left",
+                                        "center",
+                                        "right"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    {
+                                      "const": "justify",
+                                      "description": "Stretch the spaces so wrapped lines fill the box; the last line stays left.",
+                                      "type": "string"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
                               ]
                             },
                             "bold": {
@@ -12326,6 +12620,20 @@ expression: r
                 "connected": {
                   "type": "boolean"
                 },
+                "firmware": {
+                  "description": "Firmware version reported at connect, such as \"3.12\".",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "hardware": {
+                  "description": "Hardware version reported at connect.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "model": {
                   "description": "Printer model facts that commands need (subset of the registry entry).",
                   "properties": {
@@ -12399,6 +12707,13 @@ expression: r
                 },
                 "name": {
                   "type": "string"
+                },
+                "serial": {
+                  "description": "Device serial number reported at connect.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -12457,6 +12772,20 @@ expression: r
                 "connected": {
                   "type": "boolean"
                 },
+                "firmware": {
+                  "description": "Firmware version reported at connect, such as \"3.12\".",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "hardware": {
+                  "description": "Hardware version reported at connect.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "model": {
                   "description": "Printer model facts that commands need (subset of the registry entry).",
                   "properties": {
@@ -12530,6 +12859,13 @@ expression: r
                 },
                 "name": {
                   "type": "string"
+                },
+                "serial": {
+                  "description": "Device serial number reported at connect.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -12573,6 +12909,20 @@ expression: r
           },
           "connected": {
             "type": "boolean"
+          },
+          "firmware": {
+            "description": "Firmware version reported at connect, such as \"3.12\".",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hardware": {
+            "description": "Hardware version reported at connect.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "model": {
             "description": "Printer model facts that commands need (subset of the registry entry).",
@@ -12647,6 +12997,13 @@ expression: r
           },
           "name": {
             "type": "string"
+          },
+          "serial": {
+            "description": "Device serial number reported at connect.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

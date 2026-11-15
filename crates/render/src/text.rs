@@ -77,6 +77,29 @@ impl TextEngine {
         }
     }
 
+    /// Load one font file (TTF, OTF, TTC). Returns the families it added, sorted.
+    pub fn add_font(&mut self, bytes: Vec<u8>) -> Result<Vec<String>, String> {
+        let magic = bytes.get(..4).unwrap_or_default();
+        let known = matches!(magic, [0, 1, 0, 0] | b"OTTO" | b"true" | b"ttcf");
+        if !known {
+            return Err("not a TrueType or OpenType font (TTF, OTF, TTC)".to_owned());
+        }
+        let db = self.fs.db_mut();
+        let before: std::collections::HashSet<_> = db.faces().map(|f| f.id).collect();
+        db.load_font_data(bytes);
+        let mut added: Vec<String> = db
+            .faces()
+            .filter(|f| !before.contains(&f.id))
+            .filter_map(|f| f.families.first().map(|(n, _)| n.clone()))
+            .collect();
+        if added.is_empty() {
+            return Err("the font file has no readable faces".to_owned());
+        }
+        added.sort_by_key(|n| n.to_lowercase());
+        added.dedup();
+        Ok(added)
+    }
+
     /// Canonical family name if installed (case-insensitive match).
     pub fn find_family(&self, name: &str) -> Option<String> {
         self.fs.db().faces().find_map(|f| {
@@ -148,6 +171,7 @@ impl TextEngine {
             HAlign::Left => Align::Left,
             HAlign::Center => Align::Center,
             HAlign::Right => Align::Right,
+            HAlign::Justify => Align::Justified,
         };
         let spans: Vec<(&str, Attrs<'_>)> = runs
             .iter()
@@ -248,6 +272,54 @@ mod tests {
         assert_eq!(substitute("{{missing}} {{a", look), "{{missing}} {{a");
         assert_eq!(vertical("ab\nc"), "a\nb\n\nc");
         assert_eq!(substitute("plain", look), "plain");
+    }
+
+    /// Right edge of the first line's last glyph.
+    fn first_line_end(align: HAlign) -> f32 {
+        let mut e = TextEngine::new(false);
+        let st = TextStyle {
+            family: DEFAULT_FONT.into(),
+            size_px: 20.0,
+            line_spacing: 1.0,
+            letter_spacing_px: 0.0,
+            bold: false,
+            italic: false,
+            underline: false,
+            align,
+            wrap: true,
+        };
+        let laid = e.layout("aa bbb c dddd ee fff gg hhhh ii jj kkk", &st, 200.0);
+        laid.buf
+            .layout_runs()
+            .next()
+            .and_then(|run| run.glyphs.last().map(|g| g.x + g.w))
+            .unwrap_or(0.0)
+    }
+
+    #[test]
+    fn justify_fills_wrapped_lines() {
+        let left = first_line_end(HAlign::Left);
+        let justified = first_line_end(HAlign::Justify);
+        assert!(left < 195.0, "left-aligned line should be ragged: {left}");
+        assert!(
+            justified > 195.0 && justified <= 200.5,
+            "justified: {justified}"
+        );
+    }
+
+    #[test]
+    fn add_font_checks_the_file() {
+        let mut e = TextEngine::new(false);
+        assert!(e.add_font(b"not a font".to_vec()).is_err());
+        assert!(e.add_font(Vec::new()).is_err());
+        // Right magic, no tables.
+        assert!(e.add_font(vec![0, 1, 0, 0, 0, 0]).is_err());
+        let faces = e.fs.db().len();
+        assert_eq!(
+            e.add_font(FONTS[1].to_vec()),
+            Ok(vec![DEFAULT_FONT.to_owned()])
+        );
+        assert_eq!(e.fs.db().len(), faces + 1);
     }
 
     #[test]

@@ -25,3 +25,4 @@
 | [0021](0021-print-transforms-and-code128-sets.md) | Print offset, mirror and output direction; Code 128 sets and GS1-128 | proposed |
 | [0022](0022-tabs-recent-clipboard-units.md) | Document tabs, recent files, clipboard, rulers and units | proposed |
 | [0023](0023-text-fit-spans-crop-mirrors.md) | Fill-to-box text, length guard, fonts, rich spans, image crop, mirror copies and column drag | proposed |
+| [0024](0024-phase-3-close-out.md) | Phase 3 close-out: device identity, font files, justify and studio gaps | proposed |

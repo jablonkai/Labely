@@ -88,7 +88,11 @@ fn menus_are_generated_and_localised() {
     h.run();
     h.get_by_label("Beszúrás").click();
     h.run();
-    h.get_by_label_contains("Vonalkód").click();
+    // Not the palette's "+ Vonalkód" button.
+    h.get_all_by_label_contains("Vonalkód")
+        .find(|n| !format!("{n:?}").contains("+ Vonalk"))
+        .unwrap()
+        .click();
     h.run();
     let doc = h.state().session.doc(None).unwrap();
     assert_eq!(doc.elements().next().unwrap().kind.type_name(), "barcode");
@@ -881,4 +885,233 @@ fn mirror_copy_from_menu_and_font_picker() {
         h.query_by_label("Noto Sans").is_some(),
         "font picker lists the bundled font"
     );
+}
+
+// ---- Slice 3.7: Phase 3 close-out ----
+
+#[test]
+fn marquee_selects_the_unlocked_elements_it_touches() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    let rect = |app: &mut LabelyApp, x: f64, y: f64| {
+        app.run(
+            "element.add_rect",
+            json!({"x_mm": x, "y_mm": y, "width_mm": 6, "height_mm": 4}),
+        )
+        .created[0]
+    };
+    let a = rect(&mut app, 10.0, 10.0);
+    let b = rect(&mut app, 20.0, 12.0);
+    let locked = rect(&mut app, 30.0, 10.0);
+    let far = rect(&mut app, 40.0, 24.0);
+    app.run("element.lock", json!({"ids": [locked], "locked": true}));
+    app.select(&[]);
+    let mut h = harness(app);
+    h.run();
+    let view = h.state().ui.last_view.unwrap();
+    // From empty space above-left of `a` to the middle of the locked one.
+    drag(&mut h, view.to_screen(5.0, 5.0), view.to_screen(33.0, 15.0));
+    let mut sel = h.state().selection();
+    sel.sort_by_key(|i| i.0);
+    assert_eq!(sel, vec![a, b], "touched and unlocked only");
+
+    // Shift adds to the selection.
+    let view = h.state().ui.last_view.unwrap();
+    let (from, to) = (view.to_screen(45.0, 28.0), view.to_screen(38.0, 22.0));
+    h.hover_at(from);
+    h.run();
+    h.event(egui::Event::ModifiersChanged(Modifiers::SHIFT));
+    drag(&mut h, from, to);
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+    assert_eq!(h.state().selection().len(), 3);
+    assert!(h.state().selection().contains(&far));
+    assert!(h.state().ui.gesture.is_none());
+}
+
+#[test]
+fn prefs_restore_language_and_label_colour() {
+    let prefs = fresh_prefs();
+    std::fs::write(
+        &prefs,
+        r#"{"recent": [], "units": "mm", "lang": "hu", "label_color": [255, 236, 140]}"#,
+    )
+    .unwrap();
+    let app = LabelyApp::new(
+        None,
+        StudioOptions {
+            prefs_file: Some(prefs.clone()),
+            ..options()
+        },
+    );
+    assert_eq!(app.i18n.lang(), Lang::Hu);
+    assert_eq!(app.ui.label_color, [255, 236, 140]);
+
+    // Picking a language in View → Language saves it.
+    let mut h = harness(app);
+    h.run();
+    h.get_by_label("Nézet").click();
+    h.run();
+    h.get_by_label("Nyelv").hover();
+    h.run();
+    h.get_by_label("English").click();
+    h.run();
+    assert_eq!(h.state().i18n.lang(), Lang::En);
+    let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&prefs).unwrap()).unwrap();
+    assert_eq!(saved["lang"], "en");
+    assert_eq!(saved["label_color"], json!([255, 236, 140]));
+}
+
+#[test]
+fn line_style_and_table_cell_controls() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    let line = app
+        .run(
+            "element.add_line",
+            json!({"x_mm": 2, "y_mm": 5, "width_mm": 30, "height_mm": 0}),
+        )
+        .created[0];
+    app.select(&[line]);
+    let mut h = harness(app);
+    h.run();
+    h.get_by_label("line style").click();
+    h.run();
+    h.get_by_label("Dashed").click();
+    h.run();
+    let dash = |h: &Harness<'_, LabelyApp>| match &h
+        .state()
+        .session
+        .doc(None)
+        .unwrap()
+        .element(line)
+        .unwrap()
+        .kind
+    {
+        labely_core::ElementKind::Line(l) => l.dash_mm,
+        k => panic!("{k:?}"),
+    };
+    let d = dash(&h).expect("dashed");
+    assert!(d[0] > d[1], "a dash is longer than its gap: {d:?}");
+    h.get_by_label("line style").click();
+    h.run();
+    h.get_by_label("Solid").click();
+    h.run();
+    assert_eq!(dash(&h), None);
+
+    // Table: invert the focused cell, size its column, then clear the text.
+    let table = h
+        .state_mut()
+        .run(
+            "element.add_table",
+            json!({"x_mm": 2, "y_mm": 10, "width_mm": 40, "height_mm": 15, "row_count": 2, "column_count": 2}),
+        )
+        .created[0];
+    h.state_mut().run(
+        "element.table_edit",
+        json!({"id": table, "edit": {"op": "set_cell", "row": 0, "col": 0, "text": "A"}}),
+    );
+    h.state_mut().select(&[table]);
+    h.run();
+    h.get_by_label("White on black").click();
+    h.run();
+    let props = |h: &Harness<'_, LabelyApp>| match &h
+        .state()
+        .session
+        .doc(None)
+        .unwrap()
+        .element(table)
+        .unwrap()
+        .kind
+    {
+        labely_core::ElementKind::Table(t) => t.clone(),
+        k => panic!("{k:?}"),
+    };
+    assert!(props(&h).cells[0][0].invert);
+    h.get_by_label("Clear text").click();
+    h.run();
+    let t = props(&h);
+    assert!(t.cells[0][0].text.is_empty());
+    assert!(t.cells[0][0].invert, "styles stay");
+}
+
+#[test]
+fn palette_adds_by_click_and_by_drag() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    let mut h = harness(app);
+    h.run();
+    assert!(h.query_by_label("Elements").is_some());
+    h.get_by_label("+ Rectangle").click();
+    h.run();
+    assert_eq!(element_count(&h), 1);
+
+    // Drag "Ellipse" onto the label: it lands centred on the drop point.
+    let from = h.get_by_label("+ Ellipse").rect().center();
+    let view = h.state().ui.last_view.unwrap();
+    let to = view.to_screen(35.0, 20.0);
+    drag(&mut h, from, to);
+    assert_eq!(element_count(&h), 2);
+    let doc = h.state().session.doc(None).unwrap();
+    let e = doc.elements().last().unwrap();
+    assert!(
+        matches!(e.kind, labely_core::ElementKind::Ellipse(_)),
+        "{:?}",
+        e.kind
+    );
+    let (cx, cy) = (e.x_mm + e.width_mm / 2.0, e.y_mm + e.height_mm / 2.0);
+    assert!(
+        (cx - 35.0).abs() < 0.6 && (cy - 20.0).abs() < 0.6,
+        "centre {cx},{cy}"
+    );
+}
+
+#[test]
+fn print_dialog_takes_copies_from_a_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            history_dir: Some(dir.path().join("history")),
+            ..options()
+        },
+    );
+    app.run(
+        "doc.new",
+        json!({"name": "Copies", "width_mm": 30, "height_mm": 20}),
+    );
+    app.run("data.attach_csv", json!({"text": "name,n\nA,2\nB,3\n"}));
+    app.ui.print.address = format!("fake:{}", dir.path().join("out").display());
+    app.ui.dialog = Some(labely_studio::app::Dialog::Print);
+    let mut h = harness(app);
+    h.run();
+    assert!(h.query_by_label("Preview (as printed)").is_some());
+    h.get_by_label("Copies from column").click();
+    h.run();
+    h.get_by_label("n").click();
+    h.run();
+    assert_eq!(h.state().ui.print.copies_column, "n");
+    h.get_all_by_label("Print").last().unwrap().click();
+    h.run_steps(3);
+    let job = h.state().session.jobs().list()[0].clone();
+    h.state().session.jobs().wait(&job.id, None).unwrap();
+    let job = h.state().session.jobs().list()[0].clone();
+    assert_eq!(job.pages_total, 5, "2 + 3 copies: {job:?}");
+}
+
+#[test]
+fn failed_connect_shows_troubleshooting_tips() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    assert!(!labely_studio::menu::connect(
+        &mut app,
+        "usb:/dev/does-not-exist"
+    ));
+    let mut h = harness(app);
+    h.run();
+    assert!(h.query_by_label_contains("Could not connect").is_some());
+    assert!(h.query_by_label_contains("USB cable").is_some());
+    h.get_by_label("Close").click();
+    h.run();
+    assert!(h.state().ui.connect_failed.is_none());
 }

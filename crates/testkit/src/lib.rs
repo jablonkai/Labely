@@ -371,6 +371,9 @@ impl FakeDeviceHub {
             name: "Fake Printer".to_owned(),
             connected,
             model: Some(fake_model()),
+            firmware: None,
+            hardware: None,
+            serial: None,
         }
     }
 

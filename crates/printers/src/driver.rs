@@ -15,6 +15,9 @@ pub struct Identity {
     pub model: Option<Model>,
     /// Protocol generation (driver specific).
     pub protocol: Option<u8>,
+    pub firmware: Option<String>,
+    pub hardware: Option<String>,
+    pub serial: Option<String>,
 }
 
 /// A printer driver bound to one connection.

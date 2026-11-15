@@ -351,10 +351,29 @@ impl Driver for NiimbotDriver {
             .cloned()
             .or_else(|| self.fallback_model.clone());
         debug!(code, protocol = self.protocol.0, model = ?self.model.as_ref().map(|m| &m.id), "connected");
+        // Best effort: older firmware may not answer these.
+        let firmware = self.try_read(
+            &request::printer_info(InfoType::Firmware),
+            InfoType::Firmware.response_cmd(),
+            |p| response::version(p, InfoType::Firmware),
+        )?;
+        let hardware = self.try_read(
+            &request::printer_info(InfoType::Hardware),
+            InfoType::Hardware.response_cmd(),
+            |p| response::version(p, InfoType::Hardware),
+        )?;
+        let serial = self.try_read(
+            &request::printer_info(InfoType::Serial),
+            InfoType::Serial.response_cmd(),
+            response::serial,
+        )?;
         Ok(Identity {
             name: self.transport.info().name.clone(),
             model: self.model.clone(),
             protocol: Some(self.protocol.0),
+            firmware,
+            hardware,
+            serial: serial.filter(|s| !s.is_empty()),
         })
     }
 

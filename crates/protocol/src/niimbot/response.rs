@@ -6,6 +6,7 @@ use thiserror::Error;
 
 use super::Packet;
 use super::cmd;
+use super::request::InfoType;
 
 /// Parse failures.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -99,6 +100,29 @@ pub fn model_id(p: &Packet) -> Result<u16, ParseError> {
         [hi, lo, ..] => Ok(u16::from_be_bytes([*hi, *lo])),
         [] => Err(ParseError::TooShort { cmd: p.cmd, len: 0 }),
     }
+}
+
+/// Firmware (type 9) or hardware (type 12) version from a PrinterInfo reply, as
+/// `major.minor` with two minor digits (`[03, 0C]` is "3.12"). A one-byte reply is
+/// read as hundredths (`[0x64]` is "1.00").
+pub fn version(p: &Packet, kind: InfoType) -> Result<String, ParseError> {
+    check(p, kind.response_cmd())?;
+    match p.payload.as_slice() {
+        [b] => Ok(format!("{}.{:02}", b / 100, b % 100)),
+        [major, minor, ..] => Ok(format!("{major}.{minor:02}")),
+        [] => Err(ParseError::TooShort { cmd: p.cmd, len: 0 }),
+    }
+}
+
+/// Serial number from a PrinterInfo type 11 reply (0x4B): printable ASCII.
+pub fn serial(p: &Packet) -> Result<String, ParseError> {
+    check(p, InfoType::Serial.response_cmd())?;
+    need(p, 1)?;
+    Ok(p.payload
+        .iter()
+        .filter(|b| b.is_ascii_graphic())
+        .map(|&b| char::from(b))
+        .collect())
 }
 
 /// Auto-off level from a PrinterInfo type 7 reply (0x47).
@@ -365,6 +389,23 @@ mod tests {
 
     fn pk(cmd: u8, payload: &[u8]) -> Packet {
         Packet::small(cmd, payload)
+    }
+
+    /// Replies recorded from a B21 Pro (firmware 3.12, hardware 3.01).
+    #[test]
+    fn versions_and_serial_from_b21_pro() {
+        let fw = pk(0x49, &[0x03, 0x0C]);
+        assert_eq!(version(&fw, InfoType::Firmware), Ok("3.12".into()));
+        let hw = pk(0x4C, &[0x03, 0x01]);
+        assert_eq!(version(&hw, InfoType::Hardware), Ok("3.01".into()));
+        assert_eq!(
+            version(&pk(0x49, &[0x64]), InfoType::Firmware),
+            Ok("1.00".into())
+        );
+        let sn = pk(0x4B, b"HC12345678");
+        assert_eq!(serial(&sn), Ok("HC12345678".into()));
+        assert!(version(&pk(0x49, &[]), InfoType::Firmware).is_err());
+        assert!(version(&hw, InfoType::Firmware).is_err());
     }
 
     #[test]

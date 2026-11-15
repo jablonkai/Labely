@@ -1,5 +1,5 @@
 //! Icons, borders and reading codes from images: `element.add_icon`, `element.add_border`,
-//! `icon.list`, `font.list`, `code.decode`.
+//! `icon.list`, `font.list`, `font.add`, `code.decode`.
 
 use base64::Engine;
 use schemars::JsonSchema;
@@ -9,6 +9,9 @@ use super::element::{AddOutput, Frame, add, add_params};
 use crate::command::{Command, CommandError, CommandMeta, Ctx};
 use crate::document::{BorderProps, BorderStyle, DEFAULT_FONT, ElementKind, IconProps};
 use crate::services::IconInfo;
+
+/// Largest font file `font.add` reads.
+const MAX_FONT_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Largest image `code.decode` reads.
 const MAX_DECODE_BYTES: usize = 5 * 1024 * 1024;
@@ -174,6 +177,75 @@ impl Command for FontList {
             fonts.push(DEFAULT_FONT.to_owned());
         }
         Ok(FontListOutput { fonts })
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FontAddParams {
+    /// Font file: TrueType (.ttf), OpenType (.otf) or a collection (.ttc), at most 64 MiB.
+    pub path: String,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct FontAddOutput {
+    /// Family names the file added, usable as `font_family`.
+    pub added: Vec<String>,
+    /// Every family now available, sorted.
+    pub fonts: Vec<String>,
+}
+
+/// `font.add`
+#[derive(Debug)]
+pub struct FontAdd;
+
+impl Command for FontAdd {
+    const ID: &'static str = "font.add";
+    type Params = FontAddParams;
+    type Output = FontAddOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::ui(
+            "Add font file",
+            "Load a TTF, OTF or TTC font file for this session, so its families can be used as \
+             a text or table `font_family`. Documents store only the family name: a label \
+             that uses the font renders with it only where the font is loaded or installed.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: FontAddParams) -> Result<FontAddOutput, CommandError> {
+        use std::io::Read as _;
+        let path = ctx.check_path("path", &p.path, false)?;
+        let read_err = |e: std::io::Error| {
+            match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    CommandError::not_found(format!("cannot read {}: {e}", p.path))
+                }
+                _ => CommandError::bad_params(format!("cannot read {}: {e}", p.path)),
+            }
+            .with_param("path")
+        };
+        let file = std::fs::File::open(&path).map_err(read_err)?;
+        let mut bytes = Vec::new();
+        file.take(MAX_FONT_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(read_err)?;
+        if bytes.len() as u64 > MAX_FONT_BYTES {
+            return Err(CommandError::bad_params(format!(
+                "{} is larger than {} MiB",
+                p.path,
+                MAX_FONT_BYTES / 1024 / 1024
+            ))
+            .with_param("path"));
+        }
+        let renderer = &ctx.services().renderer;
+        let added = renderer
+            .add_font(bytes)
+            .map_err(|e| CommandError::bad_params(format!("{}: {e}", p.path)).with_param("path"))?;
+        Ok(FontAddOutput {
+            added,
+            fonts: renderer.fonts(),
+        })
     }
 }
 

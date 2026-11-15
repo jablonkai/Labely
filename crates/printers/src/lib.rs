@@ -15,10 +15,19 @@ pub use registry::{Model, Registry};
 
 use std::sync::Arc;
 
-/// Production services: the bundled-font renderer and the default device hub.
+/// Production services: the bundled-font renderer and the default device hub. Output does
+/// not depend on the machine's fonts (CLI, MCP, tests).
 pub fn default_services() -> labely_core::Services {
     labely_core::Services {
         renderer: Arc::new(labely_render::LabelRenderer::new()),
+        devices: Arc::new(Hub::new()),
+    }
+}
+
+/// Desktop services: like [`default_services`], plus the fonts installed on the machine.
+pub fn desktop_services() -> labely_core::Services {
+    labely_core::Services {
+        renderer: Arc::new(labely_render::LabelRenderer::with_system_fonts()),
         devices: Arc::new(Hub::new()),
     }
 }

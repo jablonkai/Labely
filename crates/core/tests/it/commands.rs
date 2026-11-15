@@ -57,7 +57,10 @@ fn bad_params_messages() {
         json!({"x_mm": 1, "y_mm": 1, "width_mm": 3, "height_mm": 3, "text": "a", "align": "middle"}),
     );
     assert_eq!(e.param.as_deref(), Some("align"));
-    assert_eq!(e.accepted.unwrap(), vec!["left", "center", "right"]);
+    assert_eq!(
+        e.accepted.unwrap(),
+        vec!["left", "center", "right", "justify"]
+    );
 
     let e = err(&mut s, "doc.get", json!([1]));
     assert!(e.message.contains("must be a JSON object"));

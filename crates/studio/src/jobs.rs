@@ -52,6 +52,18 @@ pub fn watch(app: &mut LabelyApp, ctx: &egui::Context) {
     }
 }
 
+/// Jobs queued or printing, for the status bar; `None` when the queue is idle.
+pub fn active_count(app: &LabelyApp) -> Option<usize> {
+    let n = app
+        .session
+        .jobs()
+        .list()
+        .iter()
+        .filter(|j| !j.state.is_finished())
+        .count();
+    (n > 0).then_some(n)
+}
+
 /// The queue: pause/resume, clear, history, and one row per job.
 pub fn queue_section(app: &mut LabelyApp, ui: &mut Ui) {
     let paused = app.session.jobs().is_paused();

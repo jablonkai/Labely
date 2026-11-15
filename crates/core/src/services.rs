@@ -119,6 +119,14 @@ pub trait Renderer: Send + Sync {
     fn fonts(&self) -> Vec<String> {
         Vec::new()
     }
+    /// Load a font file's bytes (TTF, OTF or a TTC collection) for the rest of the session.
+    /// Returns the family names it added, sorted.
+    fn add_font(&self, bytes: Vec<u8>) -> Result<Vec<String>, RenderError> {
+        let _ = bytes;
+        Err(RenderError::Other(
+            "this renderer cannot load font files".to_owned(),
+        ))
+    }
     /// Names of the built-in icons, with their category.
     fn icons(&self) -> Vec<IconInfo> {
         Vec::new()
@@ -162,6 +170,15 @@ pub struct DeviceInfo {
     pub connected: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelInfo>,
+    /// Firmware version reported at connect, such as "3.12".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware: Option<String>,
+    /// Hardware version reported at connect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware: Option<String>,
+    /// Device serial number reported at connect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial: Option<String>,
 }
 
 /// Label stock reported by the printer (RFID).

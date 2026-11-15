@@ -44,6 +44,8 @@ pub struct PrintForm {
     pub mirror: bool,
     /// Turn the print 180°.
     pub rotate_180: bool,
+    /// Data column holding the copies of each record; empty = `copies` for every record.
+    pub copies_column: String,
 }
 
 impl Default for PrintForm {
@@ -59,6 +61,7 @@ impl Default for PrintForm {
             offset_y_mm: 0.0,
             mirror: false,
             rotate_180: false,
+            copies_column: String::new(),
         }
     }
 }
@@ -168,8 +171,33 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         ui.add(egui::DragValue::new(&mut form.copies).range(1..=999))
             .labelled_by(l);
         ui.end_row();
-        let has_data = app.session.doc(None).is_some_and(|d| d.data.is_some());
-        if has_data {
+        let columns: Option<Vec<String>> = app
+            .session
+            .doc(None)
+            .and_then(|d| d.data.as_ref().map(|s| s.columns.clone()));
+        if let Some(columns) = &columns {
+            if !form.copies_column.is_empty() && !columns.contains(&form.copies_column) {
+                form.copies_column.clear();
+            }
+            let l = ui.label(app.i18n.t("print-copies-column")).id;
+            let none = app.i18n.t("print-copies-column-none");
+            let shown = if form.copies_column.is_empty() {
+                none.clone()
+            } else {
+                form.copies_column.clone()
+            };
+            egui::ComboBox::from_id_salt("print-copies-column")
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut form.copies_column, String::new(), none);
+                    for c in columns {
+                        ui.selectable_value(&mut form.copies_column, c.clone(), c);
+                    }
+                })
+                .response
+                .labelled_by(l)
+                .on_hover_text(app.i18n.t("print-copies-column-hint"));
+            ui.end_row();
             let l = ui.label(app.i18n.t("print-records")).id;
             ui.add(
                 egui::TextEdit::singleline(&mut form.records)
@@ -212,16 +240,14 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         });
         ui.end_row();
     });
+    print_preview(app, ui, &form);
     app.ui.print = form.clone();
     ui.separator();
     let mut close = false;
     ui.horizontal(|ui| {
         if ui.button(app.i18n.t("action-print")).clicked() {
             let connected = connected.iter().any(|d| d.address == form.address);
-            let ok = connected
-                || app
-                    .run_reporting("device.connect", json!({"address": form.address}))
-                    .ok;
+            let ok = connected || crate::menu::connect(app, &form.address);
             if ok {
                 let mut p = json!({"address": form.address, "copies": form.copies, "wait": false});
                 if form.density > 0 {
@@ -230,6 +256,9 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                 if app.session.doc(None).is_some_and(|d| d.data.is_some()) {
                     if !form.records.trim().is_empty() {
                         p["records"] = json!(form.records.trim());
+                    }
+                    if !form.copies_column.is_empty() {
+                        p["copies_column"] = json!(form.copies_column);
                     }
                 } else if form.count > 1 {
                     p["count"] = json!(form.count);
@@ -306,4 +335,35 @@ fn about(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         ui.label(format!("{}", h.conn_path.display()));
     }
     ui.button(app.i18n.t("action-close")).clicked()
+}
+
+/// Longest side of the preview in the print dialog, points.
+const PREVIEW_MAX: f32 = 260.0;
+
+/// The label as it leaves the printer: the print raster with the dialog's mirror and 180°
+/// turn applied (offsets are too small to show at this size).
+fn print_preview(app: &LabelyApp, ui: &mut Ui, form: &PrintForm) {
+    let Some(r) = &app.raster else {
+        return;
+    };
+    let (w, h) = (r.size[0] as f32, r.size[1] as f32);
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    let scale = (PREVIEW_MAX / w.max(h)).min(1.0);
+    // Mirroring flips x; a 180° turn flips both axes.
+    let flip_x = form.mirror != form.rotate_180;
+    let flip_y = form.rotate_180;
+    let (u0, u1) = if flip_x { (1.0, 0.0) } else { (0.0, 1.0) };
+    let (v0, v1) = if flip_y { (1.0, 0.0) } else { (0.0, 1.0) };
+    ui.separator();
+    ui.label(egui::RichText::new(app.i18n.t("print-preview")).weak());
+    ui.add(
+        egui::Image::new((r.texture.id(), egui::vec2(w * scale, h * scale)))
+            .uv(egui::Rect::from_min_max(
+                egui::pos2(u0, v0),
+                egui::pos2(u1, v1),
+            ))
+            .bg_fill(egui::Color32::WHITE),
+    );
 }

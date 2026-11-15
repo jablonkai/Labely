@@ -329,6 +329,7 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<table::TableEdit>(),
         Entry::of::<decor::IconList>(),
         Entry::of::<decor::FontList>(),
+        Entry::of::<decor::FontAdd>(),
         Entry::of::<decor::CodeDecode>(),
         Entry::of::<element::SetProps>(),
         Entry::of::<element::Move>(),

@@ -93,6 +93,15 @@ pub struct Prefs {
     /// Recently opened or saved documents, newest first.
     pub recent: Vec<PathBuf>,
     pub units: Units,
+    /// UI language code ("en", "hu"); `None` follows the system language.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lang: Option<String>,
+    /// Label colour shown on the canvas.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label_color: Option<[u8; 3]>,
+    /// Font files added with File → Add Font, loaded at start.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fonts: Vec<PathBuf>,
 }
 
 impl Prefs {

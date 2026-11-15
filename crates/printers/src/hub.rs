@@ -141,6 +141,9 @@ impl Hub {
             name: id.name,
             connected: true,
             model: id.model.map(|m| m.info()),
+            firmware: id.firmware,
+            hardware: id.hardware,
+            serial: id.serial,
         };
         Ok(Connection {
             driver,
@@ -188,7 +191,9 @@ impl Hub {
         locked(&self.conns)?
             .get(address)
             .map(|(_, c)| c.clone())
-            .ok_or_else(|| DeviceError::NotFound(format!("{address} is not connected")))
+            .ok_or_else(|| {
+                DeviceError::Unavailable(format!("{address} is not connected; run device.connect"))
+            })
     }
 }
 
@@ -221,6 +226,9 @@ impl DeviceHub for Hub {
                     name: d.info.name,
                     connected: false,
                     model,
+                    firmware: None,
+                    hardware: None,
+                    serial: None,
                 });
             }
         }
@@ -233,6 +241,9 @@ impl DeviceHub for Hub {
                         name: d.info.name,
                         connected: false,
                         model: None,
+                        firmware: None,
+                        hardware: None,
+                        serial: None,
                     });
                 }
             }

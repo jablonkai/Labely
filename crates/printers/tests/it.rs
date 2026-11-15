@@ -147,7 +147,12 @@ fn hub_sim_and_errors() {
     let hub = Hub::new();
     let info = hub.connect("sim:niimbot.b21_pro").unwrap();
     assert!(info.connected);
+    // Read at connect, as a B21 Pro reports them.
+    assert_eq!(info.firmware.as_deref(), Some("3.12"));
+    assert_eq!(info.hardware.as_deref(), Some("3.01"));
+    assert_eq!(info.serial.as_deref(), Some("SIM0000001"));
     assert_eq!(hub.connected().len(), 1);
+    assert_eq!(hub.connected()[0].firmware.as_deref(), Some("3.12"));
     assert!(hub.status("sim:niimbot.b21_pro").unwrap().paper.is_some());
     hub.disconnect("sim:niimbot.b21_pro").unwrap();
     assert!(hub.connect("nope:x").is_err());
@@ -239,4 +244,36 @@ fn hub_settings_on_fake_printer() {
     assert_eq!(s.auto_off_level, Some(3));
     hub.calibrate(&address, MediaType::Gap).unwrap();
     assert!(dir.path().join("calibrate-0001.json").exists());
+}
+
+#[test]
+fn font_add_loads_a_font_file_into_the_renderer() {
+    let mut s = labely_core::Session::new(labely_printers::default_services());
+    let dir = tempfile::tempdir().unwrap();
+    let font = dir.path().join("bold.ttf");
+    let src =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../render/fonts/NotoSans-Bold.ttf");
+    std::fs::copy(src, &font).unwrap();
+    let e = s.execute("font.add", serde_json::json!({ "path": font }));
+    assert!(e.ok, "{:?}", e.error);
+    let r = e.result.unwrap();
+    assert_eq!(r["added"], serde_json::json!(["Noto Sans"]));
+    assert!(
+        r["fonts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f == "Noto Sans")
+    );
+
+    let junk = dir.path().join("junk.ttf");
+    std::fs::write(&junk, b"hello").unwrap();
+    let e = s.execute("font.add", serde_json::json!({ "path": junk }));
+    let err = e.error.unwrap();
+    assert_eq!(err.param.as_deref(), Some("path"));
+    assert!(err.message.contains("not a TrueType"), "{}", err.message);
+
+    let missing = dir.path().join("missing.otf");
+    let e = s.execute("font.add", serde_json::json!({ "path": missing }));
+    assert_eq!(e.error.unwrap().code, labely_core::ErrorCode::NotFound);
 }

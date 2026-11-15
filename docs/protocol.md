@@ -313,6 +313,11 @@ The vendor V6 also has a compressed image path (`processOneColorCompressImageDat
 
 - **Third-party engines:** devices.json `interfaceType` gives the command family. 1 = NIIMBOT (this protocol), 2 = Zicox (B3), 3 = DZ/"Daozhen" (B11, B50, B50W, S1, S3, T6, T7, T8, JC-M90), 4 = SNBC (T2, T2S). Types 2–4 do **not** use the 0x55 0x55 framing [E: V:dev keys `interfaceType`, `interfaceName`; V:jc symbols `PrinterName_DZ_B`, `PrinterName_DZ_T`, `PrinterName_SNBC_T`]. niimbluelib still lists some of these (B11, B50, T8, S1…) with model ids ≥51457 [E: O:nbl printer_models.ts:206,448,910]. **Conflict:** do not assume they work with this protocol.
 - **D11 firmware versions:** devices.json `rfidNotSupportVersions` lists firmware where RFID is unsupported (D11, D41, D61, Hi-NB-D11, B21-C2B, B21S) [E: V:dev].
+- **B21 Pro, observed (firmware 3.12, Labely probe `niimbot_probe`):** PrinterInfo replies:
+  density `02`, label type `01`, auto-off `03`, model id `03 11`, firmware `03 0C` (3.12),
+  battery `02` (level, ×25 %), serial ASCII `HC12345678`, hardware `03 01` (3.01), BT MAC
+  6 bytes, area `00 00`. Speed (2), language (6) and print mode (14) answer with cmd `00`
+  (not supported). Heartbeat type 3 (DF) gets no reply.
 - **B21_PRO firmware quirks (OSS):** the first packet after PrintStart is not answered over BLE, so OSS sends a one-way A3 first. The first packet after PrintEnd is dropped, so OSS sends a one-way heartbeat after F3 [E: O:nbl D110MV4PrintTask.ts:42-46,67-75].
 
 ## 12. B21 Pro: exact path to print one label

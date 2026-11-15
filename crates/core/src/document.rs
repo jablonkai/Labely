@@ -404,6 +404,8 @@ pub enum HAlign {
     Left,
     Center,
     Right,
+    /// Stretch the spaces so wrapped lines fill the box; the last line stays left.
+    Justify,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

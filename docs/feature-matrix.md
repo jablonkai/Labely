@@ -205,6 +205,40 @@ and the app was not launched.
 | Shop | Consumables store, coupons | Links to the vendor shop, member coupons, guide prices | VIP coupons | [E: i18n pc0282, pc0283, pc0286, pc0287] [E: sym ashop host] [E: src apis/models/guide_price_model, c1_consumable_model] | won't (commerce) |
 | Meetings | Meeting/nameplate sign-in ("orca") | Meetings, attendee import, sign-in QR, printing name tags. Probably a mobile/mini-app flow | UNCERTAIN | [E: i18n orca* keys] | won't (cloud service) |
 
+## Phase 3 exit status
+
+The Phase 3 exit audit (slice 3.7, ADR-0024) checked every Ph1–Ph3 row against the code. All
+other Ph1–Ph3 rows are done. The rows below are done only in part; each remaining part has a
+reason and a new target. Device rows were checked on a B21 Pro (firmware 3.12).
+
+| Section | Row | Done | Not done: reason → target |
+|---|---|---|---|
+| 1 | Header bar | Printer, battery and active jobs in the status bar | Help menu has About only; docs links come with packaging → Ph6 |
+| 1 | Print settings dialog | Preview as printed (mirror, 180°), copies column | Cut mode needs a cutter model → Ph6 |
+| 1 | Device connect modal | Panel with troubleshooting tips and retry | Wi-Fi → later. A separate modal is not needed: the panel stays open while printing |
+| 1 | Device settings page | Battery, labels left, firmware, hardware, serial | Firmware update is vendor-only and risky → won't |
+| 2 | Canvas background colour | Six presets, saved | Free colour pick: the presets match label stock; no use case yet → later |
+| 2 | Single and multi-select | Rubber-band selection (Shift adds), select all | Editing shared properties of several elements: align, distribute and group cover the common cases → later |
+| 3 | Text alignment | Left, centre, right, justify | — |
+| 3 | Fonts / custom font | Installed fonts in the studio; `font.add` for TTF/OTF/TTC files | Cloud fonts → won't |
+| 3 | QR code | Data, error correction | Styled QR (dot shapes, logo) hurts scan reliability on 203/300 dpi heads → later |
+| 3 | Image element | Insert, crop, rotate, fit, dither | HEIC needs libheif (LGPL, C) → later. Replacing the picture in place (today: delete and insert again) → later |
+| 3 | Date/time | Static, offset, refresh per print | Format and offset pickers (bindings are typed by hand) and time linked to another element → later |
+| 3 | Serial | Start, step, digits, prefix, suffix | Serial "type" and "priority" semantics were not recovered (UNCERTAIN) → later |
+| 3 | Icons | Bundled set, picker | Own SVG icons (ADR-0016: untrusted SVG input needs a sanitising pass) → later |
+| 3 | Borders | Eight built-in styles | User frames (nine-patch images), same reason as icons → later |
+| 4 | Data source panel | Preview, records, bind, sheet and header row | Editing data in the app, source history, linked templates: Labely reads the file, the spreadsheet app edits it → won't |
+| 4 | Copies per record | Fixed copies or a copies column (studio, CLI, MCP) | "Sets" (collated copies) → later |
+| 5 | Native template format | — | Read-only importer needs sample files (ADR-0018) → later |
+| 5 | PDF import | — | No permissive pure-Rust PDF rasteriser (ADR-0018) → later |
+| 5 | Image import | PNG, JPEG, BMP, WebP | HEIC (see Image element) and SVG (see Icons) → later |
+| 5 | C1 tube template set | — | Needs the C1 model and heat-shrink media (ADR-0018) → Ph6 |
+| 6 | Speed / quality mode | — | The B21 Pro answers PrinterInfo 2 with "not supported" → Ph6, with models that answer |
+| 6 | Print mode | — | Only thermal-transfer models use it; the B21 Pro answers 14 with "not supported" → Ph6 |
+| 6 | Print range | Record ranges | Choosing pages of a multi-page document; every page prints → later |
+| 8 | Language | English and Hungarian, saved | More languages need translators; the i18n check keeps keys in step → later |
+| 8 | Label paper defaults | RFID detection and mismatch banner | Saved "always use detected paper" and "prompt on mismatch" settings → later |
+
 ## Summary
 
 **Row counts by section**
