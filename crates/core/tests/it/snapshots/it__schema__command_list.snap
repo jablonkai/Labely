@@ -1458,18 +1458,46 @@ expression: r
                               "symbology": {
                                 "default": "code128",
                                 "description": "1D symbologies.",
-                                "enum": [
-                                  "code128",
-                                  "code39",
-                                  "code93",
-                                  "ean13",
-                                  "ean8",
-                                  "upc_a",
-                                  "upc_e",
-                                  "itf",
-                                  "codabar"
-                                ],
-                                "type": "string"
+                                "oneOf": [
+                                  {
+                                    "enum": [
+                                      "code39",
+                                      "code93",
+                                      "ean13",
+                                      "ean8",
+                                      "upc_a",
+                                      "upc_e",
+                                      "itf",
+                                      "codabar"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "code128",
+                                    "description": "Code 128, code set chosen automatically.",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "code128_a",
+                                    "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "code128_b",
+                                    "description": "Code 128 forced to code set B (printable ASCII).",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "code128_c",
+                                    "description": "Code 128 forced to code set C (an even number of digits).",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "gs1_128",
+                                    "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                                    "type": "string"
+                                  }
+                                ]
                               },
                               "text_size_pt": {
                                 "default": 8.0,
@@ -3183,24 +3211,56 @@ expression: r
             ]
           },
           "symbology": {
-            "default": null,
-            "description": "1D symbology (default `code128`).",
-            "enum": [
-              "code128",
-              "code39",
-              "code93",
-              "ean13",
-              "ean8",
-              "upc_a",
-              "upc_e",
-              "itf",
-              "codabar",
-              null
+            "anyOf": [
+              {
+                "description": "1D symbologies.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "code39",
+                      "code93",
+                      "ean13",
+                      "ean8",
+                      "upc_a",
+                      "upc_e",
+                      "itf",
+                      "codabar"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "code128",
+                    "description": "Code 128, code set chosen automatically.",
+                    "type": "string"
+                  },
+                  {
+                    "const": "code128_a",
+                    "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "code128_b",
+                    "description": "Code 128 forced to code set B (printable ASCII).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "code128_c",
+                    "description": "Code 128 forced to code set C (an even number of digits).",
+                    "type": "string"
+                  },
+                  {
+                    "const": "gs1_128",
+                    "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                    "type": "string"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
-            "type": [
-              "string",
-              "null"
-            ]
+            "default": null,
+            "description": "1D symbology (default `code128`)."
           },
           "text_size_pt": {
             "default": null,
@@ -4410,18 +4470,46 @@ expression: r
                   "symbology": {
                     "default": "code128",
                     "description": "1D symbologies.",
-                    "enum": [
-                      "code128",
-                      "code39",
-                      "code93",
-                      "ean13",
-                      "ean8",
-                      "upc_a",
-                      "upc_e",
-                      "itf",
-                      "codabar"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "code39",
+                          "code93",
+                          "ean13",
+                          "ean8",
+                          "upc_a",
+                          "upc_e",
+                          "itf",
+                          "codabar"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128",
+                        "description": "Code 128, code set chosen automatically.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_a",
+                        "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_b",
+                        "description": "Code 128 forced to code set B (printable ASCII).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_c",
+                        "description": "Code 128 forced to code set C (an even number of digits).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "gs1_128",
+                        "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "text_size_pt": {
                     "default": 8.0,
@@ -5546,18 +5634,46 @@ expression: r
                   "symbology": {
                     "default": "code128",
                     "description": "1D symbologies.",
-                    "enum": [
-                      "code128",
-                      "code39",
-                      "code93",
-                      "ean13",
-                      "ean8",
-                      "upc_a",
-                      "upc_e",
-                      "itf",
-                      "codabar"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "code39",
+                          "code93",
+                          "ean13",
+                          "ean8",
+                          "upc_a",
+                          "upc_e",
+                          "itf",
+                          "codabar"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128",
+                        "description": "Code 128, code set chosen automatically.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_a",
+                        "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_b",
+                        "description": "Code 128 forced to code set B (printable ASCII).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_c",
+                        "description": "Code 128 forced to code set C (an even number of digits).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "gs1_128",
+                        "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "text_size_pt": {
                     "default": 8.0,
@@ -6271,18 +6387,46 @@ expression: r
                   "symbology": {
                     "default": "code128",
                     "description": "1D symbologies.",
-                    "enum": [
-                      "code128",
-                      "code39",
-                      "code93",
-                      "ean13",
-                      "ean8",
-                      "upc_a",
-                      "upc_e",
-                      "itf",
-                      "codabar"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "code39",
+                          "code93",
+                          "ean13",
+                          "ean8",
+                          "upc_a",
+                          "upc_e",
+                          "itf",
+                          "codabar"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128",
+                        "description": "Code 128, code set chosen automatically.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_a",
+                        "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_b",
+                        "description": "Code 128 forced to code set B (printable ASCII).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_c",
+                        "description": "Code 128 forced to code set C (an even number of digits).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "gs1_128",
+                        "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "text_size_pt": {
                     "default": 8.0,
@@ -7002,18 +7146,46 @@ expression: r
                   "symbology": {
                     "default": "code128",
                     "description": "1D symbologies.",
-                    "enum": [
-                      "code128",
-                      "code39",
-                      "code93",
-                      "ean13",
-                      "ean8",
-                      "upc_a",
-                      "upc_e",
-                      "itf",
-                      "codabar"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "code39",
+                          "code93",
+                          "ean13",
+                          "ean8",
+                          "upc_a",
+                          "upc_e",
+                          "itf",
+                          "codabar"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128",
+                        "description": "Code 128, code set chosen automatically.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_a",
+                        "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_b",
+                        "description": "Code 128 forced to code set B (printable ASCII).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_c",
+                        "description": "Code 128 forced to code set C (an even number of digits).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "gs1_128",
+                        "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "text_size_pt": {
                     "default": 8.0,
@@ -7733,18 +7905,46 @@ expression: r
                   "symbology": {
                     "default": "code128",
                     "description": "1D symbologies.",
-                    "enum": [
-                      "code128",
-                      "code39",
-                      "code93",
-                      "ean13",
-                      "ean8",
-                      "upc_a",
-                      "upc_e",
-                      "itf",
-                      "codabar"
-                    ],
-                    "type": "string"
+                    "oneOf": [
+                      {
+                        "enum": [
+                          "code39",
+                          "code93",
+                          "ean13",
+                          "ean8",
+                          "upc_a",
+                          "upc_e",
+                          "itf",
+                          "codabar"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128",
+                        "description": "Code 128, code set chosen automatically.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_a",
+                        "description": "Code 128 forced to code set A (upper case, digits, control characters).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_b",
+                        "description": "Code 128 forced to code set B (printable ASCII).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "code128_c",
+                        "description": "Code 128 forced to code set C (an even number of digits).",
+                        "type": "string"
+                      },
+                      {
+                        "const": "gs1_128",
+                        "description": "GS1-128: application identifiers in brackets, e.g. `(01)09501101530003(17)250101`.",
+                        "type": "string"
+                      }
+                    ]
                   },
                   "text_size_pt": {
                     "default": 8.0,
@@ -11001,7 +11201,7 @@ expression: r
       "undoable": false
     },
     {
-      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Jobs go through the print queue; by default the command waits until the job has printed, `wait: false` returns {job_id} at once. Run doc.check first.",
+      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Jobs go through the print queue; by default the command waits until the job has printed, `wait: false` returns {job_id} at once. offset_x_mm/offset_y_mm (±10) move the print, mirror flips it for transparent media, rotate_180 turns it for the other output direction. Run doc.check first.",
       "id": "print.submit",
       "journal": false,
       "kind": "device",
@@ -11136,11 +11336,45 @@ expression: r
               "null"
             ]
           },
+          "mirror": {
+            "default": null,
+            "description": "Mirror the print left to right, for transparent or iron-on media (default false).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "offset_x_mm": {
+            "default": null,
+            "description": "Move the print right (positive) or left, in mm, −10 to 10 (default 0).",
+            "format": "float",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "offset_y_mm": {
+            "default": null,
+            "description": "Move the print down (positive, later in the feed) or up, in mm, −10 to 10 (default 0).",
+            "format": "float",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "records": {
             "default": null,
             "description": "Data records to print, 1-based: `all` (default), `3`, `1,4,6-9`. Needs a data source.",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "rotate_180": {
+            "default": null,
+            "description": "Turn the print 180° so labels leave the printer the other way round (default false).",
+            "type": [
+              "boolean",
               "null"
             ]
           },

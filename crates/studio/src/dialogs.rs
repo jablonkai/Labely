@@ -36,6 +36,13 @@ pub struct PrintForm {
     pub records: String,
     /// Labels to print without data.
     pub count: u32,
+    /// Print offset in mm, right and down.
+    pub offset_x_mm: f32,
+    pub offset_y_mm: f32,
+    /// Mirror the print left to right.
+    pub mirror: bool,
+    /// Turn the print 180°.
+    pub rotate_180: bool,
 }
 
 impl Default for PrintForm {
@@ -47,6 +54,10 @@ impl Default for PrintForm {
             density: 0,
             records: String::new(),
             count: 1,
+            offset_x_mm: 0.0,
+            offset_y_mm: 0.0,
+            mirror: false,
+            rotate_180: false,
         }
     }
 }
@@ -183,6 +194,30 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         )
         .labelled_by(l);
         ui.end_row();
+        let l = ui.label(app.i18n.t("print-offset")).id;
+        ui.horizontal(|ui| {
+            for (v, key) in [
+                (&mut form.offset_x_mm, "print-offset-x"),
+                (&mut form.offset_y_mm, "print-offset-y"),
+            ] {
+                ui.add(
+                    egui::DragValue::new(v)
+                        .range(-10.0..=10.0)
+                        .speed(0.1)
+                        .fixed_decimals(1)
+                        .prefix(format!("{} ", app.i18n.t(key)))
+                        .suffix(" mm"),
+                )
+                .labelled_by(l);
+            }
+        });
+        ui.end_row();
+        ui.label("");
+        ui.vertical(|ui| {
+            ui.checkbox(&mut form.mirror, app.i18n.t("print-mirror"));
+            ui.checkbox(&mut form.rotate_180, app.i18n.t("print-rotate-180"));
+        });
+        ui.end_row();
     });
     app.ui.print = form.clone();
     ui.separator();
@@ -205,6 +240,18 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                     }
                 } else if form.count > 1 {
                     p["count"] = json!(form.count);
+                }
+                if form.offset_x_mm != 0.0 {
+                    p["offset_x_mm"] = json!(form.offset_x_mm);
+                }
+                if form.offset_y_mm != 0.0 {
+                    p["offset_y_mm"] = json!(form.offset_y_mm);
+                }
+                if form.mirror {
+                    p["mirror"] = json!(true);
+                }
+                if form.rotate_180 {
+                    p["rotate_180"] = json!(true);
                 }
                 if app.run_reporting("print.submit", p).ok {
                     app.set_status(app.i18n.t("status-queued"), false);

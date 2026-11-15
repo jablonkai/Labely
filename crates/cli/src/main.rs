@@ -124,6 +124,18 @@ enum Cmd {
         /// Column holding each record's copy count.
         #[arg(long)]
         copies_column: Option<String>,
+        /// Move the print right (positive) or left, in mm (−10 to 10).
+        #[arg(long, allow_hyphen_values = true)]
+        offset_x: Option<f32>,
+        /// Move the print down (positive) or up, in mm (−10 to 10).
+        #[arg(long, allow_hyphen_values = true)]
+        offset_y: Option<f32>,
+        /// Mirror the print left to right (transparent or iron-on media).
+        #[arg(long)]
+        mirror: bool,
+        /// Turn the print 180° for the other output direction.
+        #[arg(long)]
+        rotate_180: bool,
     },
     /// Show a printer's status (battery, lid, loaded labels).
     Status {
@@ -375,6 +387,10 @@ fn run(cli: Cli) -> Result<()> {
             records,
             count,
             copies_column,
+            offset_x,
+            offset_y,
+            mirror,
+            rotate_180,
         } => {
             ctx.open(&file)?;
             if let Some(d) = &data {
@@ -393,6 +409,18 @@ fn run(cli: Cli) -> Result<()> {
             }
             if let Some(c) = copies_column {
                 p["copies_column"] = json!(c);
+            }
+            if let Some(x) = offset_x {
+                p["offset_x_mm"] = json!(x);
+            }
+            if let Some(y) = offset_y {
+                p["offset_y_mm"] = json!(y);
+            }
+            if mirror {
+                p["mirror"] = json!(true);
+            }
+            if rotate_180 {
+                p["rotate_180"] = json!(true);
             }
             let env = ctx.exec("print.submit", p)?;
             ctx.show(&env)?;

@@ -64,6 +64,8 @@ files. Check a record with `data.preview_record {"record": 2}` or `render.previe
 - `print.submit {"records": "2,5-9"}` prints a selection (1-based, in that order).
 - `print.submit {"copies_column": "qty"}` takes each record's copies from a column; 0 skips it.
 - Without data, `print.submit {"count": 20}` prints 20 labels and the serial advances on each.
+- `print.submit {"offset_x_mm": 0.5, "mirror": true}` shifts the print 0.5 mm right and mirrors it,
+  for example on transparent film. `rotate_180` turns the print for the other output direction.
 
 The serial is the label's position in the job, so `records: "5-9"` numbers them from `start`.
 

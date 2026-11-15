@@ -519,6 +519,15 @@ fn every_symbology_decodes() {
         (Symbology1d::UpcE, "0123456", "upc_e", "01234565"),
         (Symbology1d::Itf, "123456", "itf", "123456"),
         (Symbology1d::Codabar, "A123456A", "codabar", "123456"),
+        (Symbology1d::Code128A, "LABELY-1", "code128", "LABELY-1"),
+        (Symbology1d::Code128B, "Labely-1", "code128", "Labely-1"),
+        (Symbology1d::Code128C, "12345678", "code128", "12345678"),
+        (
+            Symbology1d::Gs1128,
+            "(01)09501101530003(17)250101",
+            "code128",
+            "010950110153000317250101",
+        ),
     ];
     for (sym, data, fmt, text) in one_d {
         let mut d = Doc::new(60.0, 20.0);

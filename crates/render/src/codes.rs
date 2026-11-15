@@ -31,7 +31,11 @@ impl Modules {
 
 fn format_1d(s: Symbology1d) -> BarcodeFormat {
     match s {
-        Symbology1d::Code128 => BarcodeFormat::CODE_128,
+        Symbology1d::Code128
+        | Symbology1d::Code128A
+        | Symbology1d::Code128B
+        | Symbology1d::Code128C
+        | Symbology1d::Gs1128 => BarcodeFormat::CODE_128,
         Symbology1d::Code39 => BarcodeFormat::CODE_39,
         Symbology1d::Code93 => BarcodeFormat::CODE_93,
         Symbology1d::Ean13 => BarcodeFormat::EAN_13,
@@ -87,7 +91,20 @@ fn encode(data: &str, format: &BarcodeFormat, hints: &EncodeHints) -> Result<Bit
 pub(crate) fn encode_1d(data: &str, sym: Symbology1d) -> Result<Vec<bool>, String> {
     let hints = EncodeHints {
         Margin: Some("0".to_owned()),
+        ForceCodeSet: match sym {
+            Symbology1d::Code128A => Some("A".to_owned()),
+            Symbology1d::Code128B => Some("B".to_owned()),
+            Symbology1d::Code128C => Some("C".to_owned()),
+            _ => None,
+        },
         ..Default::default()
+    };
+    let gs1;
+    let data = if sym == Symbology1d::Gs1128 {
+        gs1 = gs1_element_string(data)?;
+        gs1.as_str()
+    } else {
+        data
     };
     let m = encode(data, &format_1d(sym), &hints)?;
     let row: Vec<bool> = (0..m.width()).map(|x| m.get(x, 0)).collect();
@@ -97,6 +114,104 @@ pub(crate) fn encode_1d(data: &str, sym: Symbology1d) -> Result<Vec<bool>, Strin
         (Some(a), Some(b)) => Ok(row[a..=b].to_vec()),
         _ => Err("encoder produced an empty symbol".to_owned()),
     }
+}
+
+/// rxing's escape for the FNC1 function character in Code 128 data.
+const FNC1: char = '\u{f1}';
+
+/// GS1 application identifiers with a predefined length (prefix, total length including the
+/// AI). Every other AI is variable length and needs an FNC1 separator when another AI follows.
+const GS1_FIXED: &[(&str, usize)] = &[
+    ("00", 20),
+    ("01", 16),
+    ("02", 16),
+    ("03", 16),
+    ("04", 18),
+    ("11", 8),
+    ("12", 8),
+    ("13", 8),
+    ("14", 8),
+    ("15", 8),
+    ("16", 8),
+    ("17", 8),
+    ("18", 8),
+    ("19", 8),
+    ("20", 4),
+    ("31", 10),
+    ("32", 10),
+    ("33", 10),
+    ("34", 10),
+    ("35", 10),
+    ("36", 10),
+    ("41", 16),
+];
+
+fn gs1_fixed_len(ai: &str) -> Option<usize> {
+    GS1_FIXED
+        .iter()
+        .find(|(p, _)| ai.starts_with(p))
+        .map(|(_, n)| *n)
+}
+
+/// Turn human GS1 data into the Code 128 element string: a leading FNC1, then each AI and
+/// its value, with FNC1 after variable-length values that are followed by another AI.
+///
+/// Accepts `(01)09501101530003(10)ABC` (brackets mark the AIs) or a raw element string where
+/// variable-length fields end with ASCII GS (0x1D).
+pub(crate) fn gs1_element_string(data: &str) -> Result<String, String> {
+    let data = data.trim();
+    if data.is_empty() {
+        return Err("no data".to_owned());
+    }
+    let mut out = String::with_capacity(data.len() + 4);
+    out.push(FNC1);
+    if !data.starts_with('(') {
+        if data.contains(['(', ')']) {
+            return Err("GS1 data must start with an AI in brackets, e.g. (01)".to_owned());
+        }
+        out.extend(data.chars().map(|c| if c == '\u{1d}' { FNC1 } else { c }));
+        return Ok(out);
+    }
+    let mut rest = data;
+    let mut fields = Vec::new();
+    while let Some(after) = rest.strip_prefix('(') {
+        let Some(close) = after.find(')') else {
+            return Err("unclosed bracket in GS1 data".to_owned());
+        };
+        let ai = &after[..close];
+        if !(2..=4).contains(&ai.len()) || !ai.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(format!("`({ai})` is not a GS1 application identifier"));
+        }
+        let tail = &after[close + 1..];
+        let end = tail.find('(').unwrap_or(tail.len());
+        let value = &tail[..end];
+        if value.is_empty() {
+            return Err(format!("AI ({ai}) has no value"));
+        }
+        if value.contains(')') {
+            return Err("unbalanced bracket in GS1 data".to_owned());
+        }
+        if let Some(n) = gs1_fixed_len(ai)
+            && ai.len() + value.chars().count() != n
+        {
+            return Err(format!(
+                "AI ({ai}) needs {} characters, got {}",
+                n - ai.len(),
+                value.chars().count()
+            ));
+        }
+        fields.push((ai, value));
+        rest = &tail[end..];
+    }
+    let last = fields.len().saturating_sub(1);
+    for (i, (ai, value)) in fields.iter().enumerate() {
+        out.push_str(ai);
+        out.push_str(value);
+        if i < last && gs1_fixed_len(ai).is_none() {
+            out.push(FNC1);
+        }
+    }
+    Ok(out)
 }
 
 /// Encode a 2D code as a module grid without quiet zone.
@@ -200,6 +315,48 @@ mod tests {
     }
 
     #[test]
+    fn code128_forced_sets() {
+        // Set C packs two digits per symbol: start + 3 + check + stop.
+        assert_eq!(
+            encode_1d("123456", Symbology1d::Code128C).unwrap().len(),
+            68
+        );
+        // Set B spends one symbol per digit.
+        assert_eq!(
+            encode_1d("123456", Symbology1d::Code128B).unwrap().len(),
+            101
+        );
+        assert!(encode_1d("12345", Symbology1d::Code128C).is_err());
+        assert!(encode_1d("abc", Symbology1d::Code128A).is_err());
+    }
+
+    #[test]
+    fn gs1_element_strings() {
+        let f = FNC1;
+        assert_eq!(
+            gs1_element_string("(01)09501101530003(17)250101").unwrap(),
+            format!("{f}010950110153000317250101")
+        );
+        assert_eq!(
+            gs1_element_string("(10)ABC(21)XYZ").unwrap(),
+            format!("{f}10ABC{f}21XYZ")
+        );
+        assert_eq!(
+            gs1_element_string("(01)09501101530003(10)LOT7").unwrap(),
+            format!("{f}010950110153000310LOT7")
+        );
+        assert_eq!(
+            gs1_element_string("10ABC\u{1d}21X").unwrap(),
+            format!("{f}10ABC{f}21X")
+        );
+        assert!(gs1_element_string("(01)123").is_err());
+        assert!(gs1_element_string("(1A)x").is_err());
+        assert!(gs1_element_string("(10").is_err());
+        assert!(gs1_element_string("(10)").is_err());
+        assert!(gs1_element_string("").is_err());
+    }
+
+    #[test]
     fn ean13_is_95_modules() {
         assert_eq!(
             encode_1d("590123412345", Symbology1d::Ean13).unwrap().len(),
@@ -227,6 +384,10 @@ mod tests {
             (Symbology1d::UpcE, "0123456"),
             (Symbology1d::Itf, "123456"),
             (Symbology1d::Codabar, "A123456A"),
+            (Symbology1d::Code128A, "LABELY-1"),
+            (Symbology1d::Code128B, "Labely-1"),
+            (Symbology1d::Code128C, "123456"),
+            (Symbology1d::Gs1128, "(01)09501101530003(17)250101"),
         ];
         for (s, d) in cases {
             assert!(encode_1d(d, *s).is_ok(), "{s:?}");
