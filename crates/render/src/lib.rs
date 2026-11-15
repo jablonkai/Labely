@@ -118,6 +118,14 @@ impl Renderer for LabelRenderer {
             .families()
     }
 
+    fn add_font(&self, bytes: Vec<u8>) -> Result<Vec<String>, RenderError> {
+        self.text
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .add_font(bytes)
+            .map_err(RenderError::Other)
+    }
+
     fn icons(&self) -> Vec<labely_core::services::IconInfo> {
         icons::ICONS
             .iter()

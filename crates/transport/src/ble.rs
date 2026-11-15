@@ -305,7 +305,12 @@ impl Transport for BleTransport {
             let write =
                 self.peripheral
                     .write(&self.characteristic, chunk, WriteType::WithoutResponse);
-            match self.rt.block_on(tokio::time::timeout(WRITE_TIMEOUT, write)) {
+            // The timer must be created inside the runtime: `timeout` registers with the
+            // time driver when constructed, so building it outside `block_on` panics.
+            match self
+                .rt
+                .block_on(async { tokio::time::timeout(WRITE_TIMEOUT, write).await })
+            {
                 Ok(Ok(())) => {}
                 Ok(Err(e)) => {
                     let e = bt(e);

@@ -98,6 +98,9 @@ impl Driver for FakePrinter {
             name: format!("FakePrinter ({})", self.model.name),
             model: Some(self.model.clone()),
             protocol: None,
+            firmware: None,
+            hardware: None,
+            serial: None,
         })
     }
 

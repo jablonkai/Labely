@@ -117,6 +117,10 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                 }
                 cmd::PRINTER_INFO if b0 == 8 => reply(&peer, 0x48, &cfg.model_code.to_be_bytes()),
                 cmd::PRINTER_INFO if b0 == 7 => reply(&peer, 0x47, &[auto_off]),
+                // Versions and serial as a B21 Pro reports them (firmware 3.12, hardware 3.01).
+                cmd::PRINTER_INFO if b0 == 9 => reply(&peer, 0x49, &[3, 12]),
+                cmd::PRINTER_INFO if b0 == 12 => reply(&peer, 0x4C, &[3, 1]),
+                cmd::PRINTER_INFO if b0 == 11 => reply(&peer, 0x4B, b"SIM0000001"),
                 cmd::SET_AUTO_OFF => {
                     let valid = (1..=4).contains(&b0);
                     if valid {

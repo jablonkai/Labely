@@ -92,6 +92,12 @@ pub enum Gesture {
         orig_deg: f64,
         key: String,
     },
+    /// Rubber-band selection from empty canvas; `base` stays selected (Shift adds).
+    Marquee {
+        start: egui::Pos2,
+        current: egui::Pos2,
+        base: Vec<ElementId>,
+    },
 }
 
 /// A status line message.
@@ -167,6 +173,23 @@ pub struct UiState {
     /// Text of the last studio copy, for Edit → Paste (egui cannot read the system clipboard
     /// on demand) and to offset pastes into the document it came from.
     pub clipboard: Option<(String, String)>,
+    /// The spreadsheet last attached in the studio, for switching sheet or header row.
+    pub workbook: Option<Workbook>,
+    /// Last `device.status` result per printer address.
+    pub device_status: std::collections::BTreeMap<String, Value>,
+    /// Address of the last printer that failed to connect, for the troubleshooting tips.
+    pub connect_failed: Option<String>,
+}
+
+/// A spreadsheet attached from the studio.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Workbook {
+    pub path: PathBuf,
+    /// Document it was attached to.
+    pub doc_id: String,
+    pub sheets: Vec<String>,
+    pub sheet: Option<String>,
+    pub header: bool,
 }
 
 impl Default for UiState {
@@ -202,6 +225,9 @@ impl Default for UiState {
             show_rulers: true,
             text_edit_id: None,
             clipboard: None,
+            workbook: None,
+            device_status: Default::default(),
+            connect_failed: None,
         }
     }
 }
@@ -251,7 +277,7 @@ impl std::fmt::Debug for LabelyApp {
 impl LabelyApp {
     /// Build the app; `ctx` is needed to start the MCP server (it wakes the UI).
     pub fn new(ctx: Option<&Context>, opts: StudioOptions) -> Self {
-        Self::with_session(ctx, Session::new(labely_printers::default_services()), opts)
+        Self::with_session(ctx, Session::new(labely_printers::desktop_services()), opts)
     }
 
     pub fn with_session(ctx: Option<&Context>, session: Session, opts: StudioOptions) -> Self {
@@ -268,12 +294,22 @@ impl LabelyApp {
             .prefs_file
             .clone()
             .unwrap_or_else(|| labely_mcp::connection::data_dir().join(PREFS_FILE));
+        let prefs = Prefs::load(&prefs_path);
+        let lang = prefs
+            .lang
+            .as_deref()
+            .and_then(|code| Lang::ALL.into_iter().find(|l| l.code() == code))
+            .unwrap_or(opts.lang);
+        let mut ui = UiState::default();
+        if let Some(rgb) = prefs.label_color {
+            ui.label_color = rgb;
+        }
         let mut app = Self {
-            prefs: Prefs::load(&prefs_path),
+            prefs,
             prefs_path,
             session,
-            ui: UiState::default(),
-            i18n: I18n::new(opts.lang),
+            ui,
+            i18n: I18n::new(lang),
             raster: None,
             mcp: None,
             thumbs: Default::default(),
@@ -299,6 +335,13 @@ impl LabelyApp {
             .clone()
             .unwrap_or_else(|| labely_mcp::connection::data_dir().join(PAPER_FILE));
         app.session.set_paper_file(Some(papers));
+        // Font files from earlier runs; a file that is gone is skipped (and kept, in case
+        // its drive is only unplugged).
+        for path in app.prefs.fonts.clone() {
+            if path.is_file() {
+                app.run("font.add", json!({ "path": path }));
+            }
+        }
         if let Some(path) = app.opts.open.clone() {
             app.run_reporting("doc.open", json!({ "path": path }));
         }

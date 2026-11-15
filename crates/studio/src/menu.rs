@@ -93,6 +93,17 @@ pub fn menu_bar(app: &mut LabelyApp, ui: &mut Ui) {
 fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
     match menu {
         "file" => {
+            let has_doc = app.session.active_doc_id().is_some();
+            let button = egui::Button::new(app.i18n.t("action-save-as"))
+                .shortcut_text(ui.ctx().format_shortcut(&SAVE_AS));
+            if ui.add_enabled(has_doc, button).clicked() {
+                save_as(app);
+                ui.close();
+            }
+            if ui.button(app.i18n.t("action-add-font")).clicked() {
+                add_font(app);
+                ui.close();
+            }
             ui.separator();
             let recent = app.prefs.recent.clone();
             ui.add_enabled_ui(!recent.is_empty(), |ui| {
@@ -244,12 +255,13 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
             });
             ui.checkbox(&mut app.ui.show_grid, app.i18n.t("action-show-grid"));
             ui.horizontal(|ui| {
-                ui.label(app.i18n.t("prop-grid-mm"));
+                let l = ui.label(app.i18n.t("prop-grid-mm")).id;
                 ui.add(
                     egui::DragValue::new(&mut app.ui.grid_mm)
                         .range(0.5..=20.0)
                         .speed(0.1),
-                );
+                )
+                .labelled_by(l);
             });
             ui.menu_button(app.i18n.t("menu-label-color"), |ui| {
                 for (key, rgb) in [
@@ -265,6 +277,8 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
                         .clicked()
                     {
                         app.ui.label_color = rgb;
+                        app.prefs.label_color = Some(rgb);
+                        app.save_prefs();
                         ui.close();
                     }
                 }
@@ -294,6 +308,8 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
                         .clicked()
                     {
                         app.i18n = I18n::new(lang);
+                        app.prefs.lang = Some(lang.code().to_owned());
+                        app.save_prefs();
                         ui.close();
                     }
                 }
@@ -317,6 +333,11 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
 /// Run shortcuts unless a text field has focus.
 pub fn shortcuts(app: &mut LabelyApp, ctx: &Context) {
     if ctx.egui_wants_keyboard_input() || app.ui.dialog.is_some() {
+        return;
+    }
+    // Before the registry loop: Cmd+S would otherwise also match Cmd+Shift+S.
+    if ctx.input_mut(|i| i.consume_shortcut(&SAVE_AS)) {
+        save_as(app);
         return;
     }
     let mut fired = Vec::new();
@@ -644,11 +665,8 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
             } else {
                 &["xlsx", "xlsm", "xls", "ods"]
             };
-            if let Some(path) = pick_file(app, exts)
-                && app.run_reporting(id, json!({ "path": path })).ok
-            {
-                app.ui.record = 1;
-                app.ui.show_data = true;
+            if let Some(path) = pick_file(app, exts) {
+                attach_data(app, id, path, None, true);
             }
         }
         "data.set_serial" => {
@@ -751,6 +769,37 @@ pub const FROM_COLUMN: [(&str, &str, &str); 3] = [
 ];
 
 /// Add a text, barcode or 2D-code element bound to `column`, centred on `at` (mm) if given.
+/// Drag payload: a new element of the `element.add_*` command it names.
+#[derive(Debug, Clone)]
+pub struct ElementDrag(pub &'static str);
+
+/// Element types offered in the palette, by their add command.
+pub const PALETTE: [(&str, &str); 9] = [
+    ("element.add_text", "text"),
+    ("element.add_barcode", "barcode"),
+    ("element.add_code2d", "code2d"),
+    ("element.add_table", "table"),
+    ("element.add_rect", "rect"),
+    ("element.add_ellipse", "ellipse"),
+    ("element.add_line", "line"),
+    ("element.add_icon", "icon"),
+    ("element.add_border", "border"),
+];
+
+/// Drop a new element centred on `(x, y)` mm. A border always covers the whole label.
+pub fn drop_element(app: &mut LabelyApp, id: &str, x: f64, y: f64) {
+    let Some(mut p) = add_defaults(app, id) else {
+        return;
+    };
+    if id != "element.add_border" {
+        let w = p["width_mm"].as_f64().unwrap_or(0.0);
+        let h = p["height_mm"].as_f64().unwrap_or(0.0);
+        p["x_mm"] = json!(((x - w / 2.0) * 10.0).round() / 10.0);
+        p["y_mm"] = json!(((y - h / 2.0) * 10.0).round() / 10.0);
+    }
+    add(app, id, p);
+}
+
 pub fn add_from_column(app: &mut LabelyApp, id: &str, column: &str, at: Option<(f64, f64)>) {
     let Some((_, _, prop)) = FROM_COLUMN.iter().find(|(_, c, _)| *c == id) else {
         return;
@@ -819,9 +868,124 @@ fn add(app: &mut LabelyApp, id: &str, p: Value) {
     }
 }
 
+/// Attach a CSV or spreadsheet; a spreadsheet is remembered so the data panel can switch
+/// its sheet or header row.
+pub fn attach_data(
+    app: &mut LabelyApp,
+    id: &str,
+    path: std::path::PathBuf,
+    sheet: Option<String>,
+    header: bool,
+) {
+    let mut p = json!({ "path": path });
+    if id == "data.attach_xlsx" {
+        if let Some(s) = &sheet {
+            p["sheet"] = json!(s);
+        }
+        p["header"] = json!(header);
+    }
+    let env = app.run_reporting(id, p);
+    if !env.ok {
+        return;
+    }
+    app.ui.record = 1;
+    app.ui.show_data = true;
+    let result = env.result.clone().unwrap_or_default();
+    app.ui.workbook = match (id, app.session.active_doc_id()) {
+        ("data.attach_xlsx", Some(doc_id)) => Some(crate::app::Workbook {
+            path,
+            doc_id: doc_id.to_owned(),
+            sheets: result["sheets"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            sheet: result["sheet"].as_str().map(str::to_owned).or(sheet),
+            header,
+        }),
+        _ => None,
+    };
+}
+
+/// Connect to `address` and read its status; on failure the printers panel shows
+/// troubleshooting tips.
+pub fn connect(app: &mut LabelyApp, address: &str) -> bool {
+    let ok = app
+        .run_reporting("device.connect", json!({ "address": address }))
+        .ok;
+    if ok {
+        app.ui.connect_failed = None;
+        refresh_status(app, address);
+    } else {
+        app.ui.connect_failed = Some(address.to_owned());
+        app.ui.show_printers = true;
+    }
+    ok
+}
+
+/// Read and remember a connected printer's status (battery, lid, labels).
+pub fn refresh_status(app: &mut LabelyApp, address: &str) {
+    let env = app.run("device.status", json!({ "address": address }));
+    match env.result.filter(|_| env.ok) {
+        Some(r) => {
+            app.ui
+                .device_status
+                .insert(address.to_owned(), r["status"].clone());
+        }
+        None => {
+            app.ui.device_status.remove(address);
+        }
+    }
+}
+
+/// File → Add Font: load a font file now and at every start.
+pub fn add_font(app: &mut LabelyApp) {
+    let Some(path) = pick_file(app, &["ttf", "otf", "ttc"]) else {
+        return;
+    };
+    let env = app.run_reporting("font.add", json!({ "path": path }));
+    if !env.ok {
+        return;
+    }
+    let added: Vec<String> = env
+        .result
+        .as_ref()
+        .and_then(|r| r["added"].as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    if !app.prefs.fonts.contains(&path) {
+        app.prefs.fonts.push(path);
+        app.save_prefs();
+    }
+    let text = app.i18n.t_args(
+        "status-font-added",
+        &[("fonts", labely_i18n::Arg::Str(&added.join(", ")))],
+    );
+    app.set_status(text, false);
+}
+
 pub fn save(app: &mut LabelyApp) {
     if app.session.doc_path(None).is_some() {
         app.run_reporting("doc.save", json!({}));
+        return;
+    }
+    save_as(app);
+}
+
+/// Shortcut of File → Save As.
+pub const SAVE_AS: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::S);
+
+/// Ask for a path and save there, also when the document already has one.
+pub fn save_as(app: &mut LabelyApp) {
+    if app.session.active_doc_id().is_none() {
         return;
     }
     if !app.opts.native_dialogs {

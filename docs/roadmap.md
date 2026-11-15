@@ -91,6 +91,7 @@ Phase 3 lands in slices, one pull request each.
 | 3.6a Print and codes | print offset, mirror, 180° output direction; Code 128 A/B/C and GS1-128 (ADR-0021) | done |
 | 3.6b Shell | document tabs, recent files, rulers, printable-area overlay, rotate paper, clipboard, inch units (ADR-0022) | done |
 | 3.6c Text and data | grow-to-fit text, max-length guard, font picker, drag-to-bind and element from column, rich text spans, image crop, linked mirror copies | done (ADR-0023) |
+| 3.7 Close-out | exit audit; BLE write fix, firmware/hardware/serial, justify, font files, Save As, marquee, line style, table cell controls, element palette, copies column and print preview, XLSX sheet picker, printer status, connect tips, saved language and label colour; every remaining gap has a reason in the feature matrix | done (ADR-0024) |
 
 ## Phase 4: Android shell + AppFunctions
 

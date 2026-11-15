@@ -65,6 +65,7 @@ Hints:
 | `element.add_border` | edit | frame\*, style (single, double, thick_thin, dashed, dotted, corners, ticket, scallop), stroke_mm, corner_radius_mm |
 | `icon.list` | query | category |
 | `font.list` | query | → fonts (family names for font_family) |
+| `font.add` | ui | path (TTF/OTF/TTC) → added, fonts; loads the file for this session |
 | `code.decode` | query | path or data_base64 → codes [{kind, symbology, text}] |
 | `element.set_props` | edit | id, props (any frame or kind property, plus flip_h, flip_v; text `spans` [{start, end, bold, italic, underline, font_size_pt}]; image `crop` {left, top, right, bottom} in 0–1; `mirror: null` unlinks a mirror copy) |
 | `element.move` / `.resize` / `.rotate` | edit | id, x_mm, y_mm / width_mm, height_mm / rotation_deg |

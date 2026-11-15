@@ -125,6 +125,25 @@ fn handle_pos(view: &View, f: &Frame, h: (i8, i8)) -> Pos2 {
 }
 
 /// Topmost visible element under `(x, y)` mm.
+/// Visible, unlocked elements of the first page whose bounds touch `rect` (x0, y0, x1, y1 mm).
+pub fn marquee_hits(doc: &Document, rect: (f64, f64, f64, f64)) -> Vec<ElementId> {
+    let (x0, y0, x1, y1) = rect;
+    doc.pages
+        .first()
+        .map(|page| {
+            page.elements
+                .iter()
+                .filter(|e| !e.hidden && !e.locked)
+                .filter(|e| {
+                    let b = e.bounds();
+                    b.0 <= x1 && b.2 >= x0 && b.1 <= y1 && b.3 >= y0
+                })
+                .map(|e| e.id)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn hit(doc: &Document, x: f64, y: f64, zoom: f32) -> Option<ElementId> {
     let slack = 3.0 / f64::from(zoom);
     doc.pages
@@ -490,9 +509,30 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
         let alt = ui.input(|i| i.modifiers.alt);
         update_gesture(app, &view, p, shift, alt);
     }
+    if let Some(Gesture::Marquee { start, current, .. }) = &app.ui.gesture {
+        let r = egui::Rect::from_two_pos(*start, *current);
+        painter.rect_filled(r, 0.0, Color32::from_rgba_unmultiplied(40, 120, 220, 30));
+        painter.rect_stroke(
+            r,
+            0.0,
+            egui::Stroke::new(1.0, Color32::from_rgb(40, 120, 220)),
+            egui::StrokeKind::Inside,
+        );
+    }
     if resp.drag_stopped() {
         app.ui.gesture = None;
         app.ui.guides = (Vec::new(), Vec::new());
+    }
+    if let Some(el) = resp.dnd_release_payload::<crate::menu::ElementDrag>()
+        && let Some(p) = ui.input(|i| i.pointer.hover_pos())
+    {
+        let (x, y) = view.to_mm(p);
+        crate::menu::drop_element(app, el.0, x, y);
+    } else if resp
+        .dnd_hover_payload::<crate::menu::ElementDrag>()
+        .is_some()
+    {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Copy);
     }
     if let Some(col) = resp.dnd_release_payload::<crate::menu::ColumnDrag>()
         && let Some(p) = ui.input(|i| i.pointer.hover_pos())
@@ -575,6 +615,12 @@ fn start_gesture(
     }
     let (x, y) = view.to_mm(p);
     let Some(target) = hit(doc, x, y, view.zoom) else {
+        let base = if shift { app.selection() } else { Vec::new() };
+        app.ui.gesture = Some(Gesture::Marquee {
+            start: p,
+            current: p,
+            base,
+        });
         return;
     };
     let mut sel = app.selection();
@@ -682,6 +728,26 @@ fn update_gesture(app: &mut LabelyApp, view: &View, p: Pos2, shift: bool, alt: b
         return;
     };
     match g {
+        Gesture::Marquee { start, base, .. } => {
+            let (x0, y0) = view.to_mm(start);
+            let (x1, y1) = view.to_mm(p);
+            let mut sel = base.clone();
+            if let Some(doc) = app.session.doc(None) {
+                for id in marquee_hits(doc, (x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1))) {
+                    if !sel.contains(&id) {
+                        sel.push(id);
+                    }
+                }
+            }
+            if sel != app.selection() {
+                app.select(&sel);
+            }
+            app.ui.gesture = Some(Gesture::Marquee {
+                start,
+                current: p,
+                base,
+            });
+        }
         Gesture::Move {
             start,
             originals,

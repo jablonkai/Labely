@@ -51,12 +51,42 @@ fn element_title(app: &LabelyApp, e: &Element) -> String {
     }
 }
 
+/// New elements: click to add one in the middle, or drag it onto the canvas.
+fn palette(app: &mut LabelyApp, ui: &mut Ui) {
+    ui.heading(app.i18n.t("panel-elements"));
+    let mut clicked = None;
+    ui.horizontal_wrapped(|ui| {
+        for (cmd, kind) in menu::PALETTE {
+            let text = format!("+ {}", app.i18n.t(&format!("kind-{kind}")));
+            let r = ui
+                .add(
+                    egui::Button::new(text)
+                        .small()
+                        .sense(egui::Sense::click_and_drag()),
+                )
+                .on_hover_text(app.i18n.t("palette-hint"))
+                .on_hover_cursor(egui::CursorIcon::Grab);
+            if r.drag_started() {
+                egui::DragAndDrop::set_payload(ui.ctx(), menu::ElementDrag(cmd));
+            }
+            if r.clicked() {
+                clicked = Some(cmd);
+            }
+        }
+    });
+    if let Some(cmd) = clicked {
+        menu::invoke(app, cmd);
+    }
+}
+
 /// Layers, top of the stack first.
 pub fn layers(app: &mut LabelyApp, ui: &mut Ui) {
-    ui.heading(app.i18n.t("panel-layers"));
     let Some(doc) = app.session.doc_arc(None) else {
         return;
     };
+    palette(app, ui);
+    ui.separator();
+    ui.heading(app.i18n.t("panel-layers"));
     let selection = app.selection();
     egui::ScrollArea::vertical().show(ui, |ui| {
         for e in doc.elements().collect::<Vec<_>>().into_iter().rev() {
@@ -254,6 +284,65 @@ fn prop_editor(
     out
 }
 
+/// Line style of a `dash_mm` value: solid (none), dashed or dotted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineStyle {
+    Solid,
+    Dashed,
+    Dotted,
+}
+
+impl LineStyle {
+    pub const ALL: [LineStyle; 3] = [LineStyle::Solid, LineStyle::Dashed, LineStyle::Dotted];
+
+    fn key(self) -> &'static str {
+        match self {
+            LineStyle::Solid => "line-solid",
+            LineStyle::Dashed => "line-dashed",
+            LineStyle::Dotted => "line-dotted",
+        }
+    }
+
+    /// Read a `dash_mm` value: a dash no longer than the gap counts as dotted.
+    pub fn of(dash: &Value) -> Self {
+        match dash.as_array().map(|a| (a.first(), a.get(1))) {
+            Some((Some(on), Some(off))) => match (on.as_f64(), off.as_f64()) {
+                (Some(on), Some(off)) if on <= off => LineStyle::Dotted,
+                _ => LineStyle::Dashed,
+            },
+            _ => LineStyle::Solid,
+        }
+    }
+
+    /// The `dash_mm` value for this style; dots and gaps follow the stroke width.
+    pub fn dash(self, stroke_mm: f64) -> Value {
+        let s = stroke_mm.max(0.1);
+        match self {
+            LineStyle::Solid => Value::Null,
+            LineStyle::Dashed => json!([(s * 6.0).max(1.5), (s * 3.0).max(0.8)]),
+            LineStyle::Dotted => json!([s, s * 1.5]),
+        }
+    }
+}
+
+/// Combo box for a line's dash pattern. Returns the new `dash_mm` when changed.
+fn dash_editor(app: &LabelyApp, ui: &mut Ui, value: &Value, stroke_mm: f64) -> Option<Value> {
+    let lbl = ui.label(app.i18n.t("prop-line-style")).id;
+    let cur = LineStyle::of(value);
+    let mut pick = cur;
+    egui::ComboBox::from_id_salt("line-style")
+        .selected_text(app.i18n.t(cur.key()))
+        .show_ui(ui, |ui| {
+            for s in LineStyle::ALL {
+                ui.selectable_value(&mut pick, s, app.i18n.t(s.key()));
+            }
+        })
+        .response
+        .labelled_by(lbl);
+    ui.end_row();
+    (pick != cur).then(|| pick.dash(stroke_mm))
+}
+
 /// A drag field for a length kept in mm, shown and typed in `units`.
 pub fn length_drag(mm: &mut f64, units: Units) -> egui::DragValue<'_> {
     egui::DragValue::new(mm)
@@ -385,6 +474,13 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                             .collect();
                         let s = json!({"enum": names});
                         if let Some(v) = prop_editor(ui, "icon", &s, &value, None) {
+                            edits.push((key.clone(), v));
+                        }
+                        continue;
+                    }
+                    if key == "dash_mm" {
+                        let stroke = whole.get("stroke_mm").and_then(Value::as_f64);
+                        if let Some(v) = dash_editor(app, ui, &value, stroke.unwrap_or(0.3)) {
                             edits.push((key.clone(), v));
                         }
                         continue;
@@ -694,17 +790,141 @@ fn table_editor(
                         edits.push(op);
                     }
                 }
+                if ui
+                    .button(app.i18n.t("table-clear"))
+                    .on_hover_text(app.i18n.t("table-clear-hint"))
+                    .clicked()
+                {
+                    edits.push(json!({"op": "clear"}));
+                }
             });
+            cell_style_editor(app, ui, t, (cr, cc), &mut edits);
         });
     app.ui.table_cell = (cr, cc);
     for op in edits {
-        let coalesce = (op["op"] == "set_cell" && op.get("text").is_some())
-            .then(|| format!("cell-{}-{}-{}", id.0, op["row"], op["col"]));
+        // Typing and dragging a size coalesce into one undo step per cell, row or column.
+        let coalesce = match op["op"].as_str() {
+            Some("set_cell") if op.get("text").is_some() || op.get("font_size_pt").is_some() => {
+                Some(format!("cell-{}-{}-{}", id.0, op["row"], op["col"]))
+            }
+            Some("resize_row") => Some(format!("row-{}-{}", id.0, op["at"])),
+            Some("resize_column") => Some(format!("col-{}-{}", id.0, op["at"])),
+            _ => None,
+        };
         let mut p = json!({"id": id, "edit": op});
         if let Some(c) = coalesce {
             p["coalesce"] = json!(c);
         }
         app.run_reporting("element.table_edit", p);
+    }
+}
+
+/// Style of the focused cell plus the size of its row and column.
+fn cell_style_editor(
+    app: &LabelyApp,
+    ui: &mut Ui,
+    t: &labely_core::document::TableProps,
+    (r, c): (usize, usize),
+    edits: &mut Vec<Value>,
+) {
+    use labely_core::document::HAlign;
+    let cell = &t.cells[r][c];
+    egui::Grid::new("table-cell-style")
+        .num_columns(2)
+        .show(ui, |ui| {
+            let lbl = ui.label(app.i18n.t("table-cell-align")).id;
+            let mut align = cell.align;
+            let name = |a: Option<HAlign>| match a {
+                None => app.i18n.t("table-align-default"),
+                Some(a) => app.i18n.t(&format!("halign-{}", halign_key(a))),
+            };
+            egui::ComboBox::from_id_salt("table-cell-align")
+                .selected_text(name(align))
+                .show_ui(ui, |ui| {
+                    // A cell cannot go back to "inherit" (absent fields stay as they are),
+                    // so only concrete alignments are offered once one is set.
+                    if cell.align.is_none() {
+                        ui.selectable_value(&mut align, None, name(None));
+                    }
+                    for a in [HAlign::Left, HAlign::Center, HAlign::Right, HAlign::Justify] {
+                        ui.selectable_value(&mut align, Some(a), name(Some(a)));
+                    }
+                })
+                .response
+                .labelled_by(lbl);
+            if let Some(a) = align.filter(|_| align != cell.align) {
+                edits.push(json!({"op": "set_cell", "row": r, "col": c, "align": a}));
+            }
+            ui.end_row();
+
+            let lbl = ui.label(app.i18n.t("table-cell-size")).id;
+            let mut size = cell.font_size_pt.unwrap_or(t.font_size_pt);
+            if ui
+                .add(
+                    egui::DragValue::new(&mut size)
+                        .range(2.0..=72.0)
+                        .speed(0.2)
+                        .suffix(" pt"),
+                )
+                .labelled_by(lbl)
+                .changed()
+            {
+                edits.push(json!({"op": "set_cell", "row": r, "col": c, "font_size_pt": size}));
+            }
+            ui.end_row();
+
+            let lbl = ui.label(app.i18n.t("table-cell-invert")).id;
+            let mut invert = cell.invert;
+            if ui.checkbox(&mut invert, "").labelled_by(lbl).changed() {
+                edits.push(json!({"op": "set_cell", "row": r, "col": c, "invert": invert}));
+            }
+            ui.end_row();
+
+            // Row heights and column widths are relative weights.
+            let lbl = ui.label(app.i18n.t("table-row-height")).id;
+            let mut h = t.row_heights[r];
+            if ui
+                .add(
+                    egui::DragValue::new(&mut h)
+                        .range(0.1..=20.0)
+                        .speed(0.05)
+                        .max_decimals(2),
+                )
+                .labelled_by(lbl)
+                .on_hover_text(app.i18n.t("table-weight-hint"))
+                .changed()
+            {
+                edits.push(json!({"op": "resize_row", "at": r, "height": h}));
+            }
+            ui.end_row();
+
+            let lbl = ui.label(app.i18n.t("table-column-width")).id;
+            let mut w = t.column_widths[c];
+            if ui
+                .add(
+                    egui::DragValue::new(&mut w)
+                        .range(0.1..=20.0)
+                        .speed(0.05)
+                        .max_decimals(2),
+                )
+                .labelled_by(lbl)
+                .on_hover_text(app.i18n.t("table-weight-hint"))
+                .changed()
+            {
+                edits.push(json!({"op": "resize_column", "at": c, "width": w}));
+            }
+            ui.end_row();
+        });
+}
+
+/// Message-key suffix of a horizontal alignment.
+fn halign_key(a: labely_core::document::HAlign) -> &'static str {
+    use labely_core::document::HAlign;
+    match a {
+        HAlign::Left => "left",
+        HAlign::Center => "center",
+        HAlign::Right => "right",
+        HAlign::Justify => "justify",
     }
 }
 
@@ -800,6 +1020,34 @@ pub fn tools(app: &mut LabelyApp, ui: &mut Ui) {
 }
 
 /// Data source, record navigator, column binding and serial counters.
+/// Sheet and header-row controls for a spreadsheet attached in this session.
+fn workbook_controls(app: &mut LabelyApp, ui: &mut Ui, doc_id: &str) {
+    let Some(wb) = app.ui.workbook.clone().filter(|w| w.doc_id == doc_id) else {
+        return;
+    };
+    let mut sheet = wb.sheet.clone();
+    let mut header = wb.header;
+    ui.horizontal(|ui| {
+        if wb.sheets.len() > 1 {
+            let l = ui.label(app.i18n.t("data-sheet")).id;
+            egui::ComboBox::from_id_salt("data-sheet")
+                .selected_text(sheet.clone().unwrap_or_default())
+                .show_ui(ui, |ui| {
+                    for s in &wb.sheets {
+                        ui.selectable_value(&mut sheet, Some(s.clone()), s);
+                    }
+                })
+                .response
+                .labelled_by(l);
+        }
+        ui.checkbox(&mut header, app.i18n.t("data-header-row"))
+            .on_hover_text(app.i18n.t("data-header-row-hint"));
+    });
+    if sheet != wb.sheet || header != wb.header {
+        menu::attach_data(app, "data.attach_xlsx", wb.path, sheet, header);
+    }
+}
+
 fn data_panel(app: &mut LabelyApp, ui: &mut Ui) {
     ui.heading(app.i18n.t("panel-data"));
     let Some(doc) = app.session.doc_arc(None) else {
@@ -846,6 +1094,9 @@ fn data_panel(app: &mut LabelyApp, ui: &mut Ui) {
                         app.run_reporting("data.detach", json!({}));
                     }
                 });
+                if let Some(doc_id) = app.session.active_doc_id().map(str::to_owned) {
+                    workbook_controls(app, ui, &doc_id);
+                }
                 if n > 0 {
                     let mut record = app.ui.record.clamp(1, n);
                     ui.horizontal(|ui| {
@@ -1041,10 +1292,7 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                 ui.horizontal(|ui| {
                     ui.label(format!("🖶 {} — {}", d.name, d.address));
                     if ui.small_button(app.i18n.t("action-status")).clicked() {
-                        let env = app.run_reporting("device.status", json!({"address": d.address}));
-                        if let Some(r) = env.result {
-                            app.set_status(r["status"].to_string(), false);
-                        }
+                        menu::refresh_status(app, &d.address);
                     }
                     if ui
                         .small_button(app.i18n.t("action-printer-settings"))
@@ -1062,6 +1310,10 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                         app.ui.detected = None;
                     }
                 });
+                device_details(app, ui, d);
+            }
+            if let Some(address) = app.ui.connect_failed.clone() {
+                connect_help(app, ui, &address);
             }
             crate::paper::banner(app, ui);
             for d in app.ui.scanned.clone() {
@@ -1072,9 +1324,7 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                 ui.horizontal(|ui| {
                     ui.label(format!("{} — {address}", d["name"].as_str().unwrap_or("?")));
                     if ui.small_button(app.i18n.t("action-connect")).clicked()
-                        && app
-                            .run_reporting("device.connect", json!({"address": address}))
-                            .ok
+                        && menu::connect(app, &address)
                     {
                         crate::paper::detect(app, Some(&address));
                     }
@@ -1088,6 +1338,105 @@ fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
         });
 }
 
+/// One line of facts about a connected printer: battery, lid, labels left, firmware.
+pub fn device_summary(app: &LabelyApp, d: &labely_core::services::DeviceInfo) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(s) = app.ui.device_status.get(&d.address) {
+        if let Some(b) = s["battery_percent"].as_u64() {
+            out.push(
+                app.i18n
+                    .t_args("device-battery", &[("percent", Arg::Num(b as f64))]),
+            );
+        }
+        if s["lid_closed"].as_bool() == Some(false) {
+            out.push(app.i18n.t("device-lid-open"));
+        }
+        if s["paper_present"].as_bool() == Some(false) {
+            out.push(app.i18n.t("device-no-paper"));
+        }
+        let paper = &s["paper"];
+        if let (Some(total), Some(used)) = (paper["total"].as_u64(), paper["used"].as_u64()) {
+            let left = total.saturating_sub(used);
+            out.push(app.i18n.t_args(
+                "device-labels-left",
+                &[
+                    ("left", Arg::Num(left as f64)),
+                    ("total", Arg::Num(total as f64)),
+                ],
+            ));
+        }
+    }
+    out
+}
+
+fn device_details(app: &LabelyApp, ui: &mut Ui, d: &labely_core::services::DeviceInfo) {
+    let mut facts = device_summary(app, d);
+    if let Some(fw) = &d.firmware {
+        facts.push(
+            app.i18n
+                .t_args("device-firmware", &[("version", Arg::Str(fw))]),
+        );
+    }
+    if let Some(hw) = &d.hardware {
+        facts.push(
+            app.i18n
+                .t_args("device-hardware", &[("version", Arg::Str(hw))]),
+        );
+    }
+    if let Some(sn) = &d.serial {
+        facts.push(
+            app.i18n
+                .t_args("device-serial", &[("serial", Arg::Str(sn))]),
+        );
+    }
+    if !facts.is_empty() {
+        ui.label(RichText::new(facts.join(" · ")).weak());
+    }
+}
+
+/// Tips after a failed connect, by transport.
+fn connect_help(app: &mut LabelyApp, ui: &mut Ui, address: &str) {
+    let keys: &[&str] = if address.starts_with("usb:") {
+        &[
+            "connect-tip-power",
+            "connect-tip-cable",
+            "connect-tip-other-app",
+            "connect-tip-port",
+        ]
+    } else {
+        &[
+            "connect-tip-power",
+            "connect-tip-other-app",
+            "connect-tip-bt-permission",
+            "connect-tip-distance",
+            "connect-tip-rescan",
+        ]
+    };
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.colored_label(
+                Color32::from_rgb(200, 60, 60),
+                app.i18n
+                    .t_args("connect-failed", &[("address", Arg::Str(address))]),
+            );
+            if ui.small_button(app.i18n.t("action-close")).clicked() {
+                app.ui.connect_failed = None;
+            }
+        });
+        for k in keys {
+            ui.label(format!("• {}", app.i18n.t(k)));
+        }
+        ui.horizontal(|ui| {
+            if ui.button(app.i18n.t("action-retry")).clicked() {
+                menu::connect(app, address);
+            }
+            if ui.button(app.i18n.t("action-scan")).clicked() {
+                menu::scan(app);
+            }
+        });
+    });
+}
+
 /// Status bar: document, zoom, MCP state, last message.
 pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
@@ -1099,6 +1448,34 @@ pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
             );
             ui.separator();
             ui.label(format!("{:.0}%", app.ui.zoom / 8.0 * 100.0));
+            ui.separator();
+        }
+        for d in app.session.services().devices.connected() {
+            let mut text = format!(
+                "🖶 {}",
+                d.model
+                    .as_ref()
+                    .map_or(d.name.as_str(), |m| m.name.as_str())
+            );
+            if let Some(b) = app
+                .ui
+                .device_status
+                .get(&d.address)
+                .and_then(|s| s["battery_percent"].as_u64())
+            {
+                text.push_str(&format!(" · 🔋 {b}%"));
+            }
+            let summary = device_summary(app, &d).join(" · ");
+            if ui.label(text).on_hover_text(summary).clicked() {
+                app.ui.show_printers = true;
+            }
+            ui.separator();
+        }
+        if let Some(n) = crate::jobs::active_count(app) {
+            ui.label(
+                app.i18n
+                    .t_args("status-jobs", &[("count", Arg::Num(n as f64))]),
+            );
             ui.separator();
         }
         match &app.mcp {
