@@ -1,5 +1,5 @@
 //! Icons, borders and reading codes from images: `element.add_icon`, `element.add_border`,
-//! `icon.list`, `code.decode`.
+//! `icon.list`, `font.list`, `code.decode`.
 
 use base64::Engine;
 use schemars::JsonSchema;
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::element::{AddOutput, Frame, add, add_params};
 use crate::command::{Command, CommandError, CommandMeta, Ctx};
-use crate::document::{BorderProps, BorderStyle, ElementKind, IconProps};
+use crate::document::{BorderProps, BorderStyle, DEFAULT_FONT, ElementKind, IconProps};
 use crate::services::IconInfo;
 
 /// Largest image `code.decode` reads.
@@ -138,6 +138,42 @@ impl Command for IconList {
             icons.retain(|i| &i.category == c);
         }
         Ok(IconListOutput { icons })
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FontListParams {}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct FontListOutput {
+    /// Family names usable as `font_family`, sorted.
+    pub fonts: Vec<String>,
+}
+
+/// `font.list`
+#[derive(Debug)]
+pub struct FontList;
+
+impl Command for FontList {
+    const ID: &'static str = "font.list";
+    type Params = FontListParams;
+    type Output = FontListOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::query(
+            "List fonts",
+            "Font family names the renderer can draw, for a text or table `font_family`. Other \
+             names fall back to the default font and doc.check reports it.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, _p: FontListParams) -> Result<FontListOutput, CommandError> {
+        let mut fonts = ctx.services().renderer.fonts();
+        if fonts.is_empty() {
+            fonts.push(DEFAULT_FONT.to_owned());
+        }
+        Ok(FontListOutput { fonts })
     }
 }
 

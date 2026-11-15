@@ -141,6 +141,14 @@ fn enum_values(schema: &Value) -> Option<Vec<String>> {
     None
 }
 
+/// Whether a schema node accepts `null` (an optional property).
+fn nullable(schema: &Value) -> bool {
+    match schema.get("type") {
+        Some(Value::Array(a)) => a.iter().any(|t| t == "null"),
+        _ => false,
+    }
+}
+
 /// Primary JSON type of a schema node, ignoring `null`.
 fn schema_type(schema: &Value) -> Option<&str> {
     match schema.get("type") {
@@ -197,11 +205,27 @@ fn prop_editor(
             }
             (Some("number"), _) => {
                 let mut n = value.as_f64().unwrap_or(0.0);
+                let nullable = nullable(schema);
                 let drag = match units {
                     Some(u) => length_drag(&mut n, u),
                     None => egui::DragValue::new(&mut n).speed(0.1).max_decimals(2),
                 };
-                ui.add(drag).labelled_by(lbl).changed().then(|| json!(n))
+                let drag = if nullable {
+                    drag.range(0.0..=f64::MAX)
+                } else {
+                    drag
+                };
+                ui.add(drag)
+                    .labelled_by(lbl)
+                    .changed()
+                    // An optional value at 0 means "not set".
+                    .then(|| {
+                        if nullable && n <= 0.0 {
+                            Value::Null
+                        } else {
+                            json!(n)
+                        }
+                    })
             }
             (Some("integer"), _) => {
                 let mut n = value.as_i64().unwrap_or(0);
@@ -290,6 +314,7 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
         .unwrap_or_else(|| json!({}));
     let whole = serde_json::to_value(e).unwrap_or_default();
     let mut edits: Vec<(String, Value)> = Vec::new();
+    let mut text_id = None;
 
     egui::CollapsingHeader::new(app.i18n.t("props-frame"))
         .default_open(true)
@@ -364,6 +389,36 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                         }
                         continue;
                     }
+                    if key == "font_family" {
+                        let mut names = app.session.services().renderer.fonts();
+                        if let Some(cur) = value.as_str()
+                            && !names.iter().any(|n| n == cur)
+                        {
+                            names.insert(0, cur.to_owned());
+                        }
+                        let s = json!({"enum": names});
+                        if let Some(v) = prop_editor(ui, "font", &s, &value, None) {
+                            edits.push((key.clone(), v));
+                        }
+                        continue;
+                    }
+                    if key == "text" && matches!(e.kind, labely_core::ElementKind::Text(_)) {
+                        let lbl = ui.label("text").id;
+                        let mut s = value.as_str().unwrap_or("").to_owned();
+                        let r = ui
+                            .add(
+                                egui::TextEdit::multiline(&mut s)
+                                    .id_salt("prop-text")
+                                    .desired_rows(2),
+                            )
+                            .labelled_by(lbl);
+                        text_id = Some(r.id);
+                        if r.changed() {
+                            edits.push((key.clone(), json!(s)));
+                        }
+                        ui.end_row();
+                        continue;
+                    }
                     let label = key.strip_suffix("_mm").unwrap_or(key).replace('_', " ");
                     if let Some(v) = prop_editor(ui, &label, s, &value, units_for(key, app.units()))
                     {
@@ -376,13 +431,177 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
     if let labely_core::ElementKind::Table(t) = &e.kind {
         table_editor(app, ui, e.id, t);
     }
+    if let labely_core::ElementKind::Text(t) = &e.kind {
+        app.ui.text_edit_id = text_id;
+        span_tools(app, ui, e.id, t);
+    }
+    if let labely_core::ElementKind::Image(i) = &e.kind {
+        crop_editor(app, ui, e.id, i.crop);
+    }
+    if let Some(link) = e.mirror {
+        ui.horizontal(|ui| {
+            ui.label(
+                app.i18n
+                    .t_args("props-mirror-of", &[("id", Arg::Num(link.of.0 as f64))]),
+            );
+            if ui.small_button(app.i18n.t("action-unlink")).clicked() {
+                app.run_reporting(
+                    "element.set_props",
+                    json!({"id": e.id, "props": {"mirror": null}}),
+                );
+            }
+        });
+    }
 
     for (key, value) in edits {
         let mut props = Map::new();
+        // Keep rich-text styles on the same characters while typing.
+        if key == "text"
+            && let labely_core::ElementKind::Text(t) = &e.kind
+            && !t.spans.is_empty()
+            && let Some(new) = value.as_str()
+        {
+            let spans = crate::rich::shift(&t.spans, &t.text, new);
+            props.insert("spans".into(), json!(spans));
+        }
         props.insert(key.clone(), value);
         app.run_reporting(
             "element.set_props",
             json!({"id": e.id, "props": props, "coalesce": format!("prop-{}-{key}", e.id.0)}),
+        );
+    }
+}
+
+/// The selected character range of the text property field, if any.
+fn text_selection(app: &LabelyApp, ui: &Ui) -> Option<(usize, usize)> {
+    let id = app.ui.text_edit_id?;
+    let state = egui::text_edit::TextEditState::load(ui.ctx(), id)?;
+    let r = state.cursor.char_range()?;
+    let (a, b) = (r.primary.index.0, r.secondary.index.0);
+    Some((a.min(b), a.max(b)))
+}
+
+/// Bold / italic / underline / size buttons that style the selected part of the text.
+fn span_tools(
+    app: &mut LabelyApp,
+    ui: &mut Ui,
+    id: ElementId,
+    t: &labely_core::document::TextProps,
+) {
+    use crate::rich::{self, Style};
+    let sel = text_selection(app, ui).filter(|(a, b)| a < b);
+    let mut new_spans = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(app.i18n.t("props-style-selection"))
+            .on_hover_text(app.i18n.t("props-style-selection-hint"));
+        ui.add_enabled_ui(sel.is_some(), |ui| {
+            let (a, b) = sel.unwrap_or((0, 0));
+            for (style, text, base) in [
+                (Style::Bold, RichText::new("B").strong(), t.bold),
+                (Style::Italic, RichText::new("I").italics(), t.italic),
+                (
+                    Style::Underline,
+                    RichText::new("U").underline(),
+                    t.underline,
+                ),
+            ] {
+                let on = sel.is_some() && rich::has_style(&t.spans, base, style, a, b);
+                if ui.selectable_label(on, text).clicked() {
+                    new_spans = rich::toggle(&t.spans, base, style, a, b);
+                }
+            }
+            for (label, factor) in [("A−", 0.8), ("A+", 1.25)] {
+                if ui.small_button(label).clicked() {
+                    let pt = ((t.font_size_pt * factor) * 2.0).round() / 2.0;
+                    new_spans = rich::set_size(&t.spans, a, b, pt.max(1.0));
+                }
+            }
+        });
+        if ui
+            .add_enabled(
+                !t.spans.is_empty(),
+                egui::Button::new(app.i18n.t("action-clear-styles")).small(),
+            )
+            .clicked()
+        {
+            let (a, b) = sel.unwrap_or((0, 0));
+            new_spans = Some(rich::clear(&t.spans, a, b));
+        }
+    });
+    if let Some(spans) = new_spans {
+        app.run_reporting(
+            "element.set_props",
+            json!({"id": id, "props": {"spans": spans}}),
+        );
+    }
+}
+
+/// Four percentage sliders for the image crop, and a reset button.
+fn crop_editor(
+    app: &mut LabelyApp,
+    ui: &mut Ui,
+    id: ElementId,
+    crop: Option<labely_core::document::Crop>,
+) {
+    let c = crop.unwrap_or(labely_core::document::Crop {
+        left: 0.0,
+        top: 0.0,
+        right: 1.0,
+        bottom: 1.0,
+    });
+    let (mut l, mut t, mut r, mut b) = (
+        c.left * 100.0,
+        c.top * 100.0,
+        (1.0 - c.right) * 100.0,
+        (1.0 - c.bottom) * 100.0,
+    );
+    let mut changed = false;
+    egui::CollapsingHeader::new(app.i18n.t("props-crop"))
+        .default_open(crop.is_some())
+        .show(ui, |ui| {
+            egui::Grid::new("crop").num_columns(2).show(ui, |ui| {
+                let mut v = [l, r, t, b];
+                for (i, key) in ["crop-left", "crop-right", "crop-top", "crop-bottom"]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let lbl = ui.label(app.i18n.t(key)).id;
+                    // The opposite edge; keep at least 1% of the image.
+                    let max = (99.0 - v[i ^ 1]).max(0.0);
+                    changed |= ui
+                        .add(
+                            egui::Slider::new(&mut v[i], 0.0..=max)
+                                .suffix(" %")
+                                .max_decimals(0),
+                        )
+                        .labelled_by(lbl)
+                        .changed();
+                    ui.end_row();
+                }
+                [l, r, t, b] = v;
+            });
+            if ui
+                .add_enabled(
+                    crop.is_some(),
+                    egui::Button::new(app.i18n.t("action-reset-crop")),
+                )
+                .clicked()
+            {
+                app.run_reporting(
+                    "element.set_props",
+                    json!({"id": id, "props": {"crop": null}}),
+                );
+            }
+        });
+    if changed {
+        let crop = if l + t + r + b <= 0.0 {
+            Value::Null
+        } else {
+            json!({"left": l / 100.0, "top": t / 100.0, "right": 1.0 - r / 100.0, "bottom": 1.0 - b / 100.0})
+        };
+        app.run_reporting(
+            "element.set_props",
+            json!({"id": id, "props": {"crop": crop}, "coalesce": format!("crop-{}", id.0)}),
         );
     }
 }
@@ -642,13 +861,15 @@ fn data_panel(app: &mut LabelyApp, ui: &mut Ui) {
                     });
                     app.ui.record = record;
                 }
+                ui.weak(app.i18n.t("data-drag-hint"));
                 egui::Grid::new("data-columns")
-                    .num_columns(3)
+                    .num_columns(4)
                     .striped(true)
                     .show(ui, |ui| {
                         for c in &d.columns {
-                            ui.label(c);
+                            column_source(ui, c);
                             ui.weak(values.get(c).map_or("", String::as_str));
+                            add_from_column_menu(app, ui, c);
                             if ui
                                 .add_enabled(
                                     bindable,
@@ -678,6 +899,33 @@ fn data_panel(app: &mut LabelyApp, ui: &mut Ui) {
         for (name, spec) in &doc.serials {
             serial_row(app, ui, name, spec, bindable, &values);
         }
+    });
+}
+
+/// A column name that can be dragged onto the canvas.
+fn column_source(ui: &mut Ui, column: &str) {
+    let id = egui::Id::unique(("column-drag", column));
+    ui.dnd_drag_source(id, menu::ColumnDrag(column.to_owned()), |ui| {
+        ui.add(egui::Label::new(column).sense(egui::Sense::drag()))
+    })
+    .response
+    .on_hover_cursor(egui::CursorIcon::Grab);
+}
+
+/// "+" menu: add a text, barcode or 2D code bound to the column.
+fn add_from_column_menu(app: &mut LabelyApp, ui: &mut Ui, column: &str) {
+    let has_doc = app.session.active_doc_id().is_some();
+    ui.add_enabled_ui(has_doc, |ui| {
+        ui.menu_button("+", |ui| {
+            for (key, id, _) in menu::FROM_COLUMN {
+                if ui.button(app.i18n.t(key)).clicked() {
+                    menu::add_from_column(app, id, column, None);
+                    ui.close();
+                }
+            }
+        })
+        .response
+        .on_hover_text(app.i18n.t("action-add-from-column"));
     });
 }
 

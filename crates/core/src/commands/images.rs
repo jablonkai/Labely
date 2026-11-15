@@ -141,6 +141,7 @@ impl Command for AttachImages {
                 brightness: 0.0,
                 contrast: 0.0,
                 invert: false,
+                crop: None,
             };
             let frame = Frame {
                 name: None,

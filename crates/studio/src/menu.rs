@@ -61,7 +61,7 @@ fn enabled(app: &LabelyApp, id: &str) -> bool {
         "history.undo" => app.session.can_undo(None),
         "history.redo" => app.session.can_redo(None),
         "element.delete" | "element.duplicate" | "element.reorder" | "element.ungroup"
-        | "element.lock" => has_sel,
+        | "element.lock" | "element.mirror" => has_sel,
         "element.group" => app.selection().len() >= 2,
         _ => has_doc,
     }
@@ -190,6 +190,16 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
         "arrange" => {
             ui.separator();
             let n = app.selection().len();
+            if ui
+                .add_enabled(
+                    n >= 1,
+                    egui::Button::new(app.i18n.t("action-mirror-vertical")),
+                )
+                .clicked()
+            {
+                mirror_selection(app, "vertical");
+                ui.close();
+            }
             ui.add_enabled_ui(n >= 1, |ui| {
                 ui.menu_button(app.i18n.t("menu-align"), |ui| {
                     for edge in ["left", "center", "right", "top", "middle", "bottom"] {
@@ -622,6 +632,7 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
             });
             app.run_reporting("element.lock", json!({"ids": ids, "locked": !all_locked}));
         }
+        "element.mirror" => mirror_selection(app, "horizontal"),
         "element.reorder" => {
             for sel in app.selection() {
                 app.run_reporting("element.reorder", json!({"id": sel, "to": "front"}));
@@ -708,6 +719,83 @@ pub fn insert_code_from_image(app: &mut LabelyApp, source: &Value) {
 }
 
 /// Add a text element holding `text`, creating the `serial` counter first if it is used.
+/// Add a linked mirror copy of every selected element that is not itself a copy, and select
+/// the copies.
+pub fn mirror_selection(app: &mut LabelyApp, axis: &str) {
+    let mut created = Vec::new();
+    for id in app.selection() {
+        let is_copy = app
+            .session
+            .doc(None)
+            .and_then(|d| d.element(id))
+            .is_some_and(|e| e.mirror.is_some());
+        if !is_copy {
+            let env = app.run_reporting("element.mirror", json!({"id": id, "axis": axis}));
+            created.extend(env.created);
+        }
+    }
+    if !created.is_empty() {
+        app.select(&created);
+    }
+}
+
+/// A data column (or serial) being dragged from the data panel onto the canvas.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnDrag(pub String);
+
+/// Element kinds that can be generated from a column: the add command and its bound property.
+pub const FROM_COLUMN: [(&str, &str, &str); 3] = [
+    ("kind-text", "element.add_text", "text"),
+    ("kind-barcode", "element.add_barcode", "data"),
+    ("kind-code2d", "element.add_code2d", "data"),
+];
+
+/// Add a text, barcode or 2D-code element bound to `column`, centred on `at` (mm) if given.
+pub fn add_from_column(app: &mut LabelyApp, id: &str, column: &str, at: Option<(f64, f64)>) {
+    let Some((_, _, prop)) = FROM_COLUMN.iter().find(|(_, c, _)| *c == id) else {
+        return;
+    };
+    let Some(mut p) = add_defaults(app, id) else {
+        return;
+    };
+    p[*prop] = json!(format!("{{{{{column}}}}}"));
+    if let Some((x, y)) = at {
+        let w = p["width_mm"].as_f64().unwrap_or(0.0);
+        let h = p["height_mm"].as_f64().unwrap_or(0.0);
+        p["x_mm"] = json!(((x - w / 2.0) * 10.0).round() / 10.0);
+        p["y_mm"] = json!(((y - h / 2.0) * 10.0).round() / 10.0);
+    }
+    add(app, id, p);
+}
+
+/// Drop `column` at `(x, y)` mm: bind the text, barcode or 2D code under the pointer, or
+/// add a new text element there.
+pub fn drop_column(app: &mut LabelyApp, column: &str, x: f64, y: f64, zoom: f32) {
+    let target = app.session.doc(None).and_then(|d| {
+        crate::canvas::hit(d, x, y, zoom).filter(|id| {
+            d.element(*id).is_some_and(|e| {
+                matches!(
+                    e.kind,
+                    labely_core::ElementKind::Text(_)
+                        | labely_core::ElementKind::Barcode(_)
+                        | labely_core::ElementKind::Code2d(_)
+                )
+            })
+        })
+    });
+    match target {
+        Some(id) => {
+            if app
+                .run_reporting("data.bind", json!({"id": id, "column": column}))
+                .ok
+            {
+                app.select(&[id]);
+            }
+        }
+        None => add_from_column(app, "element.add_text", column, Some((x, y))),
+    }
+}
+
 pub fn insert_bound_text(app: &mut LabelyApp, text: &str) {
     let needs_serial = text.contains("{{serial}}")
         && app

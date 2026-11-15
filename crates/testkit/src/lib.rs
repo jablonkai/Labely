@@ -100,10 +100,12 @@ impl Renderer for FakeRenderer {
                             TextFit::None => {
                                 issues.push(RenderIssue::TextOverflow { element_id: e.id })
                             }
-                            TextFit::Shrink => issues.push(RenderIssue::TextShrunk {
-                                element_id: e.id,
-                                font_size_pt: t.font_size_pt * scale,
-                            }),
+                            TextFit::Shrink | TextFit::Fill => {
+                                issues.push(RenderIssue::TextShrunk {
+                                    element_id: e.id,
+                                    font_size_pt: t.font_size_pt * scale,
+                                })
+                            }
                         }
                     }
                 }
@@ -550,6 +552,7 @@ mod tests {
             flip_h: false,
             flip_v: false,
             group: None,
+            mirror: None,
             kind: ElementKind::Rect(Default::default()),
         });
         let r = FakeRenderer::new();

@@ -51,6 +51,7 @@ impl Doc {
             flip_h: false,
             flip_v: false,
             group: None,
+            mirror: None,
             kind,
         });
         id
@@ -211,6 +212,7 @@ fn image(asset: &str, fit: ImageFit, dither: Dither) -> ImageProps {
         brightness: 0.0,
         contrast: 0.0,
         invert: false,
+        crop: None,
     }
 }
 
@@ -1184,4 +1186,172 @@ fn image_asset_bound_to_a_record() {
         &out,
         |i| matches!(i, RenderIssue::BadAsset { element_id, .. } if *element_id == id)
     ));
+}
+
+// ---------------------------------------------------------------- 3.6c text and data
+
+fn one_text(p: TextProps) -> (RenderOutput, ElementId) {
+    let mut d = Doc::new(50.0, 20.0);
+    let id = d.add(1.0, 1.0, 48.0, 18.0, 0.0, ElementKind::Text(p));
+    (render(&d.doc, 203), id)
+}
+
+#[test]
+fn fill_grows_text_to_the_box() {
+    let (fixed, _) = one_text(text("AB", 8.0));
+    let (filled, id) = one_text(TextProps {
+        fit: TextFit::Fill,
+        ..text("AB", 8.0)
+    });
+    assert!(filled.bitmap.count_black() > 4 * fixed.bitmap.count_black());
+    assert!(!has_issue(&filled, |i| matches!(
+        i,
+        RenderIssue::TextOverflow { .. } | RenderIssue::TextShrunk { .. }
+    )));
+    // Too much text for the set size: fill shrinks it like `shrink`.
+    let (shrunk, _) = one_text(TextProps {
+        fit: TextFit::Fill,
+        wrap: false,
+        ..text("A long line that cannot fit", 40.0)
+    });
+    assert!(has_issue(&shrunk, |i| matches!(
+        i,
+        RenderIssue::TextShrunk { element_id, .. } if *element_id == id
+    )));
+}
+
+#[test]
+fn spans_style_part_of_the_text() {
+    let (plain, _) = one_text(text("aaaa bbbb", 12.0));
+    let span = |sp: TextSpan| TextProps {
+        spans: vec![sp],
+        ..text("aaaa bbbb", 12.0)
+    };
+    let (bold, _) = one_text(span(TextSpan {
+        start: 0,
+        end: 4,
+        bold: Some(true),
+        ..Default::default()
+    }));
+    let (big, _) = one_text(span(TextSpan {
+        start: 5,
+        end: 9,
+        font_size_pt: Some(24.0),
+        ..Default::default()
+    }));
+    let (p, b, g) = (
+        plain.bitmap.count_black(),
+        bold.bitmap.count_black(),
+        big.bitmap.count_black(),
+    );
+    assert!(b > p && g > b, "{p} {b} {g}");
+    // A span beyond the text is clamped, and a binding inside one piece is filled in.
+    let mut d = Doc::new(50.0, 20.0);
+    d.doc.variables.insert("x".into(), "ZZ".into());
+    let a = d.add(
+        1.0,
+        1.0,
+        48.0,
+        18.0,
+        0.0,
+        ElementKind::Text(TextProps {
+            spans: vec![TextSpan {
+                start: 2,
+                end: 99,
+                italic: Some(true),
+                ..Default::default()
+            }],
+            ..text("a {{x}}", 12.0)
+        }),
+    );
+    let out = render(&d.doc, 203);
+    assert!(out.issues.is_empty(), "{:?} for {a:?}", out.issues);
+    let mut e = Doc::new(50.0, 20.0);
+    e.add(
+        1.0,
+        1.0,
+        48.0,
+        18.0,
+        0.0,
+        ElementKind::Text(TextProps {
+            italic: false,
+            ..text("a {{x}}", 12.0)
+        }),
+    );
+    assert_ne!(out.bitmap, render(&e.doc, 203).bitmap);
+}
+
+#[test]
+fn max_length_guard_reports_long_text() {
+    let (out, id) = one_text(TextProps {
+        wrap: false,
+        max_length_mm: Some(10.0),
+        ..text("Hello world", 12.0)
+    });
+    let found = out.issues.iter().find_map(|i| match i {
+        RenderIssue::TextTooLong {
+            element_id,
+            length_mm,
+            max_length_mm,
+        } if *element_id == id => Some((*length_mm, *max_length_mm)),
+        _ => None,
+    });
+    let (len, max) = found.expect("TextTooLong");
+    assert!(len > 15.0 && max == 10.0, "{len}");
+    let (ok, _) = one_text(TextProps {
+        max_length_mm: Some(40.0),
+        ..text("Hello", 12.0)
+    });
+    assert!(!has_issue(&ok, |i| matches!(
+        i,
+        RenderIssue::TextTooLong { .. }
+    )));
+}
+
+#[test]
+fn crop_uses_part_of_the_image() {
+    let draw = |crop: Option<Crop>| {
+        let mut d = Doc::new(30.0, 20.0);
+        add_asset(&mut d, "img", 64, 64);
+        d.add(
+            0.0,
+            0.0,
+            20.0,
+            20.0,
+            0.0,
+            ElementKind::Image(ImageProps {
+                crop,
+                ..image("img", ImageFit::Stretch, Dither::Threshold)
+            }),
+        );
+        render(&d.doc, 203)
+    };
+    let full = draw(None);
+    let right = draw(Some(Crop {
+        left: 0.5,
+        top: 0.0,
+        right: 1.0,
+        bottom: 1.0,
+    }));
+    assert_ne!(full.bitmap, right.bitmap);
+    assert!(
+        right
+            .issues
+            .iter()
+            .all(|i| !matches!(i, RenderIssue::BadAsset { .. }))
+    );
+    // An invalid crop is ignored rather than failing the render.
+    let bad = draw(Some(Crop {
+        left: 0.8,
+        top: 0.0,
+        right: 0.2,
+        bottom: 1.0,
+    }));
+    assert_eq!(bad.bitmap, full.bitmap);
+}
+
+#[test]
+fn font_list_has_the_bundled_family() {
+    let fonts = LabelRenderer::new().fonts();
+    assert!(fonts.iter().any(|f| f == DEFAULT_FONT), "{fonts:?}");
 }

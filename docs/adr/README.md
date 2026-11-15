@@ -24,3 +24,4 @@
 | [0020](0020-paper-library-and-device-settings.md) | Label paper library, RFID detection, calibration and printer settings | proposed |
 | [0021](0021-print-transforms-and-code128-sets.md) | Print offset, mirror and output direction; Code 128 sets and GS1-128 | proposed |
 | [0022](0022-tabs-recent-clipboard-units.md) | Document tabs, recent files, clipboard, rulers and units | proposed |
+| [0023](0023-text-fit-spans-crop-mirrors.md) | Fill-to-box text, length guard, fonts, rich spans, image crop, mirror copies and column drag | proposed |

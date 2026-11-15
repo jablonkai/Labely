@@ -31,6 +31,16 @@ pub(crate) struct TextStyle {
     pub wrap: bool,
 }
 
+/// A stretch of text with its own style; `scale` multiplies the base font size.
+#[derive(Debug, Clone)]
+pub(crate) struct Run {
+    pub text: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub scale: f32,
+}
+
 /// A shaped buffer and its extent.
 pub(crate) struct Laid {
     buf: Buffer,
@@ -77,10 +87,37 @@ impl TextEngine {
         })
     }
 
+    /// Every installed family name, sorted case-insensitively and without duplicates.
+    pub fn families(&self) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .fs
+            .db()
+            .faces()
+            .filter_map(|f| f.families.first().map(|(n, _)| n.clone()))
+            .collect();
+        out.sort_by_key(|n| n.to_lowercase());
+        out.dedup();
+        out
+    }
+
     /// Shape `text` into a box `box_w` dots wide.
     pub fn layout(&mut self, text: &str, st: &TextStyle, box_w: f32) -> Laid {
+        let run = Run {
+            text: text.to_owned(),
+            bold: st.bold,
+            italic: st.italic,
+            underline: st.underline,
+            scale: 1.0,
+        };
+        self.layout_runs(std::slice::from_ref(&run), st, box_w)
+    }
+
+    /// Shape styled `runs` into a box `box_w` dots wide; `st` gives the base size and the
+    /// paragraph settings.
+    pub fn layout_runs(&mut self, runs: &[Run], st: &TextStyle, box_w: f32) -> Laid {
         let size = st.size_px.max(0.5);
-        let line_h = (size * LINE_HEIGHT * st.line_spacing.max(0.05)).max(0.5);
+        let spacing = LINE_HEIGHT * st.line_spacing.max(0.05);
+        let line_h = (size * spacing).max(0.5);
         let mut buf = Buffer::new(&mut self.fs, Metrics::new(size, line_h));
         buf.set_wrap(if st.wrap {
             Wrap::WordOrGlyph
@@ -88,31 +125,40 @@ impl TextEngine {
             Wrap::None
         });
         buf.set_size(Some(box_w.max(1.0)), None);
-        let mut attrs = Attrs::new()
-            .family(Family::Name(&st.family))
-            .weight(if st.bold {
-                Weight::BOLD
-            } else {
-                Weight::NORMAL
-            })
-            .style(if st.italic {
-                Style::Italic
-            } else {
-                Style::Normal
-            });
-        if st.letter_spacing_px != 0.0 {
-            // cosmic-text tracking is in em.
-            attrs = attrs.letter_spacing(st.letter_spacing_px / size);
-        }
-        if st.underline {
-            attrs = attrs.underline(UnderlineStyle::Single);
-        }
+        let attrs_for = |bold: bool, italic: bool, underline: bool, scale: f32| {
+            let size = (size * scale).max(0.5);
+            let mut a = Attrs::new()
+                .family(Family::Name(&st.family))
+                .weight(if bold { Weight::BOLD } else { Weight::NORMAL })
+                .style(if italic { Style::Italic } else { Style::Normal });
+            if scale != 1.0 {
+                a = a.metrics(Metrics::new(size, (size * spacing).max(0.5)));
+            }
+            if st.letter_spacing_px != 0.0 {
+                // cosmic-text tracking is in em.
+                a = a.letter_spacing(st.letter_spacing_px / size);
+            }
+            if underline {
+                a = a.underline(UnderlineStyle::Single);
+            }
+            a
+        };
+        let base = attrs_for(st.bold, st.italic, st.underline, 1.0);
         let align = match st.align {
             HAlign::Left => Align::Left,
             HAlign::Center => Align::Center,
             HAlign::Right => Align::Right,
         };
-        buf.set_text(text, &attrs, Shaping::Advanced, Some(align));
+        let spans: Vec<(&str, Attrs<'_>)> = runs
+            .iter()
+            .map(|r| {
+                (
+                    r.text.as_str(),
+                    attrs_for(r.bold, r.italic, r.underline, r.scale),
+                )
+            })
+            .collect();
+        buf.set_rich_text(spans, &base, Shaping::Advanced, Some(align));
         buf.shape_until_scroll(&mut self.fs, false);
         let (mut width, mut height) = (0.0f32, 0.0f32);
         for run in buf.layout_runs() {

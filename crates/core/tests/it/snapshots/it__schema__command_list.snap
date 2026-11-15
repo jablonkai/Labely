@@ -1458,6 +1458,11 @@ expression: r
                                     "const": "shrink",
                                     "description": "Shrink the font until the text fits.",
                                     "type": "string"
+                                  },
+                                  {
+                                    "const": "fill",
+                                    "description": "Grow or shrink the font to the largest size that fits the box.",
+                                    "type": "string"
                                   }
                                 ]
                               },
@@ -1489,6 +1494,66 @@ expression: r
                                 "description": "Line height multiplier.",
                                 "format": "double",
                                 "type": "number"
+                              },
+                              "max_length_mm": {
+                                "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                                "format": "double",
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "spans": {
+                                "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                                "items": {
+                                  "additionalProperties": false,
+                                  "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                                  "properties": {
+                                    "bold": {
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "end": {
+                                      "description": "One past the last character.",
+                                      "format": "uint",
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "font_size_pt": {
+                                      "format": "double",
+                                      "type": [
+                                        "number",
+                                        "null"
+                                      ]
+                                    },
+                                    "italic": {
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    },
+                                    "start": {
+                                      "description": "First character (Unicode scalar index into `text`).",
+                                      "format": "uint",
+                                      "minimum": 0,
+                                      "type": "integer"
+                                    },
+                                    "underline": {
+                                      "type": [
+                                        "boolean",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "start",
+                                    "end"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
                               },
                               "text": {
                                 "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -1668,6 +1733,38 @@ expression: r
                                 "description": "-1.0 … 1.0",
                                 "format": "double",
                                 "type": "number"
+                              },
+                              "crop": {
+                                "additionalProperties": false,
+                                "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                                "properties": {
+                                  "bottom": {
+                                    "format": "double",
+                                    "type": "number"
+                                  },
+                                  "left": {
+                                    "format": "double",
+                                    "type": "number"
+                                  },
+                                  "right": {
+                                    "format": "double",
+                                    "type": "number"
+                                  },
+                                  "top": {
+                                    "format": "double",
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "left",
+                                  "top",
+                                  "right",
+                                  "bottom"
+                                ],
+                                "type": [
+                                  "object",
+                                  "null"
+                                ]
                               },
                               "dither": {
                                 "default": "floyd_steinberg",
@@ -2079,6 +2176,41 @@ expression: r
                           "locked": {
                             "default": false,
                             "type": "boolean"
+                          },
+                          "mirror": {
+                            "additionalProperties": false,
+                            "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                            "properties": {
+                              "axis": {
+                                "description": "Line a mirror copy is reflected across.",
+                                "oneOf": [
+                                  {
+                                    "const": "horizontal",
+                                    "description": "Left–right, across the label's vertical centre line.",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "vertical",
+                                    "description": "Top–bottom, across the label's horizontal centre line.",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "of": {
+                                "description": "Source element on the same page.",
+                                "format": "uint64",
+                                "minimum": 0,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "of",
+                              "axis"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
                           },
                           "name": {
                             "type": [
@@ -3207,6 +3339,11 @@ expression: r
                     "const": "shrink",
                     "description": "Shrink the font until the text fits.",
                     "type": "string"
+                  },
+                  {
+                    "const": "fill",
+                    "description": "Grow or shrink the font to the largest size that fits the box.",
+                    "type": "string"
                   }
                 ]
               },
@@ -3215,7 +3352,7 @@ expression: r
               }
             ],
             "default": null,
-            "description": "`none` (default; overflow reported by doc.check) or `shrink`."
+            "description": "`none` (default; overflow reported by doc.check), `shrink` (smaller until it fits)\nor `fill` (the largest size that fits the box)."
           },
           "font_family": {
             "default": null,
@@ -3265,6 +3402,15 @@ expression: r
           "line_spacing": {
             "default": null,
             "description": "Line height multiplier (default 1.0).",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max_length_mm": {
+            "default": null,
+            "description": "doc.check warns when the longest printed line is wider than this, mm.",
             "format": "double",
             "type": [
               "number",
@@ -4591,6 +4737,11 @@ expression: r
                         "const": "shrink",
                         "description": "Shrink the font until the text fits.",
                         "type": "string"
+                      },
+                      {
+                        "const": "fill",
+                        "description": "Grow or shrink the font to the largest size that fits the box.",
+                        "type": "string"
                       }
                     ]
                   },
@@ -4622,6 +4773,66 @@ expression: r
                     "description": "Line height multiplier.",
                     "format": "double",
                     "type": "number"
+                  },
+                  "max_length_mm": {
+                    "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                    "format": "double",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "spans": {
+                    "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                      "properties": {
+                        "bold": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "end": {
+                          "description": "One past the last character.",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "font_size_pt": {
+                          "format": "double",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "italic": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "start": {
+                          "description": "First character (Unicode scalar index into `text`).",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "underline": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "text": {
                     "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -4801,6 +5012,38 @@ expression: r
                     "description": "-1.0 … 1.0",
                     "format": "double",
                     "type": "number"
+                  },
+                  "crop": {
+                    "additionalProperties": false,
+                    "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                    "properties": {
+                      "bottom": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "left": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "right": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "top": {
+                        "format": "double",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "left",
+                      "top",
+                      "right",
+                      "bottom"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "dither": {
                     "default": "floyd_steinberg",
@@ -5212,6 +5455,41 @@ expression: r
               "locked": {
                 "default": false,
                 "type": "boolean"
+              },
+              "mirror": {
+                "additionalProperties": false,
+                "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                "properties": {
+                  "axis": {
+                    "description": "Line a mirror copy is reflected across.",
+                    "oneOf": [
+                      {
+                        "const": "horizontal",
+                        "description": "Left–right, across the label's vertical centre line.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "vertical",
+                        "description": "Top–bottom, across the label's horizontal centre line.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "of": {
+                    "description": "Source element on the same page.",
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "of",
+                  "axis"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "name": {
                 "type": [
@@ -5634,6 +5912,37 @@ expression: r
       "undoable": false
     },
     {
+      "description": "Font family names the renderer can draw, for a text or table `font_family`. Other names fall back to the default font and doc.check reports it.",
+      "id": "font.list",
+      "journal": false,
+      "kind": "query",
+      "label": "List fonts",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "fonts": {
+            "description": "Family names usable as `font_family`, sorted.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "fonts"
+        ],
+        "title": "FontListOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "FontListParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
       "description": "Decode the barcodes and 2D codes in an image (path or data_base64). Each result gives kind, symbology and text, ready for element.add_barcode or add_code2d.",
       "id": "code.decode",
       "journal": false,
@@ -5755,6 +6064,11 @@ expression: r
                         "const": "shrink",
                         "description": "Shrink the font until the text fits.",
                         "type": "string"
+                      },
+                      {
+                        "const": "fill",
+                        "description": "Grow or shrink the font to the largest size that fits the box.",
+                        "type": "string"
                       }
                     ]
                   },
@@ -5786,6 +6100,66 @@ expression: r
                     "description": "Line height multiplier.",
                     "format": "double",
                     "type": "number"
+                  },
+                  "max_length_mm": {
+                    "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                    "format": "double",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "spans": {
+                    "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                      "properties": {
+                        "bold": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "end": {
+                          "description": "One past the last character.",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "font_size_pt": {
+                          "format": "double",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "italic": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "start": {
+                          "description": "First character (Unicode scalar index into `text`).",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "underline": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "text": {
                     "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -5965,6 +6339,38 @@ expression: r
                     "description": "-1.0 … 1.0",
                     "format": "double",
                     "type": "number"
+                  },
+                  "crop": {
+                    "additionalProperties": false,
+                    "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                    "properties": {
+                      "bottom": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "left": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "right": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "top": {
+                        "format": "double",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "left",
+                      "top",
+                      "right",
+                      "bottom"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "dither": {
                     "default": "floyd_steinberg",
@@ -6376,6 +6782,41 @@ expression: r
               "locked": {
                 "default": false,
                 "type": "boolean"
+              },
+              "mirror": {
+                "additionalProperties": false,
+                "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                "properties": {
+                  "axis": {
+                    "description": "Line a mirror copy is reflected across.",
+                    "oneOf": [
+                      {
+                        "const": "horizontal",
+                        "description": "Left–right, across the label's vertical centre line.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "vertical",
+                        "description": "Top–bottom, across the label's horizontal centre line.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "of": {
+                    "description": "Source element on the same page.",
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "of",
+                  "axis"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "name": {
                 "type": [
@@ -6508,6 +6949,11 @@ expression: r
                         "const": "shrink",
                         "description": "Shrink the font until the text fits.",
                         "type": "string"
+                      },
+                      {
+                        "const": "fill",
+                        "description": "Grow or shrink the font to the largest size that fits the box.",
+                        "type": "string"
                       }
                     ]
                   },
@@ -6539,6 +6985,66 @@ expression: r
                     "description": "Line height multiplier.",
                     "format": "double",
                     "type": "number"
+                  },
+                  "max_length_mm": {
+                    "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                    "format": "double",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "spans": {
+                    "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                      "properties": {
+                        "bold": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "end": {
+                          "description": "One past the last character.",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "font_size_pt": {
+                          "format": "double",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "italic": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "start": {
+                          "description": "First character (Unicode scalar index into `text`).",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "underline": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "text": {
                     "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -6718,6 +7224,38 @@ expression: r
                     "description": "-1.0 … 1.0",
                     "format": "double",
                     "type": "number"
+                  },
+                  "crop": {
+                    "additionalProperties": false,
+                    "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                    "properties": {
+                      "bottom": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "left": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "right": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "top": {
+                        "format": "double",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "left",
+                      "top",
+                      "right",
+                      "bottom"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "dither": {
                     "default": "floyd_steinberg",
@@ -7129,6 +7667,41 @@ expression: r
               "locked": {
                 "default": false,
                 "type": "boolean"
+              },
+              "mirror": {
+                "additionalProperties": false,
+                "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                "properties": {
+                  "axis": {
+                    "description": "Line a mirror copy is reflected across.",
+                    "oneOf": [
+                      {
+                        "const": "horizontal",
+                        "description": "Left–right, across the label's vertical centre line.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "vertical",
+                        "description": "Top–bottom, across the label's horizontal centre line.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "of": {
+                    "description": "Source element on the same page.",
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "of",
+                  "axis"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "name": {
                 "type": [
@@ -7267,6 +7840,11 @@ expression: r
                         "const": "shrink",
                         "description": "Shrink the font until the text fits.",
                         "type": "string"
+                      },
+                      {
+                        "const": "fill",
+                        "description": "Grow or shrink the font to the largest size that fits the box.",
+                        "type": "string"
                       }
                     ]
                   },
@@ -7298,6 +7876,66 @@ expression: r
                     "description": "Line height multiplier.",
                     "format": "double",
                     "type": "number"
+                  },
+                  "max_length_mm": {
+                    "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                    "format": "double",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "spans": {
+                    "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                      "properties": {
+                        "bold": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "end": {
+                          "description": "One past the last character.",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "font_size_pt": {
+                          "format": "double",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "italic": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "start": {
+                          "description": "First character (Unicode scalar index into `text`).",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "underline": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "text": {
                     "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -7477,6 +8115,38 @@ expression: r
                     "description": "-1.0 … 1.0",
                     "format": "double",
                     "type": "number"
+                  },
+                  "crop": {
+                    "additionalProperties": false,
+                    "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                    "properties": {
+                      "bottom": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "left": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "right": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "top": {
+                        "format": "double",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "left",
+                      "top",
+                      "right",
+                      "bottom"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "dither": {
                     "default": "floyd_steinberg",
@@ -7888,6 +8558,41 @@ expression: r
               "locked": {
                 "default": false,
                 "type": "boolean"
+              },
+              "mirror": {
+                "additionalProperties": false,
+                "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                "properties": {
+                  "axis": {
+                    "description": "Line a mirror copy is reflected across.",
+                    "oneOf": [
+                      {
+                        "const": "horizontal",
+                        "description": "Left–right, across the label's vertical centre line.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "vertical",
+                        "description": "Top–bottom, across the label's horizontal centre line.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "of": {
+                    "description": "Source element on the same page.",
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "of",
+                  "axis"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "name": {
                 "type": [
@@ -8026,6 +8731,11 @@ expression: r
                         "const": "shrink",
                         "description": "Shrink the font until the text fits.",
                         "type": "string"
+                      },
+                      {
+                        "const": "fill",
+                        "description": "Grow or shrink the font to the largest size that fits the box.",
+                        "type": "string"
                       }
                     ]
                   },
@@ -8057,6 +8767,66 @@ expression: r
                     "description": "Line height multiplier.",
                     "format": "double",
                     "type": "number"
+                  },
+                  "max_length_mm": {
+                    "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                    "format": "double",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "spans": {
+                    "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                    "items": {
+                      "additionalProperties": false,
+                      "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                      "properties": {
+                        "bold": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "end": {
+                          "description": "One past the last character.",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "font_size_pt": {
+                          "format": "double",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "italic": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "start": {
+                          "description": "First character (Unicode scalar index into `text`).",
+                          "format": "uint",
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "underline": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
                   },
                   "text": {
                     "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -8236,6 +9006,38 @@ expression: r
                     "description": "-1.0 … 1.0",
                     "format": "double",
                     "type": "number"
+                  },
+                  "crop": {
+                    "additionalProperties": false,
+                    "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                    "properties": {
+                      "bottom": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "left": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "right": {
+                        "format": "double",
+                        "type": "number"
+                      },
+                      "top": {
+                        "format": "double",
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "left",
+                      "top",
+                      "right",
+                      "bottom"
+                    ],
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "dither": {
                     "default": "floyd_steinberg",
@@ -8647,6 +9449,41 @@ expression: r
               "locked": {
                 "default": false,
                 "type": "boolean"
+              },
+              "mirror": {
+                "additionalProperties": false,
+                "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                "properties": {
+                  "axis": {
+                    "description": "Line a mirror copy is reflected across.",
+                    "oneOf": [
+                      {
+                        "const": "horizontal",
+                        "description": "Left–right, across the label's vertical centre line.",
+                        "type": "string"
+                      },
+                      {
+                        "const": "vertical",
+                        "description": "Top–bottom, across the label's horizontal centre line.",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "of": {
+                    "description": "Source element on the same page.",
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "of",
+                  "axis"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "name": {
                 "type": [
@@ -8849,6 +9686,71 @@ expression: r
       "undoable": true
     },
     {
+      "description": "Add a linked mirror copy of an element, reflected across the label's vertical (`horizontal`) or horizontal (`vertical`) centre line. The copy follows every later change to the source; set its `mirror` to null with element.set_props to unlink it. Returns {id} of the copy.",
+      "id": "element.mirror",
+      "journal": true,
+      "kind": "edit",
+      "label": "Mirror copy",
+      "menu": "arrange",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "id": {
+            "description": "Id of the new element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AddOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "axis": {
+            "default": "horizontal",
+            "description": "`horizontal` (left–right, default) or `vertical` (top–bottom).",
+            "oneOf": [
+              {
+                "const": "horizontal",
+                "description": "Left–right, across the label's vertical centre line.",
+                "type": "string"
+              },
+              {
+                "const": "vertical",
+                "description": "Top–bottom, across the label's horizontal centre line.",
+                "type": "string"
+              }
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Source element.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "MirrorParams",
+        "type": "object"
+      },
+      "undoable": true
+    },
+    {
       "description": "Insert copies of elements (JSON as in doc.get, e.g. from another document) on top of the z-order, offset by dx_mm/dy_mm. New ids are assigned, groups among the pasted elements are kept as new groups, and locks are cleared. Images need their asset in the document or in `assets`. Returns {ids}.",
       "id": "element.paste",
       "journal": true,
@@ -8975,6 +9877,11 @@ expression: r
                           "const": "shrink",
                           "description": "Shrink the font until the text fits.",
                           "type": "string"
+                        },
+                        {
+                          "const": "fill",
+                          "description": "Grow or shrink the font to the largest size that fits the box.",
+                          "type": "string"
                         }
                       ]
                     },
@@ -9006,6 +9913,66 @@ expression: r
                       "description": "Line height multiplier.",
                       "format": "double",
                       "type": "number"
+                    },
+                    "max_length_mm": {
+                      "description": "Warn in `doc.check` when the longest printed line is wider than this, mm.",
+                      "format": "double",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "spans": {
+                      "description": "Rich-text style ranges over `text` (horizontal text only). A `{{binding}}` that\ncrosses a span edge is not substituted.",
+                      "items": {
+                        "additionalProperties": false,
+                        "description": "Style for a range of a text element's `text`. Unset fields keep the element's style;\nlater spans win where they overlap.",
+                        "properties": {
+                          "bold": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "end": {
+                            "description": "One past the last character.",
+                            "format": "uint",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "font_size_pt": {
+                            "format": "double",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "italic": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "start": {
+                            "description": "First character (Unicode scalar index into `text`).",
+                            "format": "uint",
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          "underline": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "text": {
                       "description": "Text; may contain `{{variable}}` bindings and newlines.",
@@ -9168,6 +10135,38 @@ expression: r
                       "description": "-1.0 … 1.0",
                       "format": "double",
                       "type": "number"
+                    },
+                    "crop": {
+                      "additionalProperties": false,
+                      "description": "Part of the source image to use, as fractions of its size; the whole image if absent.",
+                      "properties": {
+                        "bottom": {
+                          "format": "double",
+                          "type": "number"
+                        },
+                        "left": {
+                          "format": "double",
+                          "type": "number"
+                        },
+                        "right": {
+                          "format": "double",
+                          "type": "number"
+                        },
+                        "top": {
+                          "format": "double",
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "left",
+                        "top",
+                        "right",
+                        "bottom"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "dither": {
                       "default": "floyd_steinberg",
@@ -9558,6 +10557,41 @@ expression: r
                 "locked": {
                   "default": false,
                   "type": "boolean"
+                },
+                "mirror": {
+                  "additionalProperties": false,
+                  "description": "Linked mirror copy (`element.mirror`): content, size and position follow the source.",
+                  "properties": {
+                    "axis": {
+                      "description": "Line a mirror copy is reflected across.",
+                      "oneOf": [
+                        {
+                          "const": "horizontal",
+                          "description": "Left–right, across the label's vertical centre line.",
+                          "type": "string"
+                        },
+                        {
+                          "const": "vertical",
+                          "description": "Top–bottom, across the label's horizontal centre line.",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "of": {
+                      "description": "Source element on the same page.",
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "of",
+                    "axis"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "name": {
                   "type": [
