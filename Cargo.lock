@@ -2735,6 +2735,7 @@ dependencies = [
  "labely-printers",
  "rfd",
  "rmcp",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

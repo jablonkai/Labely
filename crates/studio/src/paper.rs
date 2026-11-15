@@ -221,28 +221,16 @@ pub fn library(app: &mut LabelyApp, ui: &mut Ui, v: &mut PaperView) -> bool {
         ui.text_edit_singleline(&mut v.new_name).labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-width-mm")).id;
-        ui.add(
-            egui::DragValue::new(&mut v.new_width_mm)
-                .range(5.0..=300.0)
-                .speed(0.5),
-        )
-        .labelled_by(l);
+        ui.add(crate::panels::length_drag(&mut v.new_width_mm, app.units()).range(5.0..=300.0))
+            .labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-height-mm")).id;
-        ui.add(
-            egui::DragValue::new(&mut v.new_height_mm)
-                .range(5.0..=1000.0)
-                .speed(0.5),
-        )
-        .labelled_by(l);
+        ui.add(crate::panels::length_drag(&mut v.new_height_mm, app.units()).range(5.0..=1000.0))
+            .labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-corner-radius-mm")).id;
-        ui.add(
-            egui::DragValue::new(&mut v.new_radius_mm)
-                .range(0.0..=50.0)
-                .speed(0.5),
-        )
-        .labelled_by(l);
+        ui.add(crate::panels::length_drag(&mut v.new_radius_mm, app.units()).range(0.0..=50.0))
+            .labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-media")).id;
         media_combo(app, ui, l, "paper-add-media", &mut v.new_media, true);

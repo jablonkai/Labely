@@ -12,6 +12,7 @@ use labely_i18n::{Arg, I18n, Lang};
 use serde_json::{Value, json};
 
 use crate::mcp_host::{McpCall, McpHost};
+use crate::prefs::{PREFS_FILE, Prefs, Units};
 use crate::{canvas, dialogs, menu, panels};
 
 /// Longest `job.wait` an agent gets in the studio, milliseconds.
@@ -43,6 +44,8 @@ pub struct StudioOptions {
     pub history_dir: Option<PathBuf>,
     /// The user's papers and RFID links; default `<app-data>/papers.json`.
     pub paper_file: Option<PathBuf>,
+    /// Studio preferences (recent files, units); default `<app-data>/studio.json`.
+    pub prefs_file: Option<PathBuf>,
 }
 
 /// File name of the user's paper library under `<app-data>`.
@@ -61,6 +64,7 @@ impl Default for StudioOptions {
             template_dir: None,
             history_dir: None,
             paper_file: None,
+            prefs_file: None,
         }
     }
 }
@@ -109,6 +113,8 @@ pub enum Dialog {
     Device(crate::paper::DeviceView),
     Print,
     About,
+    /// Close a document that has unsaved changes?
+    ConfirmClose(String),
 }
 
 /// View state; never part of a document.
@@ -154,6 +160,11 @@ pub struct UiState {
     pub last_view: Option<crate::canvas::View>,
     /// Last seen state of each print job, to report finished jobs once.
     pub jobs_seen: std::collections::BTreeMap<String, labely_core::jobs::JobState>,
+    /// Show rulers along the canvas edges.
+    pub show_rulers: bool,
+    /// Text of the last studio copy, for Edit → Paste (egui cannot read the system clipboard
+    /// on demand) and to offset pastes into the document it came from.
+    pub clipboard: Option<(String, String)>,
 }
 
 impl Default for UiState {
@@ -186,6 +197,8 @@ impl Default for UiState {
             agent_log: VecDeque::new(),
             last_view: None,
             jobs_seen: Default::default(),
+            show_rulers: true,
+            clipboard: None,
         }
     }
 }
@@ -221,6 +234,9 @@ pub struct LabelyApp {
     pub(crate) thumbs: std::collections::HashMap<String, Option<egui::TextureHandle>>,
     pending: VecDeque<McpCall>,
     agent_roots: Vec<PathBuf>,
+    /// Remembered between runs; saved on change.
+    pub prefs: Prefs,
+    prefs_path: PathBuf,
 }
 
 impl std::fmt::Debug for LabelyApp {
@@ -245,7 +261,13 @@ impl LabelyApp {
         } else {
             opts.agent_roots.clone()
         };
+        let prefs_path = opts
+            .prefs_file
+            .clone()
+            .unwrap_or_else(|| labely_mcp::connection::data_dir().join(PREFS_FILE));
         let mut app = Self {
+            prefs: Prefs::load(&prefs_path),
+            prefs_path,
             session,
             ui: UiState::default(),
             i18n: I18n::new(opts.lang),
@@ -311,7 +333,83 @@ impl LabelyApp {
 
     /// Run a command as the user. The single mutation path of the studio.
     pub fn run(&mut self, id: &str, params: Value) -> Envelope {
-        self.session.execute(id, params)
+        let env = self.session.execute(id, params);
+        if env.ok
+            && matches!(id, "doc.open" | "doc.save")
+            && let Some(path) = self
+                .session
+                .doc_path(None)
+                .map(std::path::Path::to_path_buf)
+            && self.prefs.push_recent(&path)
+        {
+            self.save_prefs();
+        }
+        env
+    }
+
+    /// Write the preferences; a failure only shows in the status line.
+    pub fn save_prefs(&mut self) {
+        if let Err(e) = self.prefs.save(&self.prefs_path) {
+            self.set_status(format!("{}: {e}", self.prefs_path.display()), true);
+        }
+    }
+
+    /// Length unit for inputs, rulers and the status line.
+    pub fn units(&self) -> Units {
+        self.prefs.units
+    }
+
+    /// Open `path` from the recent list; a file that is gone leaves the list.
+    pub fn open_recent(&mut self, path: &std::path::Path) {
+        if !path.exists() {
+            self.prefs.remove_recent(path);
+            self.save_prefs();
+            let text = self.i18n.t_args(
+                "status-recent-missing",
+                &[("path", Arg::Str(&path.display().to_string()))],
+            );
+            self.set_status(text, true);
+            return;
+        }
+        if self.run_reporting("doc.open", json!({ "path": path })).ok {
+            self.ui.fit_pending = true;
+        }
+    }
+
+    /// Close `doc_id`, asking first when it has unsaved changes.
+    pub fn request_close(&mut self, doc_id: &str) {
+        let dirty = self.session.is_dirty(Some(doc_id));
+        let empty_new = self.session.doc_path(Some(doc_id)).is_none()
+            && self
+                .session
+                .doc(Some(doc_id))
+                .is_some_and(|d| d.elements().next().is_none());
+        if dirty && !empty_new {
+            self.ui.dialog = Some(Dialog::ConfirmClose(doc_id.to_owned()));
+        } else {
+            self.close_doc(doc_id);
+        }
+    }
+
+    pub fn close_doc(&mut self, doc_id: &str) {
+        if self
+            .run_reporting("doc.close", json!({ "doc_id": doc_id }))
+            .ok
+        {
+            self.ui.fit_pending = true;
+        }
+    }
+
+    /// Switch the active document.
+    pub fn activate(&mut self, doc_id: &str) {
+        if self.session.active_doc_id() != Some(doc_id)
+            && self
+                .run_reporting("doc.activate", json!({ "doc_id": doc_id }))
+                .ok
+        {
+            self.ui.fit_pending = true;
+            self.ui.record = 1;
+        }
     }
 
     /// Run and put failures in the status line.
@@ -411,6 +509,9 @@ impl LabelyApp {
         crate::jobs::watch(self, &ctx);
         menu::shortcuts(self, &ctx);
         egui::Panel::top("menu").show(ui, |ui| menu::menu_bar(self, ui));
+        if self.session.active_doc_id().is_some() {
+            egui::Panel::top("tabs").show(ui, |ui| panels::doc_tabs(self, ui));
+        }
         egui::Panel::bottom("status").show(ui, |ui| panels::status_bar(self, ui));
         if self.session.active_doc_id().is_some() {
             if self.ui.show_layers {

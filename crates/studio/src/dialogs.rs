@@ -1,6 +1,7 @@
 //! Modal dialogs: new document, templates, print, about.
 
 use egui::{Context, Modal, Ui};
+use labely_i18n::Arg;
 use serde_json::json;
 
 use crate::app::{Dialog, LabelyApp};
@@ -82,6 +83,7 @@ pub fn show(app: &mut LabelyApp, ctx: &Context) {
             Dialog::Device(v) => crate::paper::device(app, ui, v),
             Dialog::Print => print(app, ui),
             Dialog::About => about(app, ui),
+            Dialog::ConfirmClose(doc_id) => confirm_close(app, ui, doc_id),
         };
     });
     app.ui.dialog = if close { None } else { Some(next) };
@@ -95,20 +97,12 @@ fn new_doc(app: &mut LabelyApp, ui: &mut Ui, f: &mut NewDocForm) -> bool {
         ui.text_edit_singleline(&mut f.name).labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-width-mm")).id;
-        ui.add(
-            egui::DragValue::new(&mut f.width_mm)
-                .range(5.0..=300.0)
-                .speed(0.5),
-        )
-        .labelled_by(l);
+        ui.add(crate::panels::length_drag(&mut f.width_mm, app.units()).range(5.0..=300.0))
+            .labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-height-mm")).id;
-        ui.add(
-            egui::DragValue::new(&mut f.height_mm)
-                .range(5.0..=1000.0)
-                .speed(0.5),
-        )
-        .labelled_by(l);
+        ui.add(crate::panels::length_drag(&mut f.height_mm, app.units()).range(5.0..=1000.0))
+            .labelled_by(l);
         ui.end_row();
         let l = ui.label(app.i18n.t("prop-printer-model")).id;
         let models = app.session.services().devices.models();
@@ -200,15 +194,14 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                 (&mut form.offset_x_mm, "print-offset-x"),
                 (&mut form.offset_y_mm, "print-offset-y"),
             ] {
-                ui.add(
-                    egui::DragValue::new(v)
+                let mut mm = f64::from(*v);
+                let r = ui.add(
+                    crate::panels::length_drag(&mut mm, app.units())
                         .range(-10.0..=10.0)
-                        .speed(0.1)
-                        .fixed_decimals(1)
-                        .prefix(format!("{} ", app.i18n.t(key)))
-                        .suffix(" mm"),
-                )
-                .labelled_by(l);
+                        .prefix(format!("{} ", app.i18n.t(key))),
+                );
+                *v = mm as f32;
+                r.labelled_by(l);
             }
         });
         ui.end_row();
@@ -265,6 +258,39 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         }
     });
     close
+}
+
+/// Save, discard or keep a document with unsaved changes.
+fn confirm_close(app: &mut LabelyApp, ui: &mut Ui, doc_id: &str) -> bool {
+    let name = app
+        .session
+        .doc(Some(doc_id))
+        .map_or_else(String::new, |d| d.name.clone());
+    ui.heading(app.i18n.t("close-title"));
+    ui.label(
+        app.i18n
+            .t_args("close-unsaved", &[("name", Arg::Str(&name))]),
+    );
+    ui.add_space(8.0);
+    let mut done = false;
+    ui.horizontal(|ui| {
+        if ui.button(app.i18n.t("action-save")).clicked() {
+            app.activate(doc_id);
+            crate::menu::save(app);
+            if !app.session.is_dirty(Some(doc_id)) {
+                app.close_doc(doc_id);
+            }
+            done = true;
+        }
+        if ui.button(app.i18n.t("action-discard")).clicked() {
+            app.close_doc(doc_id);
+            done = true;
+        }
+        if ui.button(app.i18n.t("action-cancel")).clicked() {
+            done = true;
+        }
+    });
+    done
 }
 
 fn about(app: &mut LabelyApp, ui: &mut Ui) -> bool {

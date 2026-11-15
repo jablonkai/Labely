@@ -376,3 +376,171 @@ impl Command for DocSetLabel {
         Ok(SetLabelOutput { label })
     }
 }
+
+/// Numeric suffix of a `doc{n}` id, for listing in open order.
+fn doc_number(id: &str) -> u64 {
+    id.strip_prefix("doc")
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(u64::MAX)
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListParams {}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct OpenDocInfo {
+    pub doc_id: String,
+    pub name: String,
+    pub path: Option<String>,
+    pub dirty: bool,
+    pub active: bool,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ListOutput {
+    /// Open documents in the order they were opened.
+    pub docs: Vec<OpenDocInfo>,
+}
+
+/// `doc.list`
+#[derive(Debug)]
+pub struct DocList;
+
+impl Command for DocList {
+    const ID: &'static str = "doc.list";
+    type Params = ListParams;
+    type Output = ListOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::query(
+            "Open documents",
+            "List the open documents in the order they were opened: doc_id, name, path, \
+             dirty and which one is active.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, _p: ListParams) -> Result<ListOutput, CommandError> {
+        let state = &ctx.session().state;
+        let mut docs: Vec<OpenDocInfo> = state
+            .docs
+            .iter()
+            .map(|(id, open)| OpenDocInfo {
+                doc_id: id.clone(),
+                name: open.doc.name.clone(),
+                path: open.path.as_ref().map(|p| p.display().to_string()),
+                dirty: open.dirty(),
+                active: state.active.as_deref() == Some(id.as_str()),
+            })
+            .collect();
+        docs.sort_by_key(|d| doc_number(&d.doc_id));
+        Ok(ListOutput { docs })
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActivateParams {
+    pub doc_id: String,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ActivateOutput {
+    pub active: String,
+}
+
+/// `doc.activate`
+#[derive(Debug)]
+pub struct DocActivate;
+
+impl Command for DocActivate {
+    const ID: &'static str = "doc.activate";
+    type Params = ActivateParams;
+    type Output = ActivateOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::edit(
+            "Switch document",
+            "Make an open document the active one; commands without doc_id then act on it.",
+        )
+        .undoable(false)
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: ActivateParams) -> Result<ActivateOutput, CommandError> {
+        let id = ctx.doc_id(Some(&p.doc_id))?;
+        let state = &mut ctx.session().state;
+        if state.active.as_deref() != Some(id.as_str()) {
+            state.active = Some(id.clone());
+            state.coalesce = None;
+        }
+        Ok(ActivateOutput { active: id })
+    }
+}
+
+/// Turn direction for `doc.rotate_label`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Turn {
+    /// A quarter turn clockwise.
+    #[default]
+    Cw,
+    /// A quarter turn anticlockwise.
+    Ccw,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RotateLabelParams {
+    #[serde(default)]
+    pub doc_id: Option<String>,
+    /// Quarter-turn direction (default `cw`).
+    #[serde(default)]
+    pub direction: Option<Turn>,
+    /// Turn the elements with the paper (default true). With false only the label size swaps.
+    #[serde(default)]
+    pub rotate_content: Option<bool>,
+}
+
+/// `doc.rotate_label`
+#[derive(Debug)]
+pub struct DocRotateLabel;
+
+impl Command for DocRotateLabel {
+    const ID: &'static str = "doc.rotate_label";
+    type Params = RotateLabelParams;
+    type Output = SetLabelOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::edit(
+            "Rotate label paper",
+            "Turn the label a quarter turn (direction cw or ccw): width and height swap. With \
+             rotate_content (default true) every element turns with it about the label, so the \
+             design keeps its look; with false the elements stay where they are.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: RotateLabelParams) -> Result<SetLabelOutput, CommandError> {
+        let doc = ctx.doc_mut(p.doc_id.as_deref())?;
+        let (w, h) = (doc.label.width_mm, doc.label.height_mm);
+        let cw = p.direction.unwrap_or_default() == Turn::Cw;
+        if p.rotate_content.unwrap_or(true) {
+            for page in &mut doc.pages {
+                for e in &mut page.elements {
+                    let (cx, cy) = (e.x_mm + e.width_mm / 2.0, e.y_mm + e.height_mm / 2.0);
+                    // y points down, so a clockwise turn maps (x, y) to (h − y, x).
+                    let (nx, ny) = if cw { (h - cy, cx) } else { (cy, w - cx) };
+                    e.x_mm = nx - e.width_mm / 2.0;
+                    e.y_mm = ny - e.height_mm / 2.0;
+                    let turn = if cw { 90.0 } else { 270.0 };
+                    e.rotation_deg = (e.rotation_deg + turn).rem_euclid(360.0);
+                }
+            }
+        }
+        doc.label.width_mm = h;
+        doc.label.height_mm = w;
+        validate_label(&doc.label)?;
+        Ok(SetLabelOutput {
+            label: doc.label.clone(),
+        })
+    }
+}

@@ -13,6 +13,7 @@ mod jobs;
 mod paper;
 mod phase2;
 mod schema;
+mod shell;
 mod templates;
 
 use labely_core::{CommandError, Session};
