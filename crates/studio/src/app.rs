@@ -311,6 +311,25 @@ impl std::fmt::Debug for Raster {
     }
 }
 
+/// Cached anti-aliased gray render of the active document at screen resolution, for the
+/// canvas.
+pub struct Smooth {
+    pub doc: Arc<Document>,
+    pub dpi: u32,
+    pub values: std::collections::BTreeMap<String, String>,
+    pub texture: egui::TextureHandle,
+    pub size: [usize; 2],
+}
+
+impl std::fmt::Debug for Smooth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Smooth")
+            .field("dpi", &self.dpi)
+            .field("size", &self.size)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The studio application.
 pub struct LabelyApp {
     pub session: Session,
@@ -318,6 +337,7 @@ pub struct LabelyApp {
     pub i18n: I18n,
     pub opts: StudioOptions,
     pub(crate) raster: Option<Raster>,
+    pub(crate) smooth: Option<Smooth>,
     pub(crate) mcp: Option<McpHost>,
     /// Template thumbnails by reference (`None`: could not render).
     pub(crate) thumbs: std::collections::HashMap<String, Option<egui::TextureHandle>>,
@@ -373,6 +393,7 @@ impl LabelyApp {
             ui,
             i18n: I18n::new(lang),
             raster: None,
+            smooth: None,
             mcp: None,
             thumbs: Default::default(),
             pending: VecDeque::new(),

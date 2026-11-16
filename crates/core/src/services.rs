@@ -108,9 +108,27 @@ pub enum RenderError {
     Other(String),
 }
 
+/// 8-bit gray image (row-major, 0 = black, 255 = white) before 1-bit conversion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrayImage {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
+}
+
 /// Rasteriser.
 pub trait Renderer: Send + Sync {
     fn render(&self, doc: &Document, opts: &RenderOptions) -> Result<RenderOutput, RenderError>;
+    /// The page as 8-bit gray before 1-bit conversion, for on-screen display at any dpi.
+    /// `None` when the renderer has no gray stage.
+    fn render_preview_gray(
+        &self,
+        doc: &Document,
+        opts: &RenderOptions,
+    ) -> Result<Option<GrayImage>, RenderError> {
+        let _ = (doc, opts);
+        Ok(None)
+    }
     /// Decode every barcode/2D code visible in `bitmap` (for the readability check).
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode>;
     /// Encode a 1-bit bitmap as PNG.

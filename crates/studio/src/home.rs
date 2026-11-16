@@ -92,7 +92,8 @@ fn nav_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Response
         color,
         1.5,
     );
-    ui.painter().text(
+    theme::fit_text(
+        ui.painter(),
         rect.left_center() + vec2(40.0, 0.0),
         egui::Align2::LEFT_CENTER,
         text,
@@ -106,6 +107,7 @@ fn nav_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Response
         } else {
             theme::TEXT
         },
+        rect.right() - rect.left() - 48.0,
     );
     resp
 }
@@ -658,19 +660,23 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
             .corner_radius(CornerRadius::same(4))
             .paint_at(ui, r);
     }
-    ui.painter().text(
+    theme::fit_text(
+        ui.painter(),
         egui::pos2(rect.left() + 12.0, well.bottom() + 10.0),
         egui::Align2::LEFT_TOP,
         &name,
         theme::bold(13.5),
         theme::TEXT,
+        rect.width() - 24.0,
     );
-    ui.painter().text(
+    theme::fit_text(
+        ui.painter(),
         egui::pos2(rect.left() + 12.0, well.bottom() + 28.0),
         egui::Align2::LEFT_TOP,
         &size,
         theme::regular(11.5),
         theme::MUTED,
+        rect.width() - 24.0,
     );
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
@@ -728,19 +734,23 @@ fn recent(app: &mut LabelyApp, ui: &mut Ui) {
             ui.painter()
                 .rect_filled(t, CornerRadius::same(theme::RADIUS), theme::PRIMARY_TINT);
             icons::paint(ui.painter(), t.shrink(8.0), "file", theme::PRIMARY, 1.5);
-            ui.painter().text(
+            theme::fit_text(
+                ui.painter(),
                 egui::pos2(rect.left() + 48.0, rect.center().y - 9.0),
                 egui::Align2::LEFT_CENTER,
                 &stem,
                 theme::bold(13.5),
                 theme::TEXT,
+                rect.width() - 56.0,
             );
-            ui.painter().text(
+            theme::fit_text(
+                ui.painter(),
                 egui::pos2(rect.left() + 48.0, rect.center().y + 9.0),
                 egui::Align2::LEFT_CENTER,
                 &folder,
                 theme::regular(11.5),
                 theme::MUTED,
+                rect.width() - 56.0,
             );
             let resp = resp.on_hover_text(path.display().to_string());
             if resp.clicked() {

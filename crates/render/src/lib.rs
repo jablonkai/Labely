@@ -43,13 +43,7 @@ pub fn pt_to_dots(pt: f64, dpi: u32) -> f64 {
     pt / 72.0 * f64::from(dpi)
 }
 
-/// 8-bit gray preview (row-major, 0 = black, 255 = white) before 1-bit conversion.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GrayImage {
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<u8>,
-}
+pub use labely_core::services::GrayImage;
 
 /// The production [`Renderer`].
 #[derive(Debug)]
@@ -101,6 +95,14 @@ impl LabelRenderer {
 impl Renderer for LabelRenderer {
     fn render(&self, doc: &Document, opts: &RenderOptions) -> Result<RenderOutput, RenderError> {
         self.render_with_gray(doc, opts).map(|(o, _)| o)
+    }
+
+    fn render_preview_gray(
+        &self,
+        doc: &Document,
+        opts: &RenderOptions,
+    ) -> Result<Option<GrayImage>, RenderError> {
+        self.render_with_gray(doc, opts).map(|(_, g)| Some(g))
     }
 
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode> {

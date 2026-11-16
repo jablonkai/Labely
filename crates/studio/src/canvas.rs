@@ -1,4 +1,4 @@
-//! The label canvas: the exact 1-bit print raster, selection, and move / resize / rotate
+//! The label canvas: an anti-aliased render at screen resolution, selection, and move / resize / rotate
 //! gestures. A gesture is a run of coalesced commands, so it is one undo step.
 
 use std::sync::Arc;
@@ -219,6 +219,77 @@ fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) 
     }
 }
 
+/// Largest side of the on-screen render, pixels.
+const SMOOTH_MAX_SIDE: f64 = 4096.0;
+
+/// Keep the canvas's anti-aliased render in step with the document and the screen scale.
+/// It renders at twice the screen resolution and averages 2×2 blocks, so the hard-edged
+/// shapes come out smooth; `None` when the renderer has no gray stage.
+fn ensure_smooth(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>, px_per_mm: f32) {
+    let values = record_values(doc, app.ui.record);
+    let longest = doc.label.width_mm.max(doc.label.height_mm).max(1.0);
+    // Quantise so small zoom steps reuse the texture (linear filtering covers the rest).
+    let want = f64::from(px_per_mm) * 25.4 * 2.0;
+    let cap = SMOOTH_MAX_SIDE * 2.0 * 25.4 / longest;
+    let dpi = (want.min(cap) / 50.0).ceil().max(1.0) as u32 * 50;
+    if app
+        .smooth
+        .as_ref()
+        .is_some_and(|s| Arc::ptr_eq(&s.doc, doc) && s.values == values && s.dpi == dpi)
+    {
+        return;
+    }
+    let services = app.session.services().clone();
+    let opts = labely_core::services::RenderOptions {
+        dpi,
+        page: 0,
+        values: values.clone(),
+    };
+    let Ok(Some(gray)) = services.renderer.render_preview_gray(doc, &opts) else {
+        app.smooth = None;
+        return;
+    };
+    let (gw, gh) = (gray.width as usize, gray.height as usize);
+    let (w, h) = (gw.div_ceil(2).max(1), gh.div_ceil(2).max(1));
+    let mut px = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            let (mut sum, mut n) = (0u32, 0u32);
+            for (sx, sy) in [
+                (2 * x, 2 * y),
+                (2 * x + 1, 2 * y),
+                (2 * x, 2 * y + 1),
+                (2 * x + 1, 2 * y + 1),
+            ] {
+                if sx < gw && sy < gh {
+                    sum += u32::from(gray.data[sy * gw + sx]);
+                    n += 1;
+                }
+            }
+            px.push((sum / n.max(1)) as u8);
+        }
+    }
+    let image = egui::ColorImage::from_gray([w, h], &px);
+    match &mut app.smooth {
+        Some(s) if s.size == [w, h] => {
+            s.texture.set(image, egui::TextureOptions::LINEAR);
+            s.doc = doc.clone();
+            s.dpi = dpi;
+            s.values = values;
+        }
+        _ => {
+            let texture = ctx.load_texture("label-smooth", image, egui::TextureOptions::LINEAR);
+            app.smooth = Some(crate::app::Smooth {
+                doc: doc.clone(),
+                dpi,
+                values,
+                texture,
+                size: [w, h],
+            });
+        }
+    }
+}
+
 /// The printable band across the label width, mm, when the printhead is narrower than the
 /// label (`None` when everything prints or no model is set). Same rule as `doc.check`.
 pub fn printable_span(app: &LabelyApp, doc: &Document) -> Option<(f64, f64)> {
@@ -416,9 +487,15 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
         }
     }
     ensure_raster(app, ui.ctx(), &doc);
-    if let Some(r) = &app.raster {
+    ensure_smooth(app, ui.ctx(), &doc, zoom * ui.ctx().pixels_per_point());
+    let texture = app
+        .smooth
+        .as_ref()
+        .map(|s| s.texture.id())
+        .or_else(|| app.raster.as_ref().map(|r| r.texture.id()));
+    if let Some(texture) = texture {
         painter.image(
-            r.texture.id(),
+            texture,
             label,
             Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
             Color32::WHITE,
