@@ -277,3 +277,41 @@ fn font_add_loads_a_font_file_into_the_renderer() {
     let e = s.execute("font.add", serde_json::json!({ "path": missing }));
     assert_eq!(e.error.unwrap().code, labely_core::ErrorCode::NotFound);
 }
+
+#[test]
+fn native_ble_host_prints_through_simulator() {
+    use labely_printers::sim::SimBleHost;
+    let host = std::sync::Arc::new(SimBleHost::b21_pro());
+    let hub = Hub::new().with_native_ble(host.clone());
+    let found = hub.scan(100).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].address, "ble:SIM-B21");
+    assert_eq!(
+        found[0].model.as_ref().map(|m| m.id.as_str()),
+        Some("niimbot.b21_pro")
+    );
+
+    let info = hub.connect("ble:SIM-B21").unwrap();
+    assert!(info.connected);
+    assert_eq!(info.serial.as_deref(), Some("SIM0000001"));
+    assert!(hub.scan(100).unwrap()[0].connected);
+
+    // Small page: the BLE packet gap (10 ms) applies per row.
+    let mut page = Bitmap1::new(96, 24);
+    for x in 0..96 {
+        page.set(x, x % 24, true);
+    }
+    let job = PrintRequest {
+        pages: vec![page],
+        copies: 2,
+        density: 3,
+        media: MediaType::Gap,
+    };
+    let report = hub.print("ble:SIM-B21", job, &JobControl::new()).unwrap();
+    assert_eq!(report.pages_printed, 2); // copies count
+    let log = host.log().unwrap();
+    assert_eq!(log.pages.len(), 1);
+    assert_eq!(log.pages[0].1, 2);
+    hub.disconnect("ble:SIM-B21").unwrap();
+    assert!(hub.connect("ble:OTHER").is_err());
+}

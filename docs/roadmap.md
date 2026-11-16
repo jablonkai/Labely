@@ -101,6 +101,18 @@ Phase 3 lands in slices, one pull request each.
 - **Exit criteria:** printing from a phone to the B21 Pro, and AppFunctions tested with
   `appfunctions-testing`.
 
+### Phase 4 progress
+
+Phase 4 lands in slices, one pull request each (ADR-0025).
+
+| Slice | Scope | Status |
+|---|---|---|
+| 4.1 FFI | `labely-ffi` (`LabelyEngine`, `NativeBle`/`NativeBleLink` callbacks), `NativeBleHost` in the hub, `SimBleHost`, `cargo xtask bindings` | done (ADR-0025) |
+| 4.2 Android build | `mobile/android` Gradle project, cargo-ndk builds, generated bindings, smoke instrumented test, CI job | next |
+| 4.3 Android UI and BLE | Kotlin `BluetoothGatt` `NativeBle`, permissions, Compose editor, templates and print after `design/labely-mobile.figcraft` | |
+| 4.4 AppFunctions | the six functions of ADR-0011, print consent, `appfunctions-testing` | |
+| 4.5 Close-out | print from a phone to the B21 Pro; exit audit | |
+
 ## Phase 5: iOS shell + App Intents
 
 - UniFFI Swift bindings (XCFramework), CoreBluetooth `NativeBleLink`, SwiftUI UI, App Intents and

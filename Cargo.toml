@@ -50,6 +50,7 @@ reqwest = { version = "0.13.2", default-features = false }
 csv = "1.4.0"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 calamine = { version = "0.38.0", default-features = false }
+uniffi = "0.32.2"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

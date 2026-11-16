@@ -1,0 +1,36 @@
+[package]
+name = "labely-ffi"
+description = "UniFFI bindings of the Labely engine for the Android and iOS shells"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "labely_ffi"
+
+[features]
+default = []
+# Builds the `uniffi-bindgen` binary that generates the Kotlin and Swift sources.
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+labely-core.workspace = true
+labely-printers.workspace = true
+labely-transport.workspace = true
+uniffi.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+[lints]
+workspace = true

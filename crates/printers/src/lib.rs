@@ -24,6 +24,17 @@ pub fn default_services() -> labely_core::Services {
     }
 }
 
+/// Mobile services: bundled fonts and a hub whose `ble:` addresses go through the shell's
+/// BLE stack (ADR-0025).
+pub fn mobile_services(
+    ble: Arc<dyn labely_transport::callback::NativeBleHost>,
+) -> labely_core::Services {
+    labely_core::Services {
+        renderer: Arc::new(labely_render::LabelRenderer::new()),
+        devices: Arc::new(Hub::new().with_native_ble(ble)),
+    }
+}
+
 /// Desktop services: like [`default_services`], plus the fonts installed on the machine.
 pub fn desktop_services() -> labely_core::Services {
     labely_core::Services {

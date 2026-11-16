@@ -9,6 +9,8 @@ cargo xtask ci           # fmt, layers, i18n-check, clippy (default and all feat
 cargo test -p labely-core          # the command engine
 cargo test -p labely-mcp           # MCP end to end (stdio and HTTP)
 cargo test -p labely-studio        # egui_kittest UI tests
+cargo test -p labely-ffi           # FFI engine and native BLE path, on the simulator
+cargo xtask bindings kotlin        # generate the UniFFI Kotlin sources into target/bindings
 cargo xtask bless                  # rewrite render goldens after an intended change
 cargo xtask schema-hash            # print the command-schema hash
 ```
@@ -17,7 +19,7 @@ Rules:
 - **Toolchain.** The toolchain is pinned in `rust-toolchain.toml`.
 - **Lints.** Library code denies `unwrap`, `expect` and `panic`.
 - **Layers.** Dependencies follow `cargo xtask layers` (ADR-0003). GUI crates may only be used
-  by `labely-studio`, and `rmcp` only by `labely-mcp`.
+  by `labely-studio`, `rmcp` only by `labely-mcp`, and `uniffi` only by `labely-ffi`.
 - **Commands.** Every document change is a command in `crates/core/src/commands/`,
   registered in `registry.rs`.
 - **Schema changes.** A command schema change fails `api_version_matches_schema_hash`. When it

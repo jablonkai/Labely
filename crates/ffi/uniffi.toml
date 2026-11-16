@@ -1,0 +1,7 @@
+# UniFFI binding settings (ADR-0025).
+[bindings.kotlin]
+package_name = "org.labely.ffi"
+cdylib_name = "labely_ffi"
+
+[bindings.swift]
+module_name = "LabelyFFI"
