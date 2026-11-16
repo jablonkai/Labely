@@ -96,27 +96,82 @@ fn ftl_keys(dir: &std::path::Path) -> Result<BTreeMap<String, std::collections::
     Ok(out)
 }
 
-/// EN and HU must define the same message ids (ADR-0009). Mobile string sets join in
-/// Phases 4 and 5.
+/// `name` attributes of every `<string>`/`<plurals>` in the Android `strings*.xml` files of
+/// `dir` (a `res/values*` directory), keyed by file name. Empty when `dir` does not exist.
+fn android_string_keys(
+    dir: &std::path::Path,
+) -> Result<BTreeMap<String, std::collections::BTreeSet<String>>> {
+    let mut out = BTreeMap::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(out);
+    };
+    for entry in entries {
+        let path = entry?.path();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !name.starts_with("strings") || !name.ends_with(".xml") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path)?;
+        let keys = text
+            .split('<')
+            .filter(|t| t.starts_with("string ") || t.starts_with("plurals "))
+            .filter_map(|t| {
+                t.split_once("name=\"")?
+                    .1
+                    .split_once('"')
+                    .map(|(k, _)| k.to_owned())
+            })
+            .collect();
+        out.insert(name, keys);
+    }
+    Ok(out)
+}
+
+/// Differences between two key sets per file, reported against `label` (the second set).
+fn key_diff(
+    label: &str,
+    en: &BTreeMap<String, std::collections::BTreeSet<String>>,
+    hu: &BTreeMap<String, std::collections::BTreeSet<String>>,
+    errors: &mut Vec<String>,
+) {
+    for (file, keys) in en {
+        let other = hu.get(file).cloned().unwrap_or_default();
+        for k in keys.difference(&other) {
+            errors.push(format!("{label}/{file}: missing `{k}`"));
+        }
+        for k in other.difference(keys) {
+            errors.push(format!("{label}/{file}: `{k}` is not in en"));
+        }
+    }
+    for file in hu.keys().filter(|f| !en.contains_key(*f)) {
+        errors.push(format!("{label}/{file}: no en counterpart"));
+    }
+}
+
+/// Android string resource directories checked by `i18n-check`.
+const ANDROID_RES: &[&str] = &["mobile/android/app/src/main/res"];
+
+/// EN and HU must define the same message ids (ADR-0009): the Fluent files and the Android
+/// string resources. iOS joins in Phase 5.
 fn i18n_check() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/i18n/locales");
     let en = ftl_keys(&root.join("en"))?;
     let hu = ftl_keys(&root.join("hu"))?;
     let mut errors = Vec::new();
-    for (file, keys) in &en {
-        let other = hu.get(file).cloned().unwrap_or_default();
-        for k in keys.difference(&other) {
-            errors.push(format!("hu/{file}: missing `{k}`"));
-        }
-        for k in other.difference(keys) {
-            errors.push(format!("hu/{file}: `{k}` is not in en"));
-        }
-    }
-    for file in hu.keys().filter(|f| !en.contains_key(*f)) {
-        errors.push(format!("hu/{file}: no en counterpart"));
+    key_diff("hu", &en, &hu, &mut errors);
+    let mut files = en.len();
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    for res in ANDROID_RES {
+        let en = android_string_keys(&repo.join(res).join("values"))?;
+        let hu = android_string_keys(&repo.join(res).join("values-hu"))?;
+        key_diff(&format!("{res}/values-hu"), &en, &hu, &mut errors);
+        files += en.len();
     }
     if errors.is_empty() {
-        eprintln!("i18n-check: ok ({} files)", en.len());
+        eprintln!("i18n-check: ok ({files} files)");
         Ok(())
     } else {
         bail!("i18n key mismatch:\n  {}", errors.join("\n  "))

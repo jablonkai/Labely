@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Labely</string>
+    <string name="engine_version">Motor API %1$d</string>
+    <string name="print_test">Tesztcímke nyomtatása a szimulátoron</string>
+    <string name="print_done">Kinyomtatva a szimulátoron</string>
+    <string name="print_failed">A nyomtatás sikertelen: %1$s</string>
+</resources>
