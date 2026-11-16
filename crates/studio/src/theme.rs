@@ -203,3 +203,33 @@ pub fn trailing<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R
     )
     .inner
 }
+
+/// Paint one line of `text` anchored at `pos` so it fits in `max_width`: first shrink the
+/// font (down to 80 %), then cut it with "…". Use it wherever text is painted into a box of
+/// fixed width, since longer translations would otherwise run over the box edge.
+pub fn fit_text(
+    painter: &egui::Painter,
+    pos: egui::Pos2,
+    align: egui::Align2,
+    text: impl Into<String>,
+    font: FontId,
+    color: Color32,
+    max_width: f32,
+) -> egui::Rect {
+    let text = text.into();
+    let max_width = max_width.max(1.0);
+    let natural = painter
+        .layout_no_wrap(text.clone(), font.clone(), color)
+        .size()
+        .x;
+    let mut font = font;
+    if natural > max_width {
+        font.size = (font.size * max_width / natural).max(font.size * 0.8);
+    }
+    let mut job = egui::text::LayoutJob::simple_singleline(text, font, color);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(max_width);
+    let galley = painter.layout_job(job);
+    let rect = align.anchor_size(pos, galley.size());
+    painter.galley(rect.min, galley, color);
+    rect
+}

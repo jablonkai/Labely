@@ -1020,17 +1020,9 @@ pub(crate) fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
         .id_salt("printers")
         .show(ui, |ui| {
             for d in &connected {
-                ui.horizontal(|ui| {
-                    ui.label(format!("🖶 {} — {}", d.name, d.address));
-                    if ui.small_button(app.i18n.t("action-status")).clicked() {
-                        menu::refresh_status(app, &d.address);
-                    }
-                    if ui
-                        .small_button(app.i18n.t("action-printer-settings"))
-                        .clicked()
-                    {
-                        crate::paper::open_device(app, Some(d.address.clone()));
-                    }
+                // Buttons first from the right, so a long address is cut instead of
+                // pushing them out of the panel.
+                crate::theme::trailing(ui, |ui| {
                     if ui.small_button(app.i18n.t("action-disconnect")).clicked()
                         && app
                             .run_reporting("device.disconnect", json!({"address": d.address}))
@@ -1040,6 +1032,20 @@ pub(crate) fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                     {
                         app.ui.detected = None;
                     }
+                    if ui
+                        .small_button(app.i18n.t("action-printer-settings"))
+                        .clicked()
+                    {
+                        crate::paper::open_device(app, Some(d.address.clone()));
+                    }
+                    if ui.small_button(app.i18n.t("action-status")).clicked() {
+                        menu::refresh_status(app, &d.address);
+                    }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(
+                            egui::Label::new(format!("🖶 {} — {}", d.name, d.address)).truncate(),
+                        );
+                    });
                 });
                 device_details(app, ui, d);
             }
@@ -1052,13 +1058,21 @@ pub(crate) fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                 if connected.iter().any(|c| c.address == address) {
                     continue;
                 }
-                ui.horizontal(|ui| {
-                    ui.label(format!("{} — {address}", d["name"].as_str().unwrap_or("?")));
+                crate::theme::trailing(ui, |ui| {
                     if ui.small_button(app.i18n.t("action-connect")).clicked()
                         && menu::connect(app, &address)
                     {
                         crate::paper::detect(app, Some(&address));
                     }
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.add(
+                            egui::Label::new(format!(
+                                "{} — {address}",
+                                d["name"].as_str().unwrap_or("?")
+                            ))
+                            .truncate(),
+                        );
+                    });
                 });
             }
             if connected.is_empty() && app.ui.scanned.is_empty() {

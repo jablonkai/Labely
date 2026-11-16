@@ -131,7 +131,8 @@ pub fn segmented(ui: &mut Ui, items: &[(String, Option<&str>)], selected: usize)
                             resp.clone().on_hover_text(text);
                         }
                         None => {
-                            ui.painter().text(
+                            theme::fit_text(
+                                ui.painter(),
                                 rect.center(),
                                 egui::Align2::CENTER_CENTER,
                                 text,
@@ -141,6 +142,7 @@ pub fn segmented(ui: &mut Ui, items: &[(String, Option<&str>)], selected: usize)
                                     theme::regular(12.5)
                                 },
                                 fg,
+                                rect.width() - 8.0,
                             );
                         }
                     }
@@ -561,12 +563,14 @@ pub fn arrange_section(app: &mut LabelyApp, ui: &mut Ui, e: &Element, edits: &mu
                 1.5,
             );
             let short = app.i18n.t(&format!("{key}-short"));
-            ui.painter().text(
+            theme::fit_text(
+                ui.painter(),
                 rect.center_bottom() - vec2(0.0, 11.0),
                 egui::Align2::CENTER_CENTER,
                 short,
                 theme::regular(10.5),
                 theme::TEXT2,
+                rect.width() - 6.0,
             );
             if resp.on_hover_text(&text).clicked() {
                 reorder = Some(to);

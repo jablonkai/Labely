@@ -102,6 +102,9 @@ pub struct Prefs {
     /// Font files added with File → Add Font, loaded at start.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub fonts: Vec<PathBuf>,
+    /// Print offset `[right, down]` in mm per printer address, kept from the last print.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub print_offsets: std::collections::BTreeMap<String, [f32; 2]>,
 }
 
 impl Prefs {

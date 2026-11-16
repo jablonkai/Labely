@@ -50,6 +50,8 @@ pub struct PrintForm {
     pub rotate_180: bool,
     /// Data column holding the copies of each record; empty = `copies` for every record.
     pub copies_column: String,
+    /// Address whose saved offsets are loaded into the form.
+    pub offsets_for: Option<String>,
 }
 
 impl Default for PrintForm {
@@ -66,6 +68,7 @@ impl Default for PrintForm {
             mirror: false,
             rotate_180: false,
             copies_column: String::new(),
+            offsets_for: None,
         }
     }
 }
@@ -710,6 +713,7 @@ fn caption(ui: &mut Ui, text: &str) -> egui::Id {
 fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
     let connected = app.session.services().devices.connected();
     let mut form = app.ui.print.clone();
+    load_offsets(app, &mut form);
     let mut close = false;
     ui.set_width(820.0);
     ui.horizontal(|ui| {
@@ -1117,6 +1121,40 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
     close
 }
 
+/// Fill the offsets from the ones last used with the form's printer, once per address, since
+/// they correct the printer's own misalignment.
+fn load_offsets(app: &LabelyApp, form: &mut PrintForm) {
+    if form.offsets_for.as_deref() == Some(form.address.as_str()) {
+        return;
+    }
+    let [x, y] = app
+        .prefs
+        .print_offsets
+        .get(&form.address)
+        .copied()
+        .unwrap_or_default();
+    form.offset_x_mm = x;
+    form.offset_y_mm = y;
+    form.offsets_for = Some(form.address.clone());
+}
+
+/// Remember the form's offsets for its printer.
+fn save_offsets(app: &mut LabelyApp, form: &PrintForm) {
+    let offsets = [form.offset_x_mm, form.offset_y_mm];
+    let stored = app.prefs.print_offsets.get(&form.address).copied();
+    if stored.unwrap_or_default() == offsets {
+        return;
+    }
+    if offsets == [0.0, 0.0] {
+        app.prefs.print_offsets.remove(&form.address);
+    } else {
+        app.prefs
+            .print_offsets
+            .insert(form.address.clone(), offsets);
+    }
+    app.save_prefs();
+}
+
 /// Queue the print job; true when it was queued.
 fn submit(
     app: &mut LabelyApp,
@@ -1154,6 +1192,7 @@ fn submit(
         p["rotate_180"] = json!(true);
     }
     if app.run_reporting("print.submit", p).ok {
+        save_offsets(app, form);
         app.set_status(app.i18n.t("status-queued"), false);
         app.ui.show_printers = true;
         true

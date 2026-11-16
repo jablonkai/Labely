@@ -481,12 +481,14 @@ fn rail_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Respons
         color,
         1.5,
     );
-    ui.painter().text(
+    theme::fit_text(
+        ui.painter(),
         rect.center_bottom() - vec2(0.0, 4.0),
         egui::Align2::CENTER_BOTTOM,
         text,
         theme::regular(11.0),
         if active { theme::PRIMARY } else { theme::MUTED },
+        rect.width() - 4.0,
     );
     resp
 }
@@ -542,12 +544,14 @@ fn tile(ui: &mut Ui, icon: &str, text: &str, a11y: &str, hint: &str) -> egui::Re
         theme::TEXT,
         1.5,
     );
-    ui.painter().text(
+    theme::fit_text(
+        ui.painter(),
         rect.center_bottom() - vec2(0.0, 10.0),
         egui::Align2::CENTER_CENTER,
         text,
         theme::regular(11.5),
         theme::TEXT2,
+        rect.width() - 8.0,
     );
     resp.on_hover_text(hint)
         .on_hover_cursor(egui::CursorIcon::Grab)
