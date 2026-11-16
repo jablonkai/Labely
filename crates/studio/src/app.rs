@@ -112,15 +112,24 @@ pub struct Status {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Dialog {
     NewDoc(dialogs::NewDocForm),
-    Templates(crate::templates::Gallery),
     SaveTemplate(crate::templates::SaveForm),
-    History(crate::jobs::HistoryView),
     Papers(crate::paper::PaperView),
     Device(crate::paper::DeviceView),
     Print,
+    Export(dialogs::ExportForm),
     About,
     /// Close a document that has unsaved changes?
     ConfirmClose(String),
+}
+
+/// What the pane next to the editor's icon rail shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LeftTab {
+    #[default]
+    Insert,
+    Layers,
+    Data,
+    Templates,
 }
 
 /// View state; never part of a document.
@@ -179,6 +188,38 @@ pub struct UiState {
     pub device_status: std::collections::BTreeMap<String, Value>,
     /// Address of the last printer that failed to connect, for the troubleshooting tips.
     pub connect_failed: Option<String>,
+    /// The home tab is in front (documents stay open behind it).
+    pub home: bool,
+    /// Active document of the last frame; switching documents leaves the home tab.
+    pub last_active: Option<String>,
+    pub home_page: crate::home::Page,
+    pub left_tab: LeftTab,
+    /// The inspector shows the label even with a selection.
+    pub inspector_label: bool,
+    /// Template listing for the home screen and the templates pane.
+    pub template_cache: Option<Vec<labely_core::commands::template::TemplateInfo>>,
+    pub layer_query: String,
+    pub home_query: String,
+    /// The zoom was set by fitting the label; refit when the canvas changes size.
+    pub fitted: bool,
+    /// Settings page: highlighted section, and the one to scroll to.
+    pub settings_section: String,
+    pub settings_jump: Option<String>,
+    /// Printer shown on the printers page.
+    pub printer: Option<String>,
+    /// Address typed on the printers page.
+    pub manual_address: String,
+    /// Template library page.
+    pub gallery: crate::templates::Gallery,
+    /// Print history page, loaded when it is opened.
+    pub history: Option<crate::jobs::HistoryView>,
+    /// Dialog to open when the current one closes (e.g. "From a template instead").
+    pub dialog_next: Option<Dialog>,
+    /// Templates pane: search text and the Starter / Mine switch.
+    pub template_query: String,
+    pub templates_own: bool,
+    /// Canvas size of the last frame.
+    pub canvas_size: Option<egui::Vec2>,
 }
 
 /// A spreadsheet attached from the studio.
@@ -228,6 +269,25 @@ impl Default for UiState {
             workbook: None,
             device_status: Default::default(),
             connect_failed: None,
+            home: false,
+            last_active: None,
+            home_page: crate::home::Page::Home,
+            left_tab: LeftTab::Insert,
+            inspector_label: false,
+            template_cache: None,
+            layer_query: String::new(),
+            home_query: String::new(),
+            fitted: false,
+            settings_section: "general".to_owned(),
+            settings_jump: None,
+            printer: None,
+            manual_address: String::new(),
+            gallery: crate::templates::Gallery::default(),
+            history: None,
+            dialog_next: None,
+            template_query: String::new(),
+            templates_own: false,
+            canvas_size: None,
         }
     }
 }
@@ -262,10 +322,12 @@ pub struct LabelyApp {
     /// Template thumbnails by reference (`None`: could not render).
     pub(crate) thumbs: std::collections::HashMap<String, Option<egui::TextureHandle>>,
     pending: VecDeque<McpCall>,
-    agent_roots: Vec<PathBuf>,
+    pub(crate) agent_roots: Vec<PathBuf>,
     /// Remembered between runs; saved on change.
     pub prefs: Prefs,
     prefs_path: PathBuf,
+    /// Fonts and style are installed (once per context).
+    themed: bool,
 }
 
 impl std::fmt::Debug for LabelyApp {
@@ -316,6 +378,7 @@ impl LabelyApp {
             pending: VecDeque::new(),
             agent_roots,
             opts,
+            themed: false,
         };
         let templates = app
             .opts
@@ -548,44 +611,100 @@ impl LabelyApp {
         }
     }
 
+    /// The editor is in front: a document is open and the home tab is not selected.
+    pub fn editing(&self) -> bool {
+        self.session.active_doc_id().is_some() && !self.ui.home
+    }
+
     /// Lay out the whole window.
     pub fn show(&mut self, ui: &mut Ui) {
+        use crate::{home, shell, theme};
         let ctx = ui.ctx().clone();
+        if !self.themed {
+            // Fonts take effect next frame; the bold family must exist before it is used.
+            theme::apply(&ctx);
+            self.themed = true;
+            ctx.request_repaint();
+            return;
+        }
+        let active = self.session.active_doc_id().map(str::to_owned);
+        if active != self.ui.last_active {
+            self.ui.home = false;
+            self.ui.last_active = active;
+            self.ui.inspector_label = false;
+        }
+        if self.ui.show_data && self.ui.left_tab != LeftTab::Data {
+            self.ui.left_tab = LeftTab::Data;
+            self.ui.show_layers = true;
+        }
         self.serve_agents(&ctx);
         crate::jobs::watch(self, &ctx);
         menu::shortcuts(self, &ctx);
-        egui::Panel::top("menu").show(ui, |ui| menu::menu_bar(self, ui));
-        if self.session.active_doc_id().is_some() {
-            egui::Panel::top("tabs").show(ui, |ui| panels::doc_tabs(self, ui));
-        }
-        egui::Panel::bottom("status").show(ui, |ui| panels::status_bar(self, ui));
-        if self.session.active_doc_id().is_some() {
+        let line = |side: bool| {
+            egui::Frame::new().fill(theme::SURFACE).stroke(if side {
+                egui::Stroke::new(1.0, theme::BORDER)
+            } else {
+                egui::Stroke::NONE
+            })
+        };
+        egui::Panel::top("menu")
+            .frame(shell::bar_frame(theme::CHROME, 8, 2))
+            .show(ui, |ui| menu::menu_bar(self, ui));
+        egui::Panel::top("tabs")
+            .frame(shell::bar_frame(theme::CHROME, 10, 6))
+            .show(ui, |ui| shell::title_bar(self, ui));
+        egui::Panel::bottom("status")
+            .frame(shell::bar_frame(theme::CHROME, 14, 4))
+            .show(ui, |ui| shell::status_bar(self, ui));
+        if self.editing() {
+            egui::Panel::top("toolbar")
+                .frame(shell::bar_frame(theme::SURFACE, 12, 6))
+                .show(ui, |ui| shell::toolbar(self, ui));
+            egui::Panel::left("rail")
+                .exact_size(72.0)
+                .resizable(false)
+                .frame(line(true).inner_margin(egui::Margin::symmetric(6, 10)))
+                .show(ui, |ui| shell::rail(self, ui));
             if self.ui.show_layers {
                 egui::Panel::left("layers")
                     .resizable(true)
-                    .default_size(200.0)
-                    .show(ui, |ui| panels::layers(self, ui));
+                    .default_size(268.0)
+                    .min_size(220.0)
+                    .frame(shell::pane_frame())
+                    .show(ui, |ui| shell::side_pane(self, ui));
             }
             if self.ui.show_props {
+                // Fixed width: wide field contents must not push the canvas aside.
                 egui::Panel::right("props")
-                    .resizable(true)
-                    .default_size(260.0)
-                    .show(ui, |ui| panels::properties(self, ui));
+                    .resizable(false)
+                    .exact_size(296.0)
+                    .frame(shell::pane_frame().inner_margin(egui::Margin::same(14)))
+                    .show(ui, |ui| shell::inspector(self, ui));
             }
-            if self.ui.show_check || self.ui.show_printers || self.ui.show_data {
+            if self.ui.show_check || self.ui.show_printers {
                 egui::Panel::bottom("tools")
                     .resizable(true)
                     .default_size(160.0)
+                    .frame(shell::pane_frame())
                     .show(ui, |ui| panels::tools(self, ui));
             }
-        }
-        egui::CentralPanel::default().show(ui, |ui| {
-            if self.session.active_doc_id().is_some() {
-                canvas::canvas(self, ui);
-            } else {
-                panels::welcome(self, ui);
+            let has_data = self.session.doc(None).is_some_and(|d| d.data.is_some());
+            if has_data && self.ui.show_layers && self.ui.left_tab == LeftTab::Data {
+                egui::Panel::bottom("records")
+                    .resizable(true)
+                    .default_size(190.0)
+                    .min_size(110.0)
+                    .frame(shell::pane_frame().inner_margin(egui::Margin::symmetric(14, 10)))
+                    .show(ui, |ui| crate::data::records_table(self, ui));
             }
-        });
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(theme::CANVAS))
+                .show(ui, |ui| canvas::canvas(self, ui));
+        } else {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(theme::BG))
+                .show(ui, |ui| home::home(self, ui));
+        }
         if self.ui.show_preview {
             panels::preview_window(self, &ctx);
         }

@@ -9,6 +9,16 @@ use serde_json::{Value, json};
 use crate::app::{Dialog, LabelyApp};
 use crate::dialogs::NewDocForm;
 
+/// Label colours shown on the canvas (not printed): i18n key and RGB.
+pub const LABEL_COLORS: [(&str, [u8; 3]); 6] = [
+    ("color-white", [255, 255, 255]),
+    ("color-yellow", [255, 236, 140]),
+    ("color-pink", [255, 196, 214]),
+    ("color-blue", [180, 220, 255]),
+    ("color-green", [196, 236, 190]),
+    ("color-transparent", [228, 228, 228]),
+];
+
 /// Menu order.
 pub const MENUS: &[&str] = &[
     "file", "edit", "insert", "arrange", "label", "data", "view", "print",
@@ -264,14 +274,7 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
                 .labelled_by(l);
             });
             ui.menu_button(app.i18n.t("menu-label-color"), |ui| {
-                for (key, rgb) in [
-                    ("color-white", [255, 255, 255]),
-                    ("color-yellow", [255, 236, 140]),
-                    ("color-pink", [255, 196, 214]),
-                    ("color-blue", [180, 220, 255]),
-                    ("color-green", [196, 236, 190]),
-                    ("color-transparent", [228, 228, 228]),
-                ] {
+                for (key, rgb) in LABEL_COLORS {
                     if ui
                         .radio(app.ui.label_color == rgb, app.i18n.t(key))
                         .clicked()
@@ -284,9 +287,11 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
                 }
             });
             if ui.button(app.i18n.t("action-zoom-in")).clicked() {
+                app.ui.fitted = false;
                 app.ui.zoom = (app.ui.zoom * 1.25).min(80.0);
             }
             if ui.button(app.i18n.t("action-zoom-out")).clicked() {
+                app.ui.fitted = false;
                 app.ui.zoom = (app.ui.zoom / 1.25).max(1.0);
             }
             if ui.button(app.i18n.t("action-zoom-fit")).clicked() {
@@ -576,7 +581,7 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
             }
         }
         "template.new" => {
-            app.ui.dialog = Some(Dialog::Templates(crate::templates::Gallery::default()));
+            crate::templates::open_library(app);
         }
         "template.save" => {
             let form = crate::templates::SaveForm::new(app);
@@ -1008,34 +1013,13 @@ pub fn save_as(app: &mut LabelyApp) {
     }
 }
 
-/// Ask for a target file and run `export.png` / `export.pdf` (all records for PDF).
+/// Open the export dialog with the format of `id` picked.
 fn export(app: &mut LabelyApp, id: &str) {
-    if !app.opts.native_dialogs {
-        app.set_status(app.i18n.t("status-no-dialogs"), true);
-        return;
-    }
-    let ext = if id == "export.pdf" { "pdf" } else { "png" };
-    let name = app
-        .session
-        .doc(None)
-        .map_or_else(|| "label".to_owned(), |d| d.name.clone());
-    let Some(path) = rfd::FileDialog::new()
-        .add_filter(ext.to_uppercase(), &[ext])
-        .set_file_name(format!("{name}.{ext}"))
-        .save_file()
-    else {
-        return;
-    };
-    let mut p = json!({ "path": path });
-    if id == "export.png" {
-        p["record"] = json!(app.ui.record);
-    }
-    if app.run_reporting(id, p).ok {
-        app.set_status(app.i18n.t("status-exported"), false);
-    }
+    let form = crate::dialogs::ExportForm::new(app, id == "export.pdf");
+    app.ui.dialog = Some(Dialog::Export(form));
 }
 
-fn pick_file(app: &mut LabelyApp, exts: &[&str]) -> Option<std::path::PathBuf> {
+pub fn pick_file(app: &mut LabelyApp, exts: &[&str]) -> Option<std::path::PathBuf> {
     if !app.opts.native_dialogs {
         app.set_status(app.i18n.t("status-no-dialogs"), true);
         return None;

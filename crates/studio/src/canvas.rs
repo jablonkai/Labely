@@ -351,32 +351,49 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
     let area = resp.rect;
     let (lw, lh) = (doc.label.width_mm as f32, doc.label.height_mm as f32);
+    // Keep a fitted label fitted when the canvas changes size (panels opening, window resize).
+    if app.ui.fitted
+        && app
+            .ui
+            .canvas_size
+            .is_some_and(|s| (s - area.size()).length() > 1.0)
+    {
+        app.ui.fit_pending = true;
+    }
+    app.ui.canvas_size = Some(area.size());
     if app.ui.fit_pending && lw > 0.0 && lh > 0.0 {
-        app.ui.zoom = ((area.width() - 48.0) / lw)
-            .min((area.height() - 48.0) / lh)
+        app.ui.fitted = true;
+        // Leave room for the rulers and the floating size and zoom controls below the label.
+        app.ui.zoom = ((area.width() - 64.0) / lw)
+            .min((area.height() - 130.0) / lh)
             .clamp(1.0, 80.0);
         app.ui.fit_pending = false;
     }
     if resp.hovered() {
         let z = ui.input(|i| i.zoom_delta());
         if z != 1.0 {
+            app.ui.fitted = false;
             app.ui.zoom = (app.ui.zoom * z).clamp(1.0, 80.0);
         }
     }
     let zoom = app.ui.zoom;
-    let label = Rect::from_center_size(area.center(), vec2(lw, lh) * zoom);
+    let label = Rect::from_center_size(area.center() - vec2(0.0, 22.0), vec2(lw, lh) * zoom);
     let view = View {
         origin: label.min,
         zoom,
     };
     app.ui.last_view = Some(view);
 
-    painter.rect_filled(area, 0.0, ui.visuals().extreme_bg_color);
+    painter.rect_filled(area, 0.0, crate::theme::CANVAS);
     let radius = CornerRadius::same((doc.label.corner_radius_mm as f32 * zoom).min(120.0) as u8);
-    painter.rect_filled(
-        label.translate(vec2(3.0, 3.0)),
-        radius,
-        Color32::from_black_alpha(40),
+    painter.add(
+        egui::Shadow {
+            offset: [0, 10],
+            blur: 30,
+            spread: 0,
+            color: Color32::from_black_alpha(34),
+        }
+        .as_shape(label, radius),
     );
     let [r, g, b] = app.ui.label_color;
     painter.rect_filled(label, radius, Color32::from_rgb(r, g, b));
@@ -410,7 +427,7 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     painter.rect_stroke(
         label,
         radius,
-        Stroke::new(1.0, Color32::GRAY),
+        Stroke::new(1.0, crate::theme::BORDER),
         StrokeKind::Outside,
     );
     if let Some((x0, x1)) = printable_span(app, &doc) {
@@ -432,7 +449,7 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     }
 
     let selection = app.selection();
-    let accent = ui.visuals().selection.stroke.color;
+    let accent = crate::theme::PRIMARY;
     for e in doc.elements().filter(|e| !e.hidden) {
         let f = Frame::of(e);
         let corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)].map(|h| handle_pos(&view, &f, h));
@@ -557,6 +574,7 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
             None => app.select(&[]),
         }
     }
+    crate::shell::canvas_overlays(app, ui, area);
     if resp.hovered()
         && let Some(p) = ui.input(|i| i.pointer.hover_pos())
     {
