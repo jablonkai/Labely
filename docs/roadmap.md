@@ -109,8 +109,8 @@ Phase 4 lands in slices, one pull request each (ADR-0025).
 |---|---|---|
 | 4.1 FFI | `labely-ffi` (`LabelyEngine`, `NativeBle`/`NativeBleLink` callbacks), `NativeBleHost` in the hub, `SimBleHost`, `cargo xtask bindings` | done (ADR-0025) |
 | 4.2 Android build | `mobile/android` Gradle project, cargo-ndk builds, generated bindings, smoke instrumented test, CI job | done (ADR-0026) |
-| 4.3 Android UI and BLE | Kotlin `BluetoothGatt` `NativeBle`, permissions, Compose editor, templates and print after `design/labely-mobile.figcraft` | next |
-| 4.4 AppFunctions | the six functions of ADR-0011, print consent, `appfunctions-testing` | |
+| 4.3 Android UI and BLE | Kotlin `BluetoothGatt` `NativeBle`, permissions, Compose editor, templates and print after `design/labely-mobile.figcraft` | done (ADR-0027) |
+| 4.4 AppFunctions | the six functions of ADR-0011, print consent, `appfunctions-testing` | next |
 | 4.5 Close-out | print from a phone to the B21 Pro; exit audit | |
 
 ## Phase 5: iOS shell + App Intents

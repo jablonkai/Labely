@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Labely mark of the mobile design: a blue label with a dot and a bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#4C6EF5"
+        android:pathData="M10,0h28a10,10 0 0 1 10,10v28a10,10 0 0 1 -10,10h-28a10,10 0 0 1 -10,-10v-28a10,10 0 0 1 10,-10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,16h32a3,3 0 0 1 3,3v10a3,3 0 0 1 -3,3h-32a3,3 0 0 1 -3,-3v-10a3,3 0 0 1 3,-3z" />
+    <path
+        android:fillColor="#4C6EF5"
+        android:pathData="M14,24m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0" />
+    <path
+        android:fillColor="#4C6EF5"
+        android:pathData="M21,22.5h15a1.5,1.5 0 0 1 0,3h-15a1.5,1.5 0 0 1 0,-3z" />
+</vector>
