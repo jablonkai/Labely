@@ -15,3 +15,17 @@ multiple-versions = "allow"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+
+[advisories]
+ignore = [
+  # ttf-parser is unmaintained. It has no known vulnerability, and no release of cosmic-text
+  # (fontdb 0.23) or winit (ab_glyph via sctk-adwaita) has moved off it yet. Drop this entry
+  # when they do.
+  { id = "RUSTSEC-2026-0192", reason = "unmaintained only; no upstream replacement yet" },
+  # zvariant, zbus_names and zvariant_derive 5.x are unmaintained, superseded by zbus 6. They
+  # come only from egui-winit 0.37 (accesskit_unix, the Linux screen-reader bridge), the
+  # latest egui. Drop these when egui moves to zbus 6.
+  { id = "RUSTSEC-2026-0370", reason = "unmaintained only; pinned by egui-winit 0.37" },
+  { id = "RUSTSEC-2026-0371", reason = "unmaintained only; pinned by egui-winit 0.37" },
+  { id = "RUSTSEC-2026-0372", reason = "unmaintained only; pinned by egui-winit 0.37" },
+]
