@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Labely</string>
+    <string name="engine_version">Engine API %1$d</string>
+    <string name="print_test">Print a test label on the simulator</string>
+    <string name="print_done">Printed on the simulator</string>
+    <string name="print_failed">Print failed: %1$s</string>
+</resources>

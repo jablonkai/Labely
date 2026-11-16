@@ -27,3 +27,4 @@
 | [0023](0023-text-fit-spans-crop-mirrors.md) | Fill-to-box text, length guard, fonts, rich spans, image crop, mirror copies and column drag | proposed |
 | [0024](0024-phase-3-close-out.md) | Phase 3 close-out: device identity, font files, justify and studio gaps | proposed |
 | [0025](0025-ffi-engine-and-native-ble.md) | FFI engine and native BLE host (Phase 4 start) | proposed |
+| [0026](0026-android-build.md) | Android build | proposed |
