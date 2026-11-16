@@ -2,9 +2,16 @@
 //!
 //! Address schemes: `fake:<dir>[?model=<id>&delay_ms=<n>]`, `sim:[<model id>]`, `ble:<peripheral id>`,
 //! `usb:<serial port>`.
+//!
+//! On mobile, `ble:` goes through the shell's [`NativeBleHost`] ([`Hub::with_native_ble`],
+//! ADR-0025) instead of btleplug.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use labely_transport::callback::{CallbackTransport, NativeBleHost};
+use labely_transport::{TransportInfo, TransportKind};
 
 use labely_core::document::MediaType;
 use labely_core::services::{
@@ -36,12 +43,15 @@ pub struct Hub {
     /// Device info lives beside the connection lock, so listing devices never waits for a
     /// running print.
     conns: Mutex<BTreeMap<String, (DeviceInfo, Shared)>>,
+    /// Platform BLE stack; when set it replaces btleplug for `ble:` addresses and scans.
+    native_ble: Option<Arc<dyn NativeBleHost>>,
 }
 
 impl std::fmt::Debug for Hub {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Hub")
             .field("models", &self.registry.models().len())
+            .field("native_ble", &self.native_ble.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -69,7 +79,70 @@ impl Hub {
         Self {
             registry: Registry::builtin().clone(),
             conns: Mutex::default(),
+            native_ble: None,
         }
+    }
+
+    /// Use the shell's BLE stack for `ble:` addresses and scans (Android, iOS).
+    pub fn with_native_ble(mut self, host: Arc<dyn NativeBleHost>) -> Self {
+        self.native_ble = Some(host);
+        self
+    }
+
+    fn ble_prefixes(&self) -> Vec<String> {
+        self.registry
+            .models()
+            .iter()
+            .flat_map(|m| m.ble_name_prefixes.iter().cloned())
+            .collect()
+    }
+
+    fn open_native_ble(
+        &self,
+        host: &Arc<dyn NativeBleHost>,
+        id: &str,
+    ) -> Result<Box<dyn Driver>, DeviceError> {
+        let mut name = String::new();
+        let t = CallbackTransport::connect_with(
+            TransportInfo {
+                kind: TransportKind::Ble,
+                address: id.to_owned(),
+                name: String::new(),
+            },
+            |sink| {
+                let (link, n) = host.connect(id, sink)?;
+                name = n;
+                Ok::<_, labely_transport::TransportError>(link)
+            },
+        )
+        .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
+        let fallback = self.registry.guess_by_name(&name).cloned();
+        Ok(Box::new(
+            NiimbotDriver::new(Box::new(t)).with_fallback_model(fallback),
+        ))
+    }
+
+    fn scan_native_ble(
+        &self,
+        host: &Arc<dyn NativeBleHost>,
+        timeout_ms: u64,
+    ) -> Result<Vec<DeviceInfo>, DeviceError> {
+        let found = host
+            .scan(Duration::from_millis(timeout_ms), &self.ble_prefixes())
+            .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
+        Ok(found
+            .into_iter()
+            .map(|d| DeviceInfo {
+                // Always `ble:`, whatever kind the shell reported, so saved addresses match.
+                address: format!("ble:{}", d.info.address),
+                model: self.registry.guess_by_name(&d.info.name).map(Model::info),
+                name: d.info.name,
+                connected: false,
+                firmware: None,
+                hardware: None,
+                serial: None,
+            })
+            .collect())
     }
 
     pub fn registry(&self) -> &Registry {
@@ -127,7 +200,10 @@ impl Hub {
                 let (sim, transport) = Simulator::start(cfg);
                 (Box::new(NiimbotDriver::new(Box::new(transport))), Some(sim))
             }
-            "ble" => (self.open_ble(rest)?, None),
+            "ble" => match &self.native_ble {
+                Some(host) => (self.open_native_ble(host, rest)?, None),
+                None => (self.open_ble(rest)?, None),
+            },
             "usb" => (self.open_serial(rest)?, None),
             other => {
                 return Err(DeviceError::NotFound(format!(
@@ -154,7 +230,6 @@ impl Hub {
 
     #[cfg(feature = "ble")]
     fn open_ble(&self, id: &str) -> Result<Box<dyn Driver>, DeviceError> {
-        use std::time::Duration;
         let t = labely_transport::ble::open(id, Duration::from_secs(15))
             .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
         let fallback = self
@@ -206,14 +281,13 @@ impl DeviceHub for Hub {
         #[allow(unused_mut)]
         let mut out: Vec<DeviceInfo> = Vec::new();
         let _ = timeout_ms;
+        if let Some(host) = &self.native_ble {
+            out = self.scan_native_ble(host, timeout_ms)?;
+        }
         #[cfg(feature = "ble")]
-        {
-            let prefixes: Vec<&str> = self
-                .registry
-                .models()
-                .iter()
-                .flat_map(|m| m.ble_name_prefixes.iter().map(String::as_str))
-                .collect();
+        if self.native_ble.is_none() {
+            let prefixes = self.ble_prefixes();
+            let prefixes: Vec<&str> = prefixes.iter().map(String::as_str).collect();
             let found = labely_transport::ble::scan(
                 std::time::Duration::from_millis(timeout_ms),
                 &prefixes,

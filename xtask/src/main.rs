@@ -1,4 +1,4 @@
-//! Project automation: `cargo xtask <ci|layers|bless|i18n-check|schema-hash>`.
+//! Project automation: `cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings>`.
 
 use std::collections::BTreeMap;
 use std::process::Command;
@@ -69,6 +69,7 @@ const RESTRICTED: &[(&str, &[&str])] = &[
     ("winit", &["labely-studio"]),
     ("rfd", &["labely-studio"]),
     ("rmcp", &["labely-mcp"]),
+    ("uniffi", &["labely-ffi"]),
     ("fluent-bundle", &["labely-i18n"]),
 ];
 
@@ -177,6 +178,44 @@ fn layers() -> Result<()> {
     }
 }
 
+/// Generate the UniFFI sources for `language` (kotlin or swift) from a host build of
+/// `labely-ffi` into `out` (default `target/bindings/<language>`).
+fn bindings(language: &str, out: Option<String>) -> Result<()> {
+    if !matches!(language, "kotlin" | "swift") {
+        bail!("bindings: language must be kotlin or swift, not '{language}'");
+    }
+    cargo(&["build", "-p", "labely-ffi", "--lib"], &[])?;
+    let lib = format!(
+        "target/debug/{}labely_ffi{}",
+        std::env::consts::DLL_PREFIX,
+        std::env::consts::DLL_SUFFIX
+    );
+    let out = out.unwrap_or_else(|| format!("target/bindings/{language}"));
+    cargo(
+        &[
+            "run",
+            "-q",
+            "-p",
+            "labely-ffi",
+            "--features",
+            "bindgen",
+            "--bin",
+            "uniffi-bindgen",
+            "--",
+            "generate",
+            "--library",
+            &lib,
+            "--language",
+            language,
+            "--out-dir",
+            &out,
+        ],
+        &[],
+    )?;
+    eprintln!("bindings: {language} → {out}");
+    Ok(())
+}
+
 fn ci() -> Result<()> {
     cargo(&["fmt", "--all", "--check"], &[])?;
     layers()?;
@@ -229,8 +268,14 @@ fn main() -> Result<()> {
             ],
             &[],
         ),
+        "bindings" => bindings(
+            &std::env::args().nth(2).unwrap_or_else(|| "kotlin".into()),
+            std::env::args().nth(3),
+        ),
         _ => {
-            eprintln!("usage: cargo xtask <ci|layers|bless|i18n-check|schema-hash>");
+            eprintln!(
+                "usage: cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings [kotlin|swift] [out-dir]>"
+            );
             std::process::exit(2)
         }
     }

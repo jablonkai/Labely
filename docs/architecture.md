@@ -240,8 +240,10 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
 
 - **Desktop and CLI.** `labely-transport::ble` uses btleplug 0.13.x (CoreBluetooth, WinRT, BlueZ).
 - **Android and iOS.** BLE lives in the native shell (Kotlin `BluetoothGatt`, Swift
-  CoreBluetooth). It implements a UniFFI callback interface `NativeBleLink { scan, connect,
-  write, on_notify, mtu }`, which `labely-transport::callback` adapts to `Transport`.
+  CoreBluetooth). It implements the UniFFI callbacks `NativeBle { scan, connect }` and
+  `NativeBleLink { write, mtu, name, disconnect }`, and pushes notifications into a `BleNotifySink`.
+  `labely-transport::callback` adapts them to `Transport`, and `Hub::with_native_ble` routes
+  `ble:` addresses through them (ADR-0025).
 - **Why.** btleplug on Android needs JNI class-loader setup, R8 keep rules and bundled Java
   classes, and has open MTU issues (#503, #504). Native BLE keeps permissions and the background
   lifecycle on the platform's terms, and the protocol stays in Rust.
@@ -282,10 +284,10 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
     snapshots, because CI runners have no GPU.
 - **FFI (`labely-ffi`, UniFFI 0.32, proc-macro mode).**
   - **Object:** `LabelyEngine` with `execute(id, params_json) -> envelope_json`,
-    `commands_json()`, `render_png(doc_id, opts)`, and device events through a callback
-    interface.
-  - **BLE:** the `NativeBleLink` callback for native BLE.
-  - **Bindings:** generated Kotlin and Swift, versioned with the crate.
+    `commands_json()`, `render_png(doc_id, dpi, page)` and `set_allow_print`. A device-event
+    callback is added with the Compose UI (ADR-0025).
+  - **BLE:** the `NativeBle` and `NativeBleLink` callbacks for native BLE.
+  - **Bindings:** generated Kotlin and Swift by `cargo xtask bindings`, not committed.
 - **Android shell** (Kotlin 2.4, Compose BOM 2026.09, AGP 9.5).
   - **Scope:** UI and platform glue only. App minSdk is 26.
   - **AppFunctions (`androidx.appfunctions` 1.0.0-rc01, Android 16 / API 36+, behind

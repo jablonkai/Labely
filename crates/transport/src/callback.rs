@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::gatt::BLE_PACKET_GAP_MS;
-use crate::{Transport, TransportError, TransportInfo, recv_while_open};
+use crate::{Discovered, Transport, TransportError, TransportInfo, recv_while_open};
 
 /// Native side of a connected link. Calls may come from any thread.
 pub trait NativeLink: Send + Sync {
@@ -18,6 +18,27 @@ pub trait NativeLink: Send + Sync {
     fn mtu(&self) -> u32;
     /// Tear the link down. Called once by [`Transport::close`].
     fn close(&self);
+}
+
+/// Platform BLE stack that discovers printers and opens [`NativeLink`]s (Android
+/// `BluetoothGatt`, iOS CoreBluetooth). The device hub uses it for `ble:` addresses when set.
+pub trait NativeBleHost: Send + Sync {
+    /// Scan for up to `timeout`, keeping devices whose advertised name starts with one of
+    /// `name_prefixes` (all devices when empty). `info.kind` should be [`crate::TransportKind::Ble`].
+    fn scan(
+        &self,
+        timeout: Duration,
+        name_prefixes: &[String],
+    ) -> Result<Vec<Discovered>, TransportError>;
+
+    /// Connect to `address` (without the `ble:` scheme). Notifications and the disconnect
+    /// event must go to `sink`, which exists before the link so nothing is lost.
+    /// Returns the link and the device's advertised name.
+    fn connect(
+        &self,
+        address: &str,
+        sink: NotifySink,
+    ) -> Result<(Arc<dyn NativeLink>, String), TransportError>;
 }
 
 /// Handle the native side uses to feed received bytes into Rust.
@@ -67,21 +88,45 @@ impl CallbackTransport {
     /// Wrap `link`. The returned sink must be handed to the native side for notifications.
     /// The packet gap defaults to the BLE value (10 ms).
     pub fn new(info: TransportInfo, link: Arc<dyn NativeLink>) -> (Self, NotifySink) {
+        let (sink, rx, open) = Self::channel();
+        (Self::from_parts(info, link, rx, open), sink)
+    }
+
+    /// Create the notification sink first, hand it to `connect`, then wrap the link it
+    /// returns. Use this when notifications may arrive while the link is still opening.
+    pub fn connect_with<E>(
+        info: TransportInfo,
+        connect: impl FnOnce(NotifySink) -> Result<Arc<dyn NativeLink>, E>,
+    ) -> Result<Self, E> {
+        let (sink, rx, open) = Self::channel();
+        let link = connect(sink)?;
+        Ok(Self::from_parts(info, link, rx, open))
+    }
+
+    fn channel() -> (NotifySink, Receiver<Vec<u8>>, Arc<AtomicBool>) {
         let (tx, rx) = channel();
         let open = Arc::new(AtomicBool::new(true));
         let sink = NotifySink {
             tx: Arc::new(Mutex::new(tx)),
             open: Arc::clone(&open),
         };
-        let t = Self {
+        (sink, rx, open)
+    }
+
+    fn from_parts(
+        info: TransportInfo,
+        link: Arc<dyn NativeLink>,
+        rx: Receiver<Vec<u8>>,
+        open: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
             info,
             link,
             rx,
             open,
             closed: false,
             packet_gap: Duration::from_millis(BLE_PACKET_GAP_MS),
-        };
-        (t, sink)
+        }
     }
 
     /// Override the recommended inter-packet gap (e.g. zero for a native USB link).
@@ -232,6 +277,27 @@ mod tests {
         assert!(!link.closed.load(Ordering::Relaxed));
         t.close();
         assert!(link.closed.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn connect_with_keeps_early_notifications() {
+        let info = TransportInfo {
+            kind: TransportKind::Ble,
+            address: "dev2".into(),
+            name: "B21".into(),
+        };
+        let mut t = CallbackTransport::connect_with(info, |sink| {
+            sink.push(vec![9]); // arrives before the link is returned
+            Ok::<_, String>(Arc::new(FakeLink::default()) as Arc<dyn NativeLink>)
+        })
+        .unwrap();
+        assert_eq!(t.info().uri(), "ble:dev2");
+        assert_eq!(t.recv(Duration::from_millis(50)).unwrap(), Some(vec![9]));
+
+        let failed = CallbackTransport::connect_with(t.info().clone(), |_| {
+            Err::<Arc<dyn NativeLink>, _>("no device".to_string())
+        });
+        assert_eq!(failed.unwrap_err(), "no device");
     }
 
     #[test]

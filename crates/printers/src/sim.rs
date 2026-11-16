@@ -255,3 +255,128 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
         }
     }
 }
+
+/// A [`NativeBleHost`] backed by simulators: it finds one printer and runs a fresh simulator
+/// per connection. It exercises the mobile BLE path (ADR-0025) without hardware.
+///
+/// [`NativeBleHost`]: labely_transport::callback::NativeBleHost
+#[derive(Debug)]
+pub struct SimBleHost {
+    config: SimConfig,
+    address: String,
+    name: String,
+    mtu: u32,
+    last: Arc<Mutex<Option<Simulator>>>,
+}
+
+impl SimBleHost {
+    /// One simulated B21 Pro at `SIM-B21`, advertised as `B21_Pro-SIM`, with a 20-byte MTU
+    /// (the BLE minimum, so chunking is exercised).
+    pub fn b21_pro() -> Self {
+        Self {
+            config: SimConfig::b21_pro(),
+            address: "SIM-B21".into(),
+            name: "B21_Pro-SIM".into(),
+            mtu: 20,
+            last: Arc::default(),
+        }
+    }
+
+    /// What the most recently connected simulator observed.
+    pub fn log(&self) -> Option<SimLog> {
+        self.last.lock().ok()?.as_ref().map(Simulator::log)
+    }
+}
+
+struct SimLink {
+    host: Arc<Mutex<MemoryTransport>>,
+    open: Arc<std::sync::atomic::AtomicBool>,
+    mtu: u32,
+}
+
+impl labely_transport::callback::NativeLink for SimLink {
+    fn write(&self, bytes: Vec<u8>) -> Result<(), String> {
+        use labely_transport::Transport;
+        let mut t = self
+            .host
+            .lock()
+            .map_err(|_| "sim lock poisoned".to_string())?;
+        t.send(&bytes).map_err(|e| e.to_string())
+    }
+
+    fn mtu(&self) -> u32 {
+        self.mtu
+    }
+
+    fn close(&self) {
+        self.open.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
+impl labely_transport::callback::NativeBleHost for SimBleHost {
+    fn scan(
+        &self,
+        _timeout: std::time::Duration,
+        name_prefixes: &[String],
+    ) -> Result<Vec<labely_transport::Discovered>, labely_transport::TransportError> {
+        let matches =
+            name_prefixes.is_empty() || name_prefixes.iter().any(|p| self.name.starts_with(p));
+        Ok(matches
+            .then(|| labely_transport::Discovered {
+                info: labely_transport::TransportInfo {
+                    kind: labely_transport::TransportKind::Ble,
+                    address: self.address.clone(),
+                    name: self.name.clone(),
+                },
+                rssi: Some(-50),
+                services: Vec::new(),
+            })
+            .into_iter()
+            .collect())
+    }
+
+    fn connect(
+        &self,
+        address: &str,
+        sink: labely_transport::callback::NotifySink,
+    ) -> Result<
+        (Arc<dyn labely_transport::callback::NativeLink>, String),
+        labely_transport::TransportError,
+    > {
+        use labely_transport::Transport;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        if address != self.address {
+            return Err(labely_transport::TransportError::NotFound(address.into()));
+        }
+        let (sim, transport) = Simulator::start(self.config.clone());
+        let host = Arc::new(Mutex::new(transport));
+        let open = Arc::new(AtomicBool::new(true));
+        // Pump simulator replies into the sink, as GATT notifications would arrive.
+        {
+            let (host, open) = (Arc::clone(&host), Arc::clone(&open));
+            std::thread::spawn(move || {
+                while open.load(Ordering::Acquire) {
+                    let got = match host.lock() {
+                        Ok(mut t) => t.recv(std::time::Duration::from_millis(5)),
+                        Err(_) => break,
+                    };
+                    match got {
+                        Ok(Some(bytes)) => sink.push(bytes),
+                        Ok(None) => std::thread::yield_now(),
+                        Err(_) => break,
+                    }
+                }
+                sink.disconnected();
+            });
+        }
+        if let Ok(mut last) = self.last.lock() {
+            *last = Some(sim);
+        }
+        let link = SimLink {
+            host,
+            open,
+            mtu: self.mtu,
+        };
+        Ok((Arc::new(link), self.name.clone()))
+    }
+}
