@@ -115,3 +115,14 @@ Phase 3 lands in slices, one pull request each.
 - **Packaging:** cargo-dist for the CLI; signed and notarised macOS app, Windows MSI, Linux
   AppImage/deb (ADR at phase start); Play and App Store builds; tag-driven release workflow with
   SHA256SUMS.
+
+## Later (after Phase 6)
+
+Ideas parked until everything above is done.
+
+- **Smarter RFID paper detection.** The tag has no size (protocol.md §10), so today an unknown
+  roll is linked to a paper once by hand (ADR-0020).
+  - Optional setting to apply a recognised paper automatically instead of offering "Use".
+  - Bundled RFID barcode → paper table built from rolls we own (not from vendor data), so
+    common rolls are known on first load.
+  - Measuring the label with the printer (0x59/0x5A). UNCERTAIN; needs testing on the B21 Pro.
