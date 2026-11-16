@@ -36,8 +36,15 @@ fn fresh_prefs() -> std::path::PathBuf {
 
 fn harness(app: LabelyApp) -> Harness<'static, LabelyApp> {
     Harness::builder()
-        .with_size(vec2(1100.0, 720.0))
+        .with_size(vec2(1280.0, 860.0))
         .build_ui_state(|ui, app: &mut LabelyApp| app.show(ui), app)
+}
+
+/// Scroll a widget into view (the inspector is taller than the window), then click it.
+fn tap(h: &mut Harness<'static, LabelyApp>, label: &str) {
+    h.get_by_label(label).scroll_to_me();
+    h.run();
+    h.get_by_label(label).click();
 }
 
 fn element_count(h: &Harness<'_, LabelyApp>) -> usize {
@@ -86,7 +93,8 @@ fn menus_are_generated_and_localised() {
     app.run("doc.new", json!({"width_mm": 40, "height_mm": 20}));
     let mut h = harness(app);
     h.run();
-    h.get_by_label("Beszúrás").click();
+    // The menu, not the rail's "Beszúrás" tab.
+    h.get_all_by_label("Beszúrás").next().unwrap().click();
     h.run();
     // Not the palette's "+ Vonalkód" button.
     h.get_all_by_label_contains("Vonalkód")
@@ -302,7 +310,7 @@ fn data_panel_binds_and_insert_date() {
     app.ui.show_data = true;
     let mut h = harness(app);
     h.run();
-    assert!(h.query_by_label_contains("2 records").is_some());
+    assert!(h.query_all_by_label_contains("2 records").next().is_some());
 
     // Bind the selected text to the first column, then step to record 2.
     h.get_all_by_label("Bind").next().unwrap().click();
@@ -312,7 +320,7 @@ fn data_panel_binds_and_insert_date() {
         labely_core::ElementKind::Text(t) => assert_eq!(t.text, "{{name}}"),
         k => panic!("{k:?}"),
     }
-    h.get_by_label("▶").click();
+    h.get_by_label("Next record").click();
     h.run();
     assert_eq!(h.state().ui.record, 2);
     assert!(h.query_by_label("Pear").is_some(), "panel shows record 2");
@@ -320,7 +328,8 @@ fn data_panel_binds_and_insert_date() {
     // Insert → Serial number creates the counter and a bound text.
     h.get_by_label("Insert").click();
     h.run();
-    h.get_by_label("Serial number").click();
+    // The menu item, not the inspector's insert chip of the same name.
+    h.get_all_by_label("Serial number").next().unwrap().click();
     h.run();
     let doc = h.state().session.doc(None).unwrap();
     assert!(doc.serials.contains_key("serial"));
@@ -338,9 +347,9 @@ fn table_editing_and_code_from_image() {
     h.get_by_label("Table").click();
     h.run();
     let id = h.state().selection()[0];
-    h.get_by_label("Merge right").click();
+    tap(&mut h, "Merge right");
     h.run();
-    h.get_by_label("+ Row").click();
+    tap(&mut h, "+ Row");
     h.run();
     let t = match &h
         .state()
@@ -397,7 +406,8 @@ fn group_select_and_align() {
     h.run();
     h.get_by_label("Arrange").click();
     h.run();
-    h.get_by_label_contains("Group").click();
+    // The menu item, not the toolbar button of the same name.
+    h.get_all_by_label("Group").last().unwrap().click();
     h.run();
     // Selecting one member selects the group.
     h.state_mut().select(&ids[..1]);
@@ -406,7 +416,8 @@ fn group_select_and_align() {
     h.run();
     h.get_by_label("Align").click();
     h.run();
-    h.get_by_label("Top edges").click();
+    // The submenu item, not the toolbar button of the same name.
+    h.get_all_by_label("Top edges").next().unwrap().click();
     h.run();
     let doc = h.state().session.doc(None).unwrap();
     let ys: Vec<f64> = doc.elements().map(|e| e.y_mm).collect();
@@ -424,10 +435,10 @@ fn template_gallery_open_save_and_manage() {
         },
     ));
     h.run();
-    // Welcome screen → gallery → open a starter by double-click.
+    // Home → template library page → select a starter and open it.
     h.get_by_label("New from template…").click();
     h.run();
-    assert!(h.query_by_label("Starter templates").is_some());
+    assert!(h.query_all_by_label("Starter templates").next().is_some());
     h.get_by_label("Price tag").click();
     h.run();
     h.get_by_label("Open").click();
@@ -470,7 +481,7 @@ fn template_gallery_open_save_and_manage() {
     h.run();
     h.get_by_label_contains("New from template…").click();
     h.run();
-    h.get_by_label("  🗀 Shop").click();
+    h.get_by_label("Shop").click();
     h.run();
     h.get_by_label("Price tag").click();
     h.run();
@@ -501,7 +512,7 @@ fn print_queue_panel_and_history() {
     let mut h = harness(app);
     h.run();
     // The dialog's Print button queues the job and opens the printers panel.
-    h.get_all_by_label("Print").last().unwrap().click();
+    h.get_by_label("Print 1 label").click();
     // Fixed steps: the UI keeps repainting while the job is busy.
     h.run_steps(3);
     assert!(h.state().ui.dialog.is_none());
@@ -521,13 +532,16 @@ fn print_queue_panel_and_history() {
     );
     assert!(dir.path().join("out/job-0001/page-01.png").is_file());
 
-    // History dialog: the entry reopens the printed document.
+    // History page: the entry's menu reopens the printed document.
     h.get_by_label("Print history…").click();
     h.run();
     assert!(h.query_by_label("Queue test").is_some());
+    h.get_by_label("···").click();
+    h.run();
     h.get_by_label("Open").click();
     h.run();
     assert!(h.state().ui.dialog.is_none());
+    assert!(!h.state().ui.home, "the reopened document is in front");
     assert_eq!(h.state().session.doc(None).unwrap().name, "Queue test");
     assert_eq!(h.state().session.doc_ids().count(), 2);
 }
@@ -851,7 +865,11 @@ fn mirror_copy_from_menu_and_font_picker() {
     h.run();
     h.get_by_label("Arrange").click();
     h.run();
-    h.get_by_label("Mirror copy (left–right)").click();
+    // The menu item, not the toolbar button of the same name.
+    h.get_all_by_label("Mirror copy (left–right)")
+        .last()
+        .unwrap()
+        .click();
     h.run();
     let copy = h.state().selection()[0];
     let doc = h.state().session.doc(None).unwrap();
@@ -879,7 +897,7 @@ fn mirror_copy_from_menu_and_font_picker() {
         .id;
     h.state_mut().select(&[t]);
     h.run();
-    h.get_all_by_label("font").last().unwrap().click();
+    h.get_all_by_label("Font").last().unwrap().click();
     h.run();
     assert!(
         h.query_by_label("Noto Sans").is_some(),
@@ -975,7 +993,7 @@ fn line_style_and_table_cell_controls() {
     app.select(&[line]);
     let mut h = harness(app);
     h.run();
-    h.get_by_label("line style").click();
+    tap(&mut h, "line style");
     h.run();
     h.get_by_label("Dashed").click();
     h.run();
@@ -993,7 +1011,7 @@ fn line_style_and_table_cell_controls() {
     };
     let d = dash(&h).expect("dashed");
     assert!(d[0] > d[1], "a dash is longer than its gap: {d:?}");
-    h.get_by_label("line style").click();
+    tap(&mut h, "line style");
     h.run();
     h.get_by_label("Solid").click();
     h.run();
@@ -1013,7 +1031,7 @@ fn line_style_and_table_cell_controls() {
     );
     h.state_mut().select(&[table]);
     h.run();
-    h.get_by_label("White on black").click();
+    tap(&mut h, "White on black");
     h.run();
     let props = |h: &Harness<'_, LabelyApp>| match &h
         .state()
@@ -1028,7 +1046,7 @@ fn line_style_and_table_cell_controls() {
         k => panic!("{k:?}"),
     };
     assert!(props(&h).cells[0][0].invert);
-    h.get_by_label("Clear text").click();
+    tap(&mut h, "Clear text");
     h.run();
     let t = props(&h);
     assert!(t.cells[0][0].text.is_empty());
@@ -1091,7 +1109,8 @@ fn print_dialog_takes_copies_from_a_column() {
     h.get_by_label("n").click();
     h.run();
     assert_eq!(h.state().ui.print.copies_column, "n");
-    h.get_all_by_label("Print").last().unwrap().click();
+    // The button counts the labels: 2 + 3 copies.
+    h.get_by_label("Print 5 labels").click();
     h.run_steps(3);
     let job = h.state().session.jobs().list()[0].clone();
     h.state().session.jobs().wait(&job.id, None).unwrap();
@@ -1114,4 +1133,56 @@ fn failed_connect_shows_troubleshooting_tips() {
     h.get_by_label("Close").click();
     h.run();
     assert!(h.state().ui.connect_failed.is_none());
+}
+
+#[test]
+fn export_dialog_writes_one_png_per_record() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            agent_roots: vec![root.clone()],
+            ..options()
+        },
+    );
+    app.run("doc.new", json!({"width_mm": 30, "height_mm": 15}));
+    app.run("data.attach_csv", json!({"text": "name\nA\nB\n"}));
+    labely_studio::menu::invoke(&mut app, "export.png");
+    let mut h = harness(app);
+    h.run();
+    h.get_by_label("All 2").click();
+    h.run();
+    h.get_by_label("Save to").focus();
+    h.get_by_label("Save to")
+        .type_text(&root.join("tag.png").display().to_string());
+    h.run();
+    // The title and the button share the name; the button comes last.
+    h.get_all_by_label("Export").last().unwrap().click();
+    h.run();
+    assert!(h.state().ui.dialog.is_none(), "{:?}", h.state().ui.status);
+    for n in ["tag-001.png", "tag-002.png"] {
+        assert!(root.join(n).is_file(), "{n} written");
+    }
+}
+
+#[test]
+fn home_pages_settings_printers_history() {
+    let mut h = harness(LabelyApp::new(None, options()));
+    h.run();
+    // Settings: the units switch is stored in the preferences.
+    h.get_by_label("Settings").click();
+    h.run();
+    h.get_by_label("Inches").click();
+    h.run();
+    assert_eq!(h.state().prefs.units, labely_studio::prefs::Units::Inch);
+    // Printers: no printer yet, a manual address field.
+    h.get_by_label("Printers").click();
+    h.run();
+    assert!(h.query_by_label("Search for printers").is_some());
+    assert!(h.query_by_label("No printer connected.").is_some());
+    // History page from the nav.
+    h.get_by_label("History").click();
+    h.run();
+    assert_eq!(h.state().ui.home_page, labely_studio::home::Page::History);
 }

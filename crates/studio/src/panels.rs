@@ -7,8 +7,8 @@ use labely_i18n::Arg;
 use serde_json::{Map, Value, json};
 
 use crate::app::LabelyApp;
-use crate::menu;
 use crate::prefs::Units;
+use crate::{menu, theme};
 
 /// Element type → the command that creates it (its params schema describes the props).
 fn add_command(kind: &str) -> &'static str {
@@ -26,7 +26,7 @@ fn add_command(kind: &str) -> &'static str {
     }
 }
 
-fn element_title(app: &LabelyApp, e: &Element) -> String {
+pub(crate) fn element_title(app: &LabelyApp, e: &Element) -> String {
     let kind = e.kind.type_name();
     let base = app.i18n.t(&format!("kind-{kind}"));
     if let Some(n) = e.name.as_deref().filter(|n| !n.is_empty()) {
@@ -49,95 +49,6 @@ fn element_title(app: &LabelyApp, e: &Element) -> String {
         Some(s) if !s.is_empty() => format!("{base}: {s}"),
         _ => format!("{base} #{}", e.id.0),
     }
-}
-
-/// New elements: click to add one in the middle, or drag it onto the canvas.
-fn palette(app: &mut LabelyApp, ui: &mut Ui) {
-    ui.heading(app.i18n.t("panel-elements"));
-    let mut clicked = None;
-    ui.horizontal_wrapped(|ui| {
-        for (cmd, kind) in menu::PALETTE {
-            let text = format!("+ {}", app.i18n.t(&format!("kind-{kind}")));
-            let r = ui
-                .add(
-                    egui::Button::new(text)
-                        .small()
-                        .sense(egui::Sense::click_and_drag()),
-                )
-                .on_hover_text(app.i18n.t("palette-hint"))
-                .on_hover_cursor(egui::CursorIcon::Grab);
-            if r.drag_started() {
-                egui::DragAndDrop::set_payload(ui.ctx(), menu::ElementDrag(cmd));
-            }
-            if r.clicked() {
-                clicked = Some(cmd);
-            }
-        }
-    });
-    if let Some(cmd) = clicked {
-        menu::invoke(app, cmd);
-    }
-}
-
-/// Layers, top of the stack first.
-pub fn layers(app: &mut LabelyApp, ui: &mut Ui) {
-    let Some(doc) = app.session.doc_arc(None) else {
-        return;
-    };
-    palette(app, ui);
-    ui.separator();
-    ui.heading(app.i18n.t("panel-layers"));
-    let selection = app.selection();
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        for e in doc.elements().collect::<Vec<_>>().into_iter().rev() {
-            ui.horizontal(|ui| {
-                let eye = if e.hidden { "—" } else { "👁" };
-                if ui
-                    .small_button(eye)
-                    .on_hover_text(app.i18n.t("layer-toggle-visible"))
-                    .clicked()
-                {
-                    app.run_reporting(
-                        "element.set_props",
-                        json!({"id": e.id, "props": {"hidden": !e.hidden}}),
-                    );
-                }
-                let lock = if e.locked { "🔒" } else { "🔓" };
-                if ui
-                    .small_button(lock)
-                    .on_hover_text(app.i18n.t("layer-toggle-lock"))
-                    .clicked()
-                {
-                    app.run_reporting(
-                        "element.set_props",
-                        json!({"id": e.id, "props": {"locked": !e.locked}}),
-                    );
-                }
-                let selected = selection.contains(&e.id);
-                let r = ui.selectable_label(selected, element_title(app, e));
-                if r.clicked() {
-                    if ui.input(|i| i.modifiers.shift || i.modifiers.command) {
-                        app.run("selection.set", json!({"ids": [e.id], "mode": "toggle"}));
-                    } else {
-                        app.select(&[e.id]);
-                    }
-                }
-                r.context_menu(|ui| {
-                    for (to, key) in [
-                        ("front", "layer-front"),
-                        ("forward", "layer-forward"),
-                        ("backward", "layer-backward"),
-                        ("back", "layer-back"),
-                    ] {
-                        if ui.button(app.i18n.t(key)).clicked() {
-                            app.run_reporting("element.reorder", json!({"id": e.id, "to": to}));
-                            ui.close();
-                        }
-                    }
-                });
-            });
-        }
-    });
 }
 
 /// Enum choices of a schema node: `enum` or `oneOf`/`anyOf` of consts.
@@ -368,13 +279,15 @@ fn units_for(key: &str, units: Units) -> Option<Units> {
 const FRAME_FIELDS: &[&str] = &["x_mm", "y_mm", "width_mm", "height_mm", "rotation_deg"];
 
 /// Properties of the single selected element, or of the label when nothing is selected.
-pub fn properties(app: &mut LabelyApp, ui: &mut Ui) {
+/// Inspector body: the label (with its check results) or the selected element.
+pub fn properties(app: &mut LabelyApp, ui: &mut Ui, label_tab: bool) {
     let Some(doc) = app.session.doc_arc(None) else {
         return;
     };
     let selection = app.selection();
     egui::ScrollArea::vertical().show(ui, |ui| match selection.as_slice() {
-        [] => label_properties(app, ui, &doc),
+        _ if label_tab => crate::inspector::label_tab(app, ui, &doc),
+        [] => crate::inspector::label_tab(app, ui, &doc),
         [id] => {
             if let Some(e) = doc.element(*id) {
                 element_properties(app, ui, e);
@@ -392,7 +305,6 @@ pub fn properties(app: &mut LabelyApp, ui: &mut Ui) {
 
 fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
     let kind = e.kind.type_name();
-    ui.heading(app.i18n.t(&format!("kind-{kind}")));
     let schema = Registry::builtin()
         .get(add_command(kind))
         .map(|c| c.params_schema())
@@ -405,49 +317,38 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
     let mut edits: Vec<(String, Value)> = Vec::new();
     let mut text_id = None;
 
-    egui::CollapsingHeader::new(app.i18n.t("props-frame"))
-        .default_open(true)
-        .show(ui, |ui| {
-            egui::Grid::new("frame").num_columns(2).show(ui, |ui| {
-                let name_schema = json!({"type": "string"});
-                let name = whole.get("name").cloned().unwrap_or(json!(""));
-                if let Some(v) =
-                    prop_editor(ui, &app.i18n.t("prop-name"), &name_schema, &name, None)
-                {
-                    edits.push(("name".into(), v));
-                }
-                for f in FRAME_FIELDS {
-                    let s = props_schema
-                        .get(*f)
-                        .cloned()
-                        .unwrap_or(json!({"type": "number"}));
-                    let label = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
-                    if let Some(v) =
-                        prop_editor(ui, &label, &s, &whole[*f], units_for(f, app.units()))
-                    {
-                        edits.push(((*f).into(), v));
-                    }
-                }
-                for f in ["locked", "hidden", "flip_h", "flip_v"] {
-                    let label = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
-                    if let Some(v) =
-                        prop_editor(ui, &label, &json!({"type": "boolean"}), &whole[f], None)
-                    {
-                        edits.push((f.into(), v));
-                    }
-                }
-            });
-        });
+    crate::inspector::frame_section(app, ui, &whole, &mut edits);
+    let is_text = matches!(e.kind, labely_core::ElementKind::Text(_));
+    if is_text {
+        crate::inspector::text_section(app, ui, &whole, &mut edits);
+    }
+    let is_barcode = matches!(e.kind, labely_core::ElementKind::Barcode(_));
+    if is_barcode {
+        crate::inspector::barcode_section(app, ui, &whole, &mut edits);
+    }
+    /// Keys the sections above already edit.
+    const STYLED: &[&str] = &[
+        "font_family",
+        "font_size_pt",
+        "bold",
+        "italic",
+        "underline",
+        "align",
+        "fit",
+    ];
 
-    egui::CollapsingHeader::new(app.i18n.t("props-content"))
-        .default_open(true)
-        .show(ui, |ui| {
+    theme::section(ui, &app.i18n.t("props-content"));
+    {
+        {
             egui::Grid::new("content").num_columns(2).show(ui, |ui| {
                 let Some(obj) = props_schema.as_object() else {
                     return;
                 };
                 for (key, s) in obj {
                     let skip = FRAME_FIELDS.contains(&key.as_str())
+                        || (is_text && STYLED.contains(&key.as_str()))
+                        || (is_barcode
+                            && matches!(key.as_str(), "data" | "symbology" | "human_readable"))
                         || matches!(
                             key.as_str(),
                             "doc_id"
@@ -515,14 +416,24 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
                         ui.end_row();
                         continue;
                     }
-                    let label = key.strip_suffix("_mm").unwrap_or(key).replace('_', " ");
+                    let tkey = format!("prop-{}", key.replace('_', "-"));
+                    let label = if app.i18n.has(&tkey) {
+                        app.i18n.t(&tkey)
+                    } else {
+                        key.strip_suffix("_mm").unwrap_or(key).replace('_', " ")
+                    };
                     if let Some(v) = prop_editor(ui, &label, s, &value, units_for(key, app.units()))
                     {
                         edits.push((key.clone(), v));
                     }
                 }
             });
-        });
+        }
+    }
+    if is_text {
+        let text = crate::inspector::text_of(e).unwrap_or_default();
+        crate::inspector::insert_chips(app, ui, &text, &mut edits);
+    }
 
     if let labely_core::ElementKind::Table(t) = &e.kind {
         table_editor(app, ui, e.id, t);
@@ -548,6 +459,8 @@ fn element_properties(app: &mut LabelyApp, ui: &mut Ui, e: &Element) {
             }
         });
     }
+
+    crate::inspector::arrange_section(app, ui, e, &mut edits);
 
     for (key, value) in edits {
         let mut props = Map::new();
@@ -928,100 +841,23 @@ fn halign_key(a: labely_core::document::HAlign) -> &'static str {
     }
 }
 
-fn label_properties(app: &mut LabelyApp, ui: &mut Ui, doc: &labely_core::Document) {
-    ui.heading(app.i18n.t("props-label"));
-    let schema = Registry::builtin()
-        .get("doc.set_label")
-        .map(|c| c.params_schema())
-        .unwrap_or_default();
-    let props = schema.get("properties").cloned().unwrap_or_default();
-    let label = serde_json::to_value(&doc.label).unwrap_or_default();
-    let models = app.session.services().devices.models();
-    let mut edits: Vec<(String, Value)> = Vec::new();
-    egui::Grid::new("label").num_columns(2).show(ui, |ui| {
-        if let Some(v) = prop_editor(
-            ui,
-            &app.i18n.t("prop-name"),
-            &json!({"type": "string"}),
-            &json!(doc.name),
-            None,
-        ) {
-            edits.push(("name".into(), v));
-        }
-        for f in [
-            "width_mm",
-            "height_mm",
-            "corner_radius_mm",
-            "media",
-            "density",
-        ] {
-            let s = props.get(f).cloned().unwrap_or(json!({"type": "number"}));
-            let text = app.i18n.t(&format!("prop-{}", f.replace('_', "-")));
-            if let Some(v) = prop_editor(ui, &text, &s, &label[f], units_for(f, app.units())) {
-                edits.push((f.into(), v));
-            }
-        }
-        let lbl = ui.label(app.i18n.t("prop-printer-model")).id;
-        let current = doc.label.printer_model.clone().unwrap_or_default();
-        let mut pick = current.clone();
-        let shown = models
-            .iter()
-            .find(|m| m.id == current)
-            .map_or_else(|| app.i18n.t("model-none"), |m| m.name.clone());
-        egui::ComboBox::from_id_salt("printer_model")
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                for m in &models {
-                    ui.selectable_value(
-                        &mut pick,
-                        m.id.clone(),
-                        format!("{} ({} dpi)", m.name, m.dpi),
-                    );
-                }
-            })
-            .response
-            .labelled_by(lbl);
-        if pick != current {
-            edits.push(("printer_model".into(), json!(pick)));
-        }
-        ui.end_row();
-    });
-    for (key, value) in edits {
-        let mut p = Map::new();
-        p.insert(key.clone(), value);
-        p.insert("coalesce".into(), json!(format!("label-{key}")));
-        if app.run_reporting("doc.set_label", Value::Object(p)).ok {
-            app.ui.fit_pending |= key.ends_with("_mm");
-        }
+/// Bottom tools: check results and printers.
+pub fn tools(app: &mut LabelyApp, ui: &mut Ui) {
+    let both = app.ui.show_check && app.ui.show_printers;
+    if both {
+        ui.columns(2, |cols| {
+            check_panel(app, &mut cols[0]);
+            printers_panel(app, &mut cols[1]);
+        });
+    } else if app.ui.show_check {
+        check_panel(app, ui);
+    } else {
+        printers_panel(app, ui);
     }
 }
 
-/// Bottom tools: check results and printers.
-pub fn tools(app: &mut LabelyApp, ui: &mut Ui) {
-    ui.columns(
-        usize::from(app.ui.show_check)
-            + usize::from(app.ui.show_printers)
-            + usize::from(app.ui.show_data),
-        |cols| {
-            let mut i = 0;
-            if app.ui.show_data {
-                data_panel(app, &mut cols[i]);
-                i += 1;
-            }
-            if app.ui.show_check {
-                check_panel(app, &mut cols[i]);
-                i += 1;
-            }
-            if app.ui.show_printers {
-                printers_panel(app, &mut cols[i]);
-            }
-        },
-    );
-}
-
-/// Data source, record navigator, column binding and serial counters.
 /// Sheet and header-row controls for a spreadsheet attached in this session.
-fn workbook_controls(app: &mut LabelyApp, ui: &mut Ui, doc_id: &str) {
+pub(crate) fn workbook_controls(app: &mut LabelyApp, ui: &mut Ui, doc_id: &str) {
     let Some(wb) = app.ui.workbook.clone().filter(|w| w.doc_id == doc_id) else {
         return;
     };
@@ -1048,113 +884,8 @@ fn workbook_controls(app: &mut LabelyApp, ui: &mut Ui, doc_id: &str) {
     }
 }
 
-fn data_panel(app: &mut LabelyApp, ui: &mut Ui) {
-    ui.heading(app.i18n.t("panel-data"));
-    let Some(doc) = app.session.doc_arc(None) else {
-        return;
-    };
-    let bindable = match app.selection().as_slice() {
-        [id] => doc.element(*id).is_some_and(|e| {
-            matches!(
-                e.kind,
-                labely_core::ElementKind::Text(_)
-                    | labely_core::ElementKind::Barcode(_)
-                    | labely_core::ElementKind::Code2d(_)
-            )
-        }),
-        _ => false,
-    };
-    let values = crate::canvas::record_values(&doc, app.ui.record);
-    egui::ScrollArea::vertical().id_salt("data").show(ui, |ui| {
-        match &doc.data {
-            None => {
-                ui.label(app.i18n.t("data-none"));
-                ui.horizontal(|ui| {
-                    for id in ["data.attach_csv", "data.attach_xlsx"] {
-                        if ui.button(menu::command_label(&app.i18n, id)).clicked() {
-                            menu::invoke(app, id);
-                        }
-                    }
-                });
-            }
-            Some(d) => {
-                let n = d.rows.len();
-                ui.horizontal(|ui| {
-                    if let Some(o) = &d.origin {
-                        ui.strong(o);
-                    }
-                    ui.label(
-                        app.i18n
-                            .t_args("data-records", &[("count", Arg::Num(n as f64))]),
-                    );
-                    if ui
-                        .small_button(menu::command_label(&app.i18n, "data.detach"))
-                        .clicked()
-                    {
-                        app.run_reporting("data.detach", json!({}));
-                    }
-                });
-                if let Some(doc_id) = app.session.active_doc_id().map(str::to_owned) {
-                    workbook_controls(app, ui, &doc_id);
-                }
-                if n > 0 {
-                    let mut record = app.ui.record.clamp(1, n);
-                    ui.horizontal(|ui| {
-                        let l = ui.label(app.i18n.t("data-record")).id;
-                        if ui.small_button("◀").clicked() {
-                            record = record.saturating_sub(1).max(1);
-                        }
-                        ui.add(egui::DragValue::new(&mut record).range(1..=n))
-                            .labelled_by(l);
-                        if ui.small_button("▶").clicked() {
-                            record = (record + 1).min(n);
-                        }
-                    });
-                    app.ui.record = record;
-                }
-                ui.weak(app.i18n.t("data-drag-hint"));
-                egui::Grid::new("data-columns")
-                    .num_columns(4)
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for c in &d.columns {
-                            column_source(ui, c);
-                            ui.weak(values.get(c).map_or("", String::as_str));
-                            add_from_column_menu(app, ui, c);
-                            if ui
-                                .add_enabled(
-                                    bindable,
-                                    egui::Button::new(app.i18n.t("action-bind")).small(),
-                                )
-                                .on_hover_text(app.i18n.t("action-bind-hint"))
-                                .clicked()
-                                && let [id] = app.selection().as_slice()
-                            {
-                                app.run_reporting("data.bind", json!({"id": id, "column": c}));
-                            }
-                            ui.end_row();
-                        }
-                    });
-            }
-        }
-        ui.separator();
-        ui.horizontal(|ui| {
-            ui.strong(app.i18n.t("data-serials"));
-            if ui
-                .small_button(menu::command_label(&app.i18n, "data.set_serial"))
-                .clicked()
-            {
-                menu::invoke(app, "data.set_serial");
-            }
-        });
-        for (name, spec) in &doc.serials {
-            serial_row(app, ui, name, spec, bindable, &values);
-        }
-    });
-}
-
 /// A column name that can be dragged onto the canvas.
-fn column_source(ui: &mut Ui, column: &str) {
+pub(crate) fn column_source(ui: &mut Ui, column: &str) {
     let id = egui::Id::unique(("column-drag", column));
     ui.dnd_drag_source(id, menu::ColumnDrag(column.to_owned()), |ui| {
         ui.add(egui::Label::new(column).sense(egui::Sense::drag()))
@@ -1164,7 +895,7 @@ fn column_source(ui: &mut Ui, column: &str) {
 }
 
 /// "+" menu: add a text, barcode or 2D code bound to the column.
-fn add_from_column_menu(app: &mut LabelyApp, ui: &mut Ui, column: &str) {
+pub(crate) fn add_from_column_menu(app: &mut LabelyApp, ui: &mut Ui, column: &str) {
     let has_doc = app.session.active_doc_id().is_some();
     ui.add_enabled_ui(has_doc, |ui| {
         ui.menu_button("+", |ui| {
@@ -1180,7 +911,7 @@ fn add_from_column_menu(app: &mut LabelyApp, ui: &mut Ui, column: &str) {
     });
 }
 
-fn serial_row(
+pub(crate) fn serial_row(
     app: &mut LabelyApp,
     ui: &mut Ui,
     name: &str,
@@ -1233,7 +964,7 @@ fn serial_row(
     }
 }
 
-fn check_panel(app: &mut LabelyApp, ui: &mut Ui) {
+pub(crate) fn check_panel(app: &mut LabelyApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.heading(app.i18n.t("panel-check"));
         if ui.button(app.i18n.t("action-run-check")).clicked() {
@@ -1277,7 +1008,7 @@ fn check_panel(app: &mut LabelyApp, ui: &mut Ui) {
         });
 }
 
-fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
+pub(crate) fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.heading(app.i18n.t("panel-printers"));
         if ui.button(app.i18n.t("action-scan")).clicked() {
@@ -1395,7 +1126,7 @@ fn device_details(app: &LabelyApp, ui: &mut Ui, d: &labely_core::services::Devic
 }
 
 /// Tips after a failed connect, by transport.
-fn connect_help(app: &mut LabelyApp, ui: &mut Ui, address: &str) {
+pub(crate) fn connect_help(app: &mut LabelyApp, ui: &mut Ui, address: &str) {
     let keys: &[&str] = if address.starts_with("usb:") {
         &[
             "connect-tip-power",
@@ -1435,182 +1166,6 @@ fn connect_help(app: &mut LabelyApp, ui: &mut Ui, address: &str) {
             }
         });
     });
-}
-
-/// Status bar: document, zoom, MCP state, last message.
-pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
-    ui.horizontal(|ui| {
-        if let Some(doc) = app.session.doc(None) {
-            let n = doc.elements().count();
-            ui.label(
-                app.i18n
-                    .t_args("status-elements", &[("count", Arg::Num(n as f64))]),
-            );
-            ui.separator();
-            ui.label(format!("{:.0}%", app.ui.zoom / 8.0 * 100.0));
-            ui.separator();
-        }
-        for d in app.session.services().devices.connected() {
-            let mut text = format!(
-                "🖶 {}",
-                d.model
-                    .as_ref()
-                    .map_or(d.name.as_str(), |m| m.name.as_str())
-            );
-            if let Some(b) = app
-                .ui
-                .device_status
-                .get(&d.address)
-                .and_then(|s| s["battery_percent"].as_u64())
-            {
-                text.push_str(&format!(" · 🔋 {b}%"));
-            }
-            let summary = device_summary(app, &d).join(" · ");
-            if ui.label(text).on_hover_text(summary).clicked() {
-                app.ui.show_printers = true;
-            }
-            ui.separator();
-        }
-        if let Some(n) = crate::jobs::active_count(app) {
-            ui.label(
-                app.i18n
-                    .t_args("status-jobs", &[("count", Arg::Num(n as f64))]),
-            );
-            ui.separator();
-        }
-        match &app.mcp {
-            Some(h) => {
-                ui.label(format!("MCP • {}", h.url.trim_start_matches("http://")))
-                    .on_hover_text(app.i18n.t("mcp-on-hint"));
-                ui.checkbox(
-                    &mut app.ui.allow_agent_print,
-                    app.i18n.t("action-allow-agent-print"),
-                );
-                if let Some(last) = app.ui.agent_log.back() {
-                    ui.label(RichText::new(format!("⚙ {last}")).weak());
-                }
-            }
-            None => {
-                ui.label(RichText::new(app.i18n.t("mcp-off")).weak());
-            }
-        }
-        if let Some(s) = &app.ui.status
-            && s.at.elapsed().as_secs() < 8
-        {
-            ui.separator();
-            let color = if s.error {
-                Color32::from_rgb(200, 60, 60)
-            } else {
-                ui.visuals().text_color()
-            };
-            ui.colored_label(color, &s.text);
-        }
-    });
-}
-
-/// Shown when no document is open.
-pub fn welcome(app: &mut LabelyApp, ui: &mut Ui) {
-    ui.vertical_centered(|ui| {
-        ui.add_space(ui.available_height() / 3.0);
-        ui.heading("Labely");
-        ui.label(app.i18n.t("welcome-text"));
-        ui.add_space(12.0);
-        if ui
-            .button(menu::command_label(&app.i18n, "doc.new"))
-            .clicked()
-        {
-            menu::invoke(app, "doc.new");
-        }
-        if ui
-            .button(menu::command_label(&app.i18n, "template.new"))
-            .clicked()
-        {
-            menu::invoke(app, "template.new");
-        }
-        if ui
-            .button(menu::command_label(&app.i18n, "doc.open"))
-            .clicked()
-        {
-            menu::invoke(app, "doc.open");
-        }
-        if !app.prefs.recent.is_empty() {
-            ui.add_space(16.0);
-            ui.label(RichText::new(app.i18n.t("menu-recent")).strong());
-            let mut open = None;
-            for path in &app.prefs.recent {
-                let name = path.file_name().map_or_else(
-                    || path.display().to_string(),
-                    |n| n.to_string_lossy().into_owned(),
-                );
-                if ui
-                    .link(name)
-                    .on_hover_text(path.display().to_string())
-                    .clicked()
-                {
-                    open = Some(path.clone());
-                }
-            }
-            if let Some(path) = open {
-                app.open_recent(&path);
-            }
-        }
-    });
-}
-
-/// One tab per open document: click to switch, × to close, + for a new label.
-pub fn doc_tabs(app: &mut LabelyApp, ui: &mut Ui) {
-    let docs = app
-        .run("doc.list", json!({}))
-        .result
-        .and_then(|r| r.get("docs").cloned())
-        .and_then(|d| d.as_array().cloned())
-        .unwrap_or_default();
-    let mut activate = None;
-    let mut close = None;
-    egui::ScrollArea::horizontal().show(ui, |ui| {
-        ui.horizontal(|ui| {
-            for d in &docs {
-                let id = d["doc_id"].as_str().unwrap_or_default().to_owned();
-                let name = d["name"].as_str().unwrap_or_default();
-                let dirty = if d["dirty"].as_bool() == Some(true) {
-                    " •"
-                } else {
-                    ""
-                };
-                let active = d["active"].as_bool() == Some(true);
-                let tab = ui
-                    .selectable_label(active, format!("{name}{dirty}"))
-                    .on_hover_text(d["path"].as_str().unwrap_or(name));
-                if tab.clicked() {
-                    activate = Some(id.clone());
-                }
-                if tab.middle_clicked() {
-                    close = Some(id.clone());
-                }
-                if ui
-                    .small_button("×")
-                    .on_hover_text(app.i18n.t("cmd-doc-close"))
-                    .clicked()
-                {
-                    close = Some(id);
-                }
-                ui.separator();
-            }
-            if ui
-                .small_button("+")
-                .on_hover_text(menu::command_label(&app.i18n, "doc.new"))
-                .clicked()
-            {
-                menu::invoke(app, "doc.new");
-            }
-        });
-    });
-    if let Some(id) = activate {
-        app.activate(&id);
-    }
-    if let Some(id) = close {
-        app.request_close(&id);
-    }
 }
 
 /// The print raster at one screen point per dot.
