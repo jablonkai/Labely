@@ -1186,3 +1186,23 @@ fn home_pages_settings_printers_history() {
     h.run();
     assert_eq!(h.state().ui.home_page, labely_studio::home::Page::History);
 }
+
+#[test]
+fn printers_page_connects_a_found_printer() {
+    let dir = tempfile::tempdir().unwrap();
+    let address = format!("fake:{}", dir.path().join("out").display());
+    let mut app = LabelyApp::new(None, options());
+    app.ui.scanned = vec![json!({"name": "Fake printer", "address": address})];
+    app.ui.home_page = labely_studio::home::Page::Printers;
+    let mut h = harness(app);
+    h.run();
+    // The found printer's button, not the manual address row's.
+    h.get_all_by_label("Connect").next().unwrap().click();
+    h.run();
+    let connected = h.state().session.services().devices.connected();
+    assert!(
+        connected.iter().any(|d| d.address == address),
+        "{:?}",
+        h.state().ui.status
+    );
+}

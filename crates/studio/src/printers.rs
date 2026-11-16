@@ -38,13 +38,16 @@ fn printer_icon(ui: &mut Ui, size: f32, active: bool) {
     icons::paint(ui.painter(), r.shrink(size * 0.27), "printer", fg, 1.5);
 }
 
-/// A device row card; the trailing area holds a badge or a button.
+/// A device row card; the trailing area holds a badge or a button. Only a `clickable` row
+/// takes clicks itself: a row-wide click area would sit on top of a button inside it and
+/// swallow its clicks.
 fn device_row(
     ui: &mut Ui,
     name: &str,
     sub: &str,
     dot: Color32,
     selected: bool,
+    clickable: bool,
     trailing: impl FnOnce(&mut Ui),
 ) -> egui::Response {
     let stroke = if selected {
@@ -79,6 +82,9 @@ fn device_row(
             });
         })
         .response;
+    if !clickable {
+        return r;
+    }
     let label = name.to_owned();
     let r = r.interact(Sense::click());
     r.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &label));
@@ -184,9 +190,17 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
         sub.extend(panels::device_summary(app, d));
         let active = app.ui.printer.as_deref() == Some(d.address.as_str());
         let text = app.i18n.t("printers-connected");
-        if device_row(ui, &name, &sub.join(" · "), theme::GREEN, active, |ui| {
-            badge(ui, &text, theme::GREEN, theme::GREEN_TINT);
-        })
+        if device_row(
+            ui,
+            &name,
+            &sub.join(" · "),
+            theme::GREEN,
+            active,
+            true,
+            |ui| {
+                badge(ui, &text, theme::GREEN, theme::GREEN_TINT);
+            },
+        )
         .clicked()
         {
             app.ui.printer = Some(d.address.clone());
@@ -224,7 +238,7 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
         let name = d["name"].as_str().unwrap_or("?").to_owned();
         let sub = format!("{} · {address}", transport(&address));
         let label = app.i18n.t("action-connect");
-        device_row(ui, &name, &sub, theme::PRIMARY, false, |ui| {
+        device_row(ui, &name, &sub, theme::PRIMARY, false, false, |ui| {
             if ui
                 .add(egui::Button::new(label).min_size(vec2(0.0, 30.0)))
                 .clicked()
