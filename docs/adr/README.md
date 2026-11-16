@@ -28,3 +28,4 @@
 | [0024](0024-phase-3-close-out.md) | Phase 3 close-out: device identity, font files, justify and studio gaps | proposed |
 | [0025](0025-ffi-engine-and-native-ble.md) | FFI engine and native BLE host (Phase 4 start) | proposed |
 | [0026](0026-android-build.md) | Android build | proposed |
+| [0027](0027-android-ui-and-ble.md) | Android UI and BLE | proposed |

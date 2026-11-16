@@ -1,8 +1,156 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Labely</string>
-    <string name="engine_version">Motor API %1$d</string>
-    <string name="print_test">Tesztcímke nyomtatása a szimulátoron</string>
-    <string name="print_done">Kinyomtatva a szimulátoron</string>
-    <string name="print_failed">A nyomtatás sikertelen: %1$s</string>
+    <string name="engine_version">API %1$d</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">Kezdőlap</string>
+    <string name="tab_templates">Sablonok</string>
+    <string name="tab_history">Előzmények</string>
+    <string name="tab_printers">Nyomtatók</string>
+    <string name="tab_settings">Beállítások</string>
+
+    <!-- Common -->
+    <string name="apply">Alkalmaz</string>
+    <string name="cancel">Mégse</string>
+    <string name="create">Létrehozás</string>
+    <string name="delete">Törlés</string>
+    <string name="save">Mentés</string>
+    <string name="see_all">Összes</string>
+
+    <!-- Home -->
+    <string name="home_greeting">Szép napot!</string>
+    <string name="home_title">Milyen címkét készítünk ma?</string>
+    <string name="home_search">Sablonok és címkék keresése</string>
+    <string name="home_new">Új címke</string>
+    <string name="home_new_sub">Üres, bármilyen méret</string>
+    <string name="home_from_template">Sablonból</string>
+    <string name="home_from_template_sub">10 kezdő sablon</string>
+    <string name="home_open">Megnyitás</string>
+    <string name="home_open_sub">.labely fájl</string>
+    <string name="home_starters">Kezdő sablonok</string>
+    <string name="home_recent">Legutóbbiak</string>
+    <string name="new_label">Új címke</string>
+    <string name="new_label_name">Címke</string>
+
+    <!-- Templates -->
+    <string name="templates_sub">Kezdő sablonok és saját mappák</string>
+    <string name="templates_search">Keresés a sablonok között</string>
+    <plurals name="templates_count">
+        <item quantity="one">%1$d sablon</item>
+        <item quantity="other">%1$d sablon</item>
+    </plurals>
+    <string name="filter_all">Mind</string>
+    <string name="filter_starters">Kezdő</string>
+    <string name="filter_mine">Saját</string>
+    <string name="template_delete_title">Törlöd a sablont?</string>
+    <string name="template_delete_body">A(z) „%1$s” sablon kikerül a könyvtáradból.</string>
+    <string name="template_name_badge">Névkártya</string>
+    <string name="template_price_tag">Árcédula</string>
+    <string name="template_asset_tag">Leltárcímke</string>
+    <string name="template_address">Címzés</string>
+    <string name="template_qr_link">QR-link</string>
+    <string name="template_storage_box">Tárolódoboz</string>
+    <string name="template_jar">Befőttesüveg</string>
+    <string name="template_cable_flag">Kábelzászló</string>
+    <string name="template_wifi">Wi-Fi</string>
+    <string name="template_shipping">Szállítás</string>
+
+    <!-- History -->
+    <string name="history_sub">Minden, amit kinyomtattál</string>
+    <string name="history_empty">Még nem nyomtattál semmit</string>
+    <string name="history_failed">Sikertelen</string>
+
+    <!-- Printers -->
+    <string name="printers_sub">Bluetooth hőnyomtatók</string>
+    <string name="printers_known">Ismert nyomtatók</string>
+    <string name="printers_search">Keresés</string>
+    <string name="printers_found">A közelben</string>
+    <string name="printers_none_found">Nem található nyomtató</string>
+    <string name="printers_none_found_hint">Kapcsold be a nyomtatót, és tartsd a közelben</string>
+    <string name="scanning">Keresés…</string>
+    <string name="no_printer">Nincs nyomtató</string>
+    <string name="no_printer_hint">Keress egy nyomtatót, és csatlakozz hozzá</string>
+    <string name="choose_printer">Válassz nyomtatót</string>
+    <string name="connect">Csatlakozás</string>
+    <string name="connected">Csatlakozva</string>
+    <string name="disconnect">Leválasztás</string>
+    <string name="calibrate">Kalibrálás</string>
+    <string name="calibrated">A kalibrálás kész</string>
+    <string name="firmware">Firmware %1$s</string>
+    <string name="battery">Akku</string>
+    <string name="paper">Papír</string>
+    <string name="paper_loaded">Betöltve</string>
+    <string name="paper_missing">Nincs</string>
+    <string name="transport_ble">Bluetooth</string>
+    <string name="transport_sim">Szimulátor</string>
+    <string name="simulator">B21 Pro szimulátor</string>
+    <string name="ble_denied">A nyomtatók kereséséhez a Labelynek Bluetooth-engedély kell</string>
+
+    <!-- Editor -->
+    <string name="saved">Mentve</string>
+    <string name="not_saved">Mentés…</string>
+    <string name="inspector_hint">Koppints egy elemre a címkén a szerkesztéshez, vagy szúrj be újat</string>
+    <string name="text_hint">Szöveg</string>
+    <string name="data_hint">Adat</string>
+    <string name="width_short">Sz</string>
+    <string name="height_short">M</string>
+    <string name="tool_insert">Beszúrás</string>
+    <string name="tool_layers">Rétegek</string>
+    <string name="tool_template">Sablon</string>
+    <string name="tool_label">Címke</string>
+    <string name="new_text">Szöveg</string>
+    <string name="layers_empty">A címke üres</string>
+    <string name="save_template">Mentés sablonként</string>
+    <string name="template_name">Név</string>
+    <string name="kind_text">Szöveg</string>
+    <string name="kind_barcode">Vonalkód</string>
+    <string name="kind_code2d">QR-kód</string>
+    <string name="kind_image">Kép</string>
+    <string name="kind_rect">Téglalap</string>
+    <string name="kind_ellipse">Ellipszis</string>
+    <string name="kind_line">Vonal</string>
+    <string name="kind_table">Táblázat</string>
+    <string name="kind_icon">Ikon</string>
+    <string name="kind_border">Keret</string>
+    <string name="kind_element">Elem</string>
+
+    <!-- Label size -->
+    <string name="label_title">Címke</string>
+    <string name="size">Méret</string>
+    <string name="width">Szélesség</string>
+    <string name="height">Magasság</string>
+    <string name="paper_type">Papírtípus</string>
+    <string name="orientation">Tájolás</string>
+    <string name="landscape">Fekvő</string>
+    <string name="portrait">Álló</string>
+    <string name="media_gap">Résközös</string>
+    <string name="media_black_mark">Fekete jeles</string>
+    <string name="media_continuous">Folyamatos</string>
+    <string name="media_transparent">Átlátszó</string>
+
+    <!-- Print -->
+    <string name="print">Nyomtatás</string>
+    <string name="copies">Példányszám</string>
+    <string name="density">Sötétség</string>
+    <string name="check_ok">Ellenőrizve, nincs hiba</string>
+    <string name="printing_progress">Nyomtatás: %1$d / %2$d…</string>
+    <string name="print_done">Kinyomtatva</string>
+    <string name="print_failed">A nyomtatás nem sikerült: %1$s</string>
+    <plurals name="print_labels">
+        <item quantity="one">%1$d címke nyomtatása</item>
+        <item quantity="other">%1$d címke nyomtatása</item>
+    </plurals>
+    <plurals name="labels">
+        <item quantity="one">%1$d címke</item>
+        <item quantity="other">%1$d címke</item>
+    </plurals>
+
+    <!-- Settings -->
+    <string name="settings_language">Nyelv</string>
+    <string name="settings_language_sub">Magyar vagy angol, alkalmazásonként</string>
+    <string name="settings_permissions">Engedélyek</string>
+    <string name="settings_permissions_sub">Bluetooth-hozzáférés a nyomtatókhoz</string>
+    <string name="settings_version">Verzió</string>
+    <string name="settings_engine">Motor</string>
 </resources>

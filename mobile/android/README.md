@@ -19,3 +19,9 @@ cargo-ndk and generates its Kotlin bindings, and `:app` is the UI.
 ```
 
 The Rust libraries and the Kotlin bindings are generated into `build/`. Never commit them.
+
+## App
+
+The screens follow `design/labely-mobile.figcraft` (ADR-0027). Debug builds list the B21 Pro
+simulator under Printers, so editing and printing work without hardware. A real printer needs
+Bluetooth on and the Nearby devices permission, which the app asks for on the first search.
