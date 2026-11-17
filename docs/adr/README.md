@@ -34,3 +34,4 @@
 | [0030](0030-ios-build.md) | iOS build (Phase 5 start) | proposed |
 | [0031](0031-device-events.md) | Device events | proposed |
 | [0032](0032-ios-ui-and-ble.md) | iOS UI and BLE | proposed |
+| [0033](0033-ios-app-intents.md) | iOS App Intents | proposed |

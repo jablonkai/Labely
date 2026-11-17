@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 @main
 struct LabelyApp: App {
-    @State private var state: AppState = Self.makeState()
+    @State private var state: AppState = Shared.state
 
     var body: some Scene {
         WindowGroup {
@@ -14,10 +14,16 @@ struct LabelyApp: App {
                 .tint(Palette.primary)
         }
     }
+}
 
-    /// The engine and the UI state for the life of the process (ADR-0032). The engine's data
-    /// lives in Application Support; labels are saved in its `labels` folder.
-    @MainActor
+/// The engine and the UI state for the life of the process (ADR-0032), shared by the screens
+/// and the App Intents (ADR-0033), which may run before any scene exists.
+@MainActor
+enum Shared {
+    static let state = makeState()
+    static let assistant = Assistant(app: state, simulatorName: L("simulator"), templateName: displayName)
+
+    /// The engine's data lives in Application Support; labels are saved in its `labels` folder.
     private static func makeState() -> AppState {
         let fm = FileManager.default
         let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

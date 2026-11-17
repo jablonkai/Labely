@@ -2,10 +2,9 @@ import LabelyKit
 import SwiftUI
 
 /// M10 · Beállítások, reduced to what the shell has: language and Bluetooth (both in the app's
-/// page of the Settings app) and version information. The assistant print consent comes with
-/// App Intents (5.4).
+/// page of the Settings app), the assistant print consent (ADR-0033) and version information.
 struct SettingsScreen: View {
-    let state: AppState
+    @Bindable var state: AppState
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -24,6 +23,13 @@ struct SettingsScreen: View {
                         IconTile(.bluetooth)
                     } trailing: {
                         LIcon(.chevRight, Palette.muted, size: 18)
+                    }
+                }
+                ListGroup {
+                    ListRow(title: L("settings_agent_print"), subtitle: L("settings_agent_print_sub")) {
+                        IconTile(.printer)
+                    } trailing: {
+                        Toggle("", isOn: $state.allowAgentPrint).labelsHidden()
                     }
                 }
                 ListGroup {

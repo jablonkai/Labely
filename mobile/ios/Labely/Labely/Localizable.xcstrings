@@ -641,6 +641,806 @@
         }
       }
     },
+    "intent_err_bluetooth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth is off or not allowed. Turn it on and open Labely once to allow it."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Bluetooth ki van kapcsolva vagy nincs engedélyezve. Kapcsold be, és nyisd meg egyszer a Labelyt az engedélyezéshez."
+          }
+        }
+      }
+    },
+    "intent_err_copies": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copies must be 1 to %lld."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A példányszám 1 és %lld között lehet."
+          }
+        }
+      }
+    },
+    "intent_err_empty_text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text is empty."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A szöveg üres."
+          }
+        }
+      }
+    },
+    "intent_err_field_line": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” is not name=value."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@” nem név=érték alakú."
+          }
+        }
+      }
+    },
+    "intent_err_no_field": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The template has no field “%1$@”. Its fields: %2$@."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A sablonnak nincs „%1$@” mezője. A mezői: %2$@."
+          }
+        }
+      }
+    },
+    "intent_err_no_label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is no saved label “%@”."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nincs „%@” mentett címke."
+          }
+        }
+      }
+    },
+    "intent_err_no_printer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No printer is chosen. Connect one in Labely or pick one."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nincs kiválasztott nyomtató. Csatlakozz egyhez a Labelyben, vagy válassz egyet."
+          }
+        }
+      }
+    },
+    "intent_err_no_template": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is no template “%@”."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nincs „%@” sablon."
+          }
+        }
+      }
+    },
+    "intent_err_print_consent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Labely does not let assistants print yet. Turn on “%@” in Labely’s settings."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Labely még nem engedi az asszisztenseknek a nyomtatást. Kapcsold be a Labely beállításaiban: „%@”."
+          }
+        }
+      }
+    },
+    "intent_err_print_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The print failed: %@"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A nyomtatás nem sikerült: %@"
+          }
+        }
+      }
+    },
+    "intent_err_size": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A %@ label is out of range (10–120 × 5–120 mm)."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A(z) %@ méretű címke kívül esik a tartományon (10–120 × 5–120 mm)."
+          }
+        }
+      }
+    },
+    "intent_err_timeout": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The print did not finish in time. The print queue may be paused."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A nyomtatás nem fejeződött be időben. Lehet, hogy a nyomtatási sor szünetel."
+          }
+        }
+      }
+    },
+    "intent_err_unreachable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The printer does not answer. Switch it on and bring it close."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A nyomtató nem válaszol. Kapcsold be, és vidd közelebb."
+          }
+        }
+      }
+    },
+    "intent_p_copies": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copies"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Példányszám"
+          }
+        }
+      }
+    },
+    "intent_p_fields": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fields"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mezők"
+          }
+        }
+      }
+    },
+    "intent_p_height": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Height (mm)"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magasság (mm)"
+          }
+        }
+      }
+    },
+    "intent_p_label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke"
+          }
+        }
+      }
+    },
+    "intent_p_printer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Printer"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyomtató"
+          }
+        }
+      }
+    },
+    "intent_p_query": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keresés"
+          }
+        }
+      }
+    },
+    "intent_p_scan": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search nearby"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keresés a közelben"
+          }
+        }
+      }
+    },
+    "intent_p_template": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Template"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sablon"
+          }
+        }
+      }
+    },
+    "intent_p_text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szöveg"
+          }
+        }
+      }
+    },
+    "intent_p_width": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Width (mm)"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szélesség (mm)"
+          }
+        }
+      }
+    },
+    "intent_print_desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prints a saved label and waits until it has printed. Turn on “Allow assistants to print” in Labely’s settings first."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinyomtat egy mentett címkét, és megvárja, amíg elkészül. Előbb kapcsold be a Labely beállításaiban: „Nyomtathatnak az asszisztensek”."
+          }
+        }
+      }
+    },
+    "intent_print_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print Label"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke nyomtatása"
+          }
+        }
+      }
+    },
+    "intent_printed_dialog": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Printed “%1$@”: %2$lld of %3$lld."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%1$@” kinyomtatva: %2$lld/%3$lld."
+          }
+        }
+      }
+    },
+    "intent_printers_desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lists the connected printer and those Labely connected to before. Search nearby takes about 5 seconds."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Felsorolja a csatlakoztatott nyomtatót és azokat, amelyekhez a Labely korábban csatlakozott. A közeli keresés kb. 5 másodperc."
+          }
+        }
+      }
+    },
+    "intent_printers_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List Label Printers"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címkenyomtatók listája"
+          }
+        }
+      }
+    },
+    "intent_prop_battery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery (%)"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akku (%)"
+          }
+        }
+      }
+    },
+    "intent_prop_connected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Csatlakoztatva"
+          }
+        }
+      }
+    },
+    "intent_prop_folder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappa"
+          }
+        }
+      }
+    },
+    "intent_prop_model": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Típus"
+          }
+        }
+      }
+    },
+    "intent_prop_name": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Név"
+          }
+        }
+      }
+    },
+    "intent_prop_paper": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paper"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Papír"
+          }
+        }
+      }
+    },
+    "intent_prop_warnings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warnings"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Figyelmeztetések"
+          }
+        }
+      }
+    },
+    "intent_saved_dialog": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved “%@”."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@” elmentve."
+          }
+        }
+      }
+    },
+    "intent_short_text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text Label"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szöveges címke"
+          }
+        }
+      }
+    },
+    "intent_status_desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gets a printer's battery and paper, connecting to it first if needed."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lekéri a nyomtató akkuját és papírját; ha kell, előbb csatlakozik hozzá."
+          }
+        }
+      }
+    },
+    "intent_status_dialog": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: battery %2$@, paper %3$@."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: akku %2$@, papír: %3$@."
+          }
+        }
+      }
+    },
+    "intent_status_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Printer Status"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyomtató állapota"
+          }
+        }
+      }
+    },
+    "intent_t_label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke"
+          }
+        }
+      }
+    },
+    "intent_t_printer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label Printer"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címkenyomtató"
+          }
+        }
+      }
+    },
+    "intent_t_template": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label Template"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címkesablon"
+          }
+        }
+      }
+    },
+    "intent_template_desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creates a label from a template, fills in its fields and saves it, ready to print. Give each field as name=value; the others keep their sample value."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címkét készít egy sablonból, kitölti a mezőit, és nyomtatásra készen elmenti. Minden mezőt név=érték alakban adj meg; a többi megtartja a mintaértékét."
+          }
+        }
+      }
+    },
+    "intent_template_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Label from Template"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke sablonból"
+          }
+        }
+      }
+    },
+    "intent_templates_desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lists the starter templates and your own, with the fields each one can fill in."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Felsorolja a beépített és a saját sablonokat, a kitölthető mezőikkel együtt."
+          }
+        }
+      }
+    },
+    "intent_templates_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List Label Templates"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címkesablonok listája"
+          }
+        }
+      }
+    },
+    "intent_text_desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creates a label that shows a text and saves it, ready to print. The text is centred and shrinks to fit."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címkét készít egy szövegből, és nyomtatásra készen elmenti. A szöveg középre kerül, és kisebb lesz, ha nem fér el."
+          }
+        }
+      }
+    },
+    "intent_text_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Label from Text"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke szövegből"
+          }
+        }
+      }
+    },
+    "intent_unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ismeretlen"
+          }
+        }
+      }
+    },
     "kind_barcode": {
       "localizations": {
         "en": {
@@ -1469,6 +2269,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "Összes"
+          }
+        }
+      }
+    },
+    "settings_agent_print": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow assistants to print"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyomtathatnak az asszisztensek"
+          }
+        }
+      }
+    },
+    "settings_agent_print_sub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siri and Shortcuts may print labels"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Siri és a Parancsok is nyomtathat"
           }
         }
       }
