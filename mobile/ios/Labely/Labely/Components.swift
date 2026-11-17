@@ -292,7 +292,7 @@ struct NumberField: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 12)
         HStack(spacing: 8) {
-            Text(label).style(.caption)
+            Text(label).style(.caption).lineLimit(1).fixedSize()
             TextField("", text: $text)
                 .style(.body)
                 .keyboardType(.decimalPad)

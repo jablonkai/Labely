@@ -28,8 +28,9 @@ struct InsertSheet: View {
                             Text(label).style(.bodyStrong.with(size: 14)).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity)
-                        .aspectRatio(1.2, contentMode: .fit)
+                        .frame(height: 96)
                         .background(Palette.bg, in: RoundedRectangle(cornerRadius: 16))
+                        .contentShape(RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.plain)
                 }
