@@ -24,6 +24,9 @@
 | getPrinterStatus(printerId) | device.status |
 | printLabel(docId, printerId, copies) | print.submit (needs a one-time user consent) |
 
+Android names the parameters `widthMm, heightMm` and `labelId`, and print consent is a
+setting the user turns on once (ADR-0028, ADR-0029).
+
 ## Consequences
 - The shells hold no editing logic.
 - If the AppFunctions API changes, only one Android module is affected.

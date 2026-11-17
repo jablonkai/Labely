@@ -7,11 +7,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -55,28 +60,38 @@ import org.labely.app.ui.theme.Type
 private enum class Sheet { Insert, Layers, Label, SaveTemplate, Print }
 
 /** M2 · Szerkesztő: canvas, inspector of the selected element and the editing toolbar. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
     var sheet by remember { mutableStateOf<Sheet?>(null) }
+    // Text and number fields commit when they lose focus. Hiding the keyboard (Back) or opening
+    // a sheet such as Print leaves focus in place, so clear it there: a pending edit is never lost.
+    val focus = LocalFocusManager.current
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) { if (!imeVisible) focus.clearFocus() }
+    val open = { s: Sheet ->
+        focus.clearFocus()
+        sheet = s
+    }
     BackHandler { if (ed.selectedId != null) ed.selectedId = null else onClose() }
     val doc = ed.doc ?: return
 
     Column(Modifier.fillMaxSize().background(Palette.surface).statusBarsPadding().navigationBarsPadding()) {
-        TopBar(ed, onClose, onPrint = { sheet = Sheet.Print })
+        TopBar(ed, onClose, onPrint = { open(Sheet.Print) })
         Box(Modifier.weight(1f).fillMaxWidth().background(Palette.canvas)) {
             LabelCanvas(ed, Modifier.fillMaxSize().padding(bottom = 56.dp))
             PaperBar(sizeText(doc.label.widthMm, doc.label.heightMm) + " · " + mediaName(doc.label.media), Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)) {
-                sheet = Sheet.Label
+                open(Sheet.Label)
             }
         }
         HorizontalDivider(color = Palette.border)
         Inspector(ed)
         HorizontalDivider(color = Palette.border)
         Toolbar(
-            onInsert = { sheet = Sheet.Insert },
-            onLayers = { sheet = Sheet.Layers },
-            onTemplate = { sheet = Sheet.SaveTemplate },
-            onLabel = { sheet = Sheet.Label },
+            onInsert = { open(Sheet.Insert) },
+            onLayers = { open(Sheet.Layers) },
+            onTemplate = { open(Sheet.SaveTemplate) },
+            onLabel = { open(Sheet.Label) },
         )
     }
 

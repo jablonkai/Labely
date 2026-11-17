@@ -1,5 +1,8 @@
 package org.labely.app.appfunctions
 
+import android.app.Application
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.os.Looper
 import androidx.appfunctions.AppFunctionData
@@ -29,6 +32,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.labely.app.LabelyApplication
 import org.labely.app.SIM_ADDRESS
+import org.labely.app.ble.BlePermissions
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -139,6 +143,23 @@ class LabelyFunctionsTest {
         failure<androidx.appfunctions.AppFunctionElementNotFoundException>(
             call("printLabel") { setString("labelId", "../secret.labely"); setString("printerId", SIM_ADDRESS) },
         )
+    }
+
+    @Test
+    fun listPrintersScanAsksForBluetoothPermission() {
+        val e = failure<AppFunctionPermissionRequiredException>(call("listPrinters") { setBoolean("scan", true) })
+        assertTrue(e.errorMessage.orEmpty().contains("Bluetooth"))
+    }
+
+    @Test
+    fun listPrintersScanSearchesWhenAllowed() {
+        shadowOf(context as Application).grantPermissions(*BlePermissions.required)
+        val adapter = context.getSystemService(BluetoothManager::class.java).adapter
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        shadowOf(adapter).setEnabled(true)
+        val printers = result(call("listPrinters") { setBoolean("scan", true) }).list(Printer::class.java)
+        // Robolectric's scanner finds nothing, so only the debug simulator is listed.
+        assertEquals(listOf(SIM_ADDRESS), printers.map { it.printerId })
     }
 
     // ---- helpers ----
