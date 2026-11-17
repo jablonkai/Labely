@@ -8,3 +8,4 @@
 /mobile/ios/LabelyFFI/Sources/LabelyFFI/LabelyFFI.swift
 /mobile/ios/**/.build/
 /mobile/ios/**/.swiftpm/
+/mobile/ios/**/xcuserdata/

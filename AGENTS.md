@@ -14,6 +14,7 @@ cargo xtask bindings kotlin        # generate the UniFFI Kotlin sources into tar
 (cd mobile/android && ./gradlew :app:assembleDebug)   # Android app; see mobile/android/README.md
 cargo xtask xcframework            # iOS XCFramework and Swift bindings; see mobile/ios/README.md
 (cd mobile/ios/LabelyFFI && swift test)              # Swift engine smoke tests (macOS slice)
+(cd mobile/ios/LabelyKit && swift test)              # iOS shell logic on the engine (macOS)
 cargo xtask bless                  # rewrite render goldens after an intended change
 cargo xtask schema-hash            # print the command-schema hash
 ```

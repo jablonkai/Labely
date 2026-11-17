@@ -33,3 +33,4 @@
 | [0029](0029-phase-4-close-out.md) | Phase 4 close-out | proposed |
 | [0030](0030-ios-build.md) | iOS build (Phase 5 start) | proposed |
 | [0031](0031-device-events.md) | Device events | proposed |
+| [0032](0032-ios-ui-and-ble.md) | iOS UI and BLE | proposed |

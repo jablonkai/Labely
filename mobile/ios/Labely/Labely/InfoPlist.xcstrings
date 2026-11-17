@@ -1,0 +1,18 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Labely" } },
+        "hu" : { "stringUnit" : { "state" : "translated", "value" : "Labely" } }
+      }
+    },
+    "NSBluetoothAlwaysUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Labely finds and connects to your label printer over Bluetooth." } },
+        "hu" : { "stringUnit" : { "state" : "translated", "value" : "A Labely Bluetooth-on keresi meg a címkenyomtatót, és ezen csatlakozik hozzá." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
