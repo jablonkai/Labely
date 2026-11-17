@@ -63,7 +63,7 @@ public final class AppState {
     private static let maxKnown = 8
 
     public let engine: Engine
-    /// Where labels are saved; App Intents address labels by their file name here (5.4).
+    /// Where labels are saved; App Intents address labels by their file name here (ADR-0033).
     public let labelsDir: URL
     public let debug: Bool
     /// Name of a new blank label, in the user's language.
@@ -89,6 +89,12 @@ public final class AppState {
 
     public private(set) var editor: EditorState?
 
+    /// Whether App Intents may print (ADR-0033). Off until the user turns it on, like the
+    /// studio's "Allow agents to print".
+    public var allowAgentPrint = false {
+        didSet { defaults.set(allowAgentPrint, forKey: "allow_agent_print") }
+    }
+
     /// The model new documents and checks use.
     public var modelId: String { printer?.model?.id ?? Self.defaultModel }
 
@@ -100,6 +106,7 @@ public final class AppState {
         try? FileManager.default.createDirectory(at: labelsDir, withIntermediateDirectories: true)
         recents = loadRecents()
         known = load([KnownPrinter].self, "known") ?? []
+        allowAgentPrint = defaults.bool(forKey: "allow_agent_print")
     }
 
     /// Follow the engine's printer events and load the lists. Returns the loading task.

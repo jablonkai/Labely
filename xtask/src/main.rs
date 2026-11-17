@@ -159,9 +159,11 @@ const ANDROID_RES: &[&str] = &["mobile/android/app/src/main/res"];
 const IOS_CATALOGS: &[&str] = &[
     "mobile/ios/Labely/Labely/Localizable.xcstrings",
     "mobile/ios/Labely/Labely/InfoPlist.xcstrings",
+    "mobile/ios/Labely/Labely/AppShortcuts.xcstrings",
 ];
 
-/// iOS Swift sources whose `L("key")` literals must be in `Localizable.xcstrings`.
+/// iOS Swift sources whose `L("key")` and `"intent_…"` literals must be in
+/// `Localizable.xcstrings` (ADR-0032, ADR-0033).
 const IOS_SOURCES: &str = "mobile/ios/Labely/Labely";
 
 /// Every key of an Xcode string catalog must have an EN and a HU value (a string or plural
@@ -189,7 +191,8 @@ fn xcstrings_check(
     Ok(strings.keys().cloned().collect())
 }
 
-/// `L("key")` string literals (without interpolation) in the Swift files of `dir`.
+/// `L("key")` string literals (without interpolation) in the Swift files of `dir`, and the
+/// `"intent_…"` keys of the App Intents' `LocalizedStringResource`s.
 fn swift_l_keys(dir: &std::path::Path) -> Result<Vec<(String, String)>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir)? {
@@ -207,6 +210,13 @@ fn swift_l_keys(dir: &std::path::Path) -> Result<Vec<(String, String)>> {
                 && !key.contains('\\')
             {
                 out.push((file.clone(), key.to_owned()));
+            }
+        }
+        for part in text.split("\"intent_").skip(1) {
+            if let Some((rest, _)) = part.split_once('"')
+                && rest.chars().all(|c| c.is_ascii_lowercase() || c == '_')
+            {
+                out.push((file.clone(), format!("intent_{rest}")));
             }
         }
     }
@@ -235,7 +245,7 @@ fn i18n_check() -> Result<()> {
             for (file, key) in swift_l_keys(&repo.join(IOS_SOURCES))? {
                 if !keys.contains(&key) {
                     errors.push(format!(
-                        "{IOS_SOURCES}/{file}: `L(\"{key}\")` is not in {catalog}"
+                        "{IOS_SOURCES}/{file}: key `{key}` is not in {catalog}"
                     ));
                 }
             }

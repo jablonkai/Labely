@@ -1,0 +1,70 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Check my ${applicationName} printer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check my ${applicationName} printer"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName} nyomtató állapota"
+          }
+        }
+      }
+    },
+    "Create a ${applicationName} label": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a ${applicationName} label"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Új ${applicationName} címke"
+          }
+        }
+      }
+    },
+    "Make a label in ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make a label in ${applicationName}"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke készítése a ${applicationName} appban"
+          }
+        }
+      }
+    },
+    "Print a label with ${applicationName}": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print a label with ${applicationName}"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Címke nyomtatása a ${applicationName} appal"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

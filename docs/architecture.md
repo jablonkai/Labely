@@ -294,10 +294,11 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
     `@RequiresApi(36)`):** `createLabelFromText`, `createLabelFromTemplate`, `listTemplates`,
     `listPrinters`, `getPrinterStatus`, `printLabel`. Each one maps 1:1 onto a command or batch
     through `LabelyEngine.execute` (ADR-0011).
-- **iOS shell** (SwiftUI, min iOS 17).
-  - **App Intents:** the same six intents, with `AppEntity` for templates and printers and
-    `AppShortcutsProvider`, all mapped onto `execute`.
-  - **Later:** newer APIs such as `LongRunningIntent` for printing, behind availability checks.
+- **iOS shell** (SwiftUI, min iOS 18).
+  - **App Intents:** the same six intents, with `AppEntity` for labels, templates and printers
+    and `AppShortcutsProvider`, all mapped onto `execute` through `LabelyKit.Assistant`
+    (ADR-0033).
+  - **Later:** `LongRunningIntent` for printing once the app targets iOS 27.
 
 ## 8. Localisation (ADR-0009)
 
