@@ -111,12 +111,14 @@ Phase 4 lands in slices, one pull request each (ADR-0025).
 | 4.2 Android build | `mobile/android` Gradle project, cargo-ndk builds, generated bindings, smoke instrumented test, CI job | done (ADR-0026) |
 | 4.3 Android UI and BLE | Kotlin `BluetoothGatt` `NativeBle`, permissions, Compose editor, templates and print after `design/labely-mobile.figcraft` | done (ADR-0027) |
 | 4.4 AppFunctions | the six functions of ADR-0011, print consent, `appfunctions-testing` | done (ADR-0028) |
-| 4.5 Close-out | print from a phone to the B21 Pro; exit audit | next |
+| 4.5 Close-out | print from a phone to the B21 Pro; exit audit; scan and permission tests; editor commit on keyboard hide; deferred items given reasons | done (ADR-0029) |
 
 ## Phase 5: iOS shell + App Intents
 
 - UniFFI Swift bindings (XCFramework), CoreBluetooth `NativeBleLink`, SwiftUI UI, App Intents and
   App Shortcuts.
+- Device-event callback (printer state pushed to the shell) for both shells, replacing polling
+  (ADR-0029).
 - **Exit criteria:** printing from an iPhone to the B21 Pro; the intents run from Shortcuts.
 
 ## Phase 6: More models and vendors, packaging, releases
@@ -131,6 +133,9 @@ Phase 4 lands in slices, one pull request each (ADR-0025).
 ## Later (after Phase 6)
 
 Ideas parked until everything above is done.
+
+- **Mobile parity.** Android and iOS get these from one design pass (ADR-0029): data merge,
+  the barcode screen, export, printer settings, pinch zoom, resize handles and images.
 
 - **Smarter RFID paper detection.** The tag has no size (protocol.md §10), so today an unknown
   roll is linked to a paper once by hand (ADR-0020).

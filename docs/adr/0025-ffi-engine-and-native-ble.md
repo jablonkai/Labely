@@ -21,7 +21,9 @@ latest release (checked 2026-11-16).
   - `execute(id, params_json) -> envelope_json` takes the same ids and envelopes as MCP. Bad
     JSON or non-object params come back as a `bad_params` envelope, never as an exception.
   - `commands_json()` returns `command.list`. `api_version()` returns `API_VERSION`.
-  - `set_allow_print(bool)` is the switch for the AppFunctions one-time consent (ADR-0011).
+  - `set_allow_print(bool)` turns `print.*` off for an engine that only agents use. The
+    Android app shares one engine between its UI and its AppFunctions, so it checks the
+    consent in the shell instead (ADR-0029).
   - `render_png(doc_id?, dpi, page) -> bytes` renders the print raster without a base64 round
     trip, for the canvas.
 - **BLE, split in two.** ADR-0006 named one interface `NativeBleLink {scan, connect, write, mtu,
