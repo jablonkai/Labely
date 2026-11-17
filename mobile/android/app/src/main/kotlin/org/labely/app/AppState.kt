@@ -97,9 +97,23 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
     val modelId: String get() = printer?.model?.id ?: DEFAULT_MODEL
 
     fun start() {
+        scope.launch { engine.devices.collect(::onDeviceEvent) }
         scope.launch {
             loadTemplates()
             refreshHistory()
+        }
+    }
+
+    /** A printer event pushed by the engine (ADR-0031): a dropped link or a new status. */
+    private fun onDeviceEvent(e: JSONObject) {
+        val p = printer ?: return
+        if (e.optString("address") != p.address) return
+        if (!e.optBoolean("connected")) {
+            printer = null
+            printerStatus = null
+            if (e.optBoolean("lost")) message = context.getString(R.string.printer_lost)
+        } else if (e.has("status")) {
+            printerStatus = DeviceStatus.from(e)
         }
     }
 

@@ -68,6 +68,7 @@
     <string name="printers_found">Found nearby</string>
     <string name="printers_none_found">No printer found</string>
     <string name="printers_none_found_hint">Turn the printer on and keep it close</string>
+    <string name="printer_lost">The printer disconnected</string>
     <string name="scanning">Searching…</string>
     <string name="no_printer">No printer</string>
     <string name="no_printer_hint">Search for a printer and connect to it</string>

@@ -5,10 +5,13 @@
 //! new job; the running one finishes. Cancelling a queued job drops it; cancelling the running
 //! job stops it at the next page boundary. Jobs that reached a printer are recorded in the
 //! history directory, with a snapshot of the document, when the frontend set one.
+//!
+//! A frontend can set a [`JobObserver`] to be told about every change instead of polling
+//! `job.get` (ADR-0031).
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
 use schemars::JsonSchema;
@@ -88,6 +91,13 @@ pub struct JobSpec {
     pub doc: Arc<Document>,
 }
 
+/// Told about every job change: queued, started, a page printed, finished or cancelled.
+///
+/// It runs on the thread that made the change while the queue is locked, so events arrive in
+/// order. It must return quickly and must not call into the queue (hand the info to a
+/// channel instead).
+pub type JobObserver = Arc<dyn Fn(&JobInfo) + Send + Sync>;
+
 struct Job {
     info: JobInfo,
     request: Option<PrintRequest>,
@@ -109,6 +119,17 @@ struct Shared {
     changed: Condvar,
     /// Serialises history-file rewrites within the process.
     history: Mutex<()>,
+    observer: Mutex<Option<JobObserver>>,
+}
+
+impl Shared {
+    /// Tell the observer about `job`. The caller holds the state lock.
+    fn emit(&self, job: &Job) {
+        let observer = lock(&self.observer).clone();
+        if let Some(f) = observer {
+            f(&live(job));
+        }
+    }
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -144,6 +165,7 @@ impl PrintQueue {
                 state: Mutex::default(),
                 changed: Condvar::new(),
                 history: Mutex::new(()),
+                observer: Mutex::new(None),
             }),
         }
     }
@@ -151,6 +173,11 @@ impl PrintQueue {
     /// Directory of the print history; `None` keeps no history.
     pub fn set_history_dir(&self, dir: Option<PathBuf>) {
         lock(&self.shared.state).history_dir = dir;
+    }
+
+    /// Set or clear the job observer.
+    pub fn set_observer(&self, observer: Option<JobObserver>) {
+        *lock(&self.shared.observer) = observer;
     }
 
     pub fn history_dir(&self) -> Option<PathBuf> {
@@ -178,10 +205,14 @@ impl PrintQueue {
             duration_ms: None,
             error: None,
         };
+        let shared = Arc::downgrade(&self.shared);
+        let id = info.id.clone();
+        let control =
+            JobControl::with_progress_hook(Box::new(move |_, _| progressed(&shared, &id)));
         st.jobs.push_back(Job {
             info: info.clone(),
             request: Some(request),
-            control: Arc::new(JobControl::new()),
+            control: Arc::new(control),
             doc: spec.doc,
         });
         if !st.worker {
@@ -197,6 +228,9 @@ impl PrintQueue {
                     )
                 })?;
             st.worker = true;
+        }
+        if let Some(job) = st.jobs.back() {
+            self.shared.emit(job);
         }
         self.shared.changed.notify_all();
         Ok(info)
@@ -258,6 +292,9 @@ impl PrintQueue {
             }
         }
         let info = live(job);
+        if info.state == JobState::Cancelled {
+            self.shared.emit(job);
+        }
         self.shared.changed.notify_all();
         Ok(info)
     }
@@ -323,6 +360,7 @@ impl PrintQueue {
                         job.info.started_at = Some(now());
                         let request = job.request.take();
                         let picked = (job.info.address.clone(), request, job.control.clone());
+                        self.shared.emit(job);
                         self.shared.changed.notify_all();
                         break picked;
                     }
@@ -370,6 +408,7 @@ impl PrintQueue {
                         job.info.error = Some(e.into());
                     }
                 }
+                self.shared.emit(job);
                 let out = (job.info.clone(), job.doc.clone(), st.history_dir.clone());
                 trim_finished(&mut st);
                 self.shared.changed.notify_all();
@@ -535,6 +574,19 @@ fn io_error(what: &str, path: &Path, e: &std::io::Error) -> CommandError {
 /// The history is best effort: a failed write must not fail the print.
 fn warn_history(e: &CommandError) {
     eprintln!("labely: print history not updated: {}", e.message);
+}
+
+/// Progress hook of a job's control: tell the observer about the new page count.
+fn progressed(shared: &Weak<Shared>, id: &str) {
+    let Some(shared) = shared.upgrade() else {
+        return;
+    };
+    let st = lock(&shared.state);
+    if let Some(job) = st.jobs.iter().find(|j| j.info.id == id)
+        && job.info.state == JobState::Printing
+    {
+        shared.emit(job);
+    }
 }
 
 fn live(job: &Job) -> JobInfo {

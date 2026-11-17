@@ -1,8 +1,8 @@
 //! Service traits injected into a `Session` (ADR-0003). Core defines them; `labely-render`
 //! and `labely-printers` implement them; `labely-testkit` provides fakes.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -268,17 +268,38 @@ pub enum DeviceError {
     Other(String),
 }
 
+/// Called with `(pages_done, pages_total)` when a driver reports new progress.
+pub type ProgressHook = Box<dyn Fn(u32, u32) + Send + Sync>;
+
 /// Shared between a running print and whoever queued it: progress out, cancel in.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct JobControl {
     cancel: AtomicBool,
     done: AtomicU32,
     total: AtomicU32,
+    on_progress: OnceLock<ProgressHook>,
+}
+
+impl std::fmt::Debug for JobControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JobControl")
+            .field("cancel", &self.cancel)
+            .field("done", &self.done)
+            .field("total", &self.total)
+            .finish_non_exhaustive()
+    }
 }
 
 impl JobControl {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A control that calls `hook` on the driver's thread whenever the progress changes.
+    pub fn with_progress_hook(hook: ProgressHook) -> Self {
+        let c = Self::default();
+        let _ = c.on_progress.set(hook);
+        c
     }
 
     /// Ask the driver to stop at the next page boundary.
@@ -292,8 +313,13 @@ impl JobControl {
 
     /// Report progress (called by drivers).
     pub fn set_progress(&self, done: u32, total: u32) {
-        self.total.store(total, Ordering::SeqCst);
-        self.done.store(done, Ordering::SeqCst);
+        let old_total = self.total.swap(total, Ordering::SeqCst);
+        let old_done = self.done.swap(done, Ordering::SeqCst);
+        if (old_done, old_total) != (done, total)
+            && let Some(hook) = self.on_progress.get()
+        {
+            hook(done, total);
+        }
     }
 
     /// `(pages_done, pages_total)` reported so far.

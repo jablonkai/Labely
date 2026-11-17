@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.labely.app.AppState
@@ -136,8 +136,8 @@ class EditorState(val app: AppState, val docId: String) {
                         "doc_id" to docId, "address" to printer.address, "copies" to copies, "density" to density, "wait" to false,
                     )
                     val jobId = r.getString("job_id")
-                    while (true) {
-                        val j = engine.call("job.get", "id" to jobId)
+                    // The engine pushes each change (ADR-0031); stop at the final state.
+                    engine.job(jobId).first { j ->
                         val p = PrintProgress(
                             done = j.optInt("pages_done"),
                             total = j.optInt("pages_total", copies),
@@ -145,8 +145,7 @@ class EditorState(val app: AppState, val docId: String) {
                             error = j.optJSONObject("error")?.optString("message"),
                         )
                         progress = p
-                        if (p.finished) break
-                        delay(POLL_MS)
+                        p.finished
                     }
                 } catch (e: Exception) {
                     progress = PrintProgress(0, copies, "failed", e.message)
@@ -165,6 +164,5 @@ class EditorState(val app: AppState, val docId: String) {
     companion object {
         /** The B21 Pro's own resolution, so the canvas shows the exact raster. */
         const val PREVIEW_DPI = 203
-        private const val POLL_MS = 300L
     }
 }

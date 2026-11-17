@@ -66,6 +66,7 @@
     <string name="printers_known">Ismert nyomtatók</string>
     <string name="printers_search">Keresés</string>
     <string name="printers_found">A közelben</string>
+    <string name="printer_lost">A nyomtató kapcsolata megszakadt</string>
     <string name="printers_none_found">Nem található nyomtató</string>
     <string name="printers_none_found_hint">Kapcsold be a nyomtatót, és tartsd a közelben</string>
     <string name="scanning">Keresés…</string>

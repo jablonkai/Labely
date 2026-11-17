@@ -7,21 +7,28 @@
 //!   `BluetoothGatt`, Swift CoreBluetooth). Framing, chunking and the printer protocol stay
 //!   in Rust (ADR-0006).
 //!
+//! - [`DeviceEvents`] is set by the shell to be told about printer and job changes instead
+//!   of polling `device.status` and `job.get` (ADR-0031).
+//!
 //! Calls block. The shells call them off the main thread.
 
 // UniFFI's generated scaffolding uses `unsafe` for the C ABI.
 #![allow(unsafe_code)]
 
 mod ble;
+mod events;
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
 use labely_core::services::RenderOptions;
 use labely_core::{CommandError, Envelope, Policy, Session};
 use serde_json::Value;
 
 pub use ble::{BleDevice, BleError, BleNotifySink, NativeBle, NativeBleLink};
+pub use events::DeviceEvents;
+
+use events::{Event, EventTx, Listener};
 
 uniffi::setup_scaffolding!();
 
@@ -53,9 +60,19 @@ impl From<CommandError> for EngineError {
 }
 
 /// One editing session: open documents, undo history, print queue and printers.
-#[derive(Debug, uniffi::Object)]
+#[derive(uniffi::Object)]
 pub struct LabelyEngine {
     session: Mutex<Session>,
+    events: EventTx,
+    listener: Listener,
+}
+
+impl std::fmt::Debug for LabelyEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LabelyEngine")
+            .field("session", &self.session)
+            .finish_non_exhaustive()
+    }
 }
 
 #[uniffi::export]
@@ -64,10 +81,16 @@ impl LabelyEngine {
     /// without it only `fake:` and `sim:` printers work.
     #[uniffi::constructor]
     pub fn new(config: EngineConfig, ble: Option<Arc<dyn NativeBle>>) -> Arc<Self> {
+        let (tx, rx) = mpsc::channel();
         let services = match ble {
-            Some(ble) => labely_printers::mobile_services(Arc::new(ble::Host::new(ble))),
+            Some(ble) => {
+                labely_printers::mobile_services(Arc::new(ble::Host::new(ble, tx.clone())))
+            }
             None => labely_printers::default_services(),
         };
+        let listener = Listener::default();
+        // Without the thread events are dropped; the shell can still poll.
+        let _ = events::spawn(rx, Arc::clone(&listener), Arc::downgrade(&services.devices));
         let data = PathBuf::from(&config.data_dir);
         let mut roots: Vec<PathBuf> = vec![data.clone()];
         roots.extend(config.file_roots.iter().map(PathBuf::from));
@@ -77,8 +100,16 @@ impl LabelyEngine {
         session.set_template_dir(Some(data.join("templates")));
         session.set_history_dir(Some(data.join("history")));
         session.set_paper_file(Some(data.join("papers.json")));
+        let job_tx = tx.clone();
+        session
+            .jobs()
+            .set_observer(Some(Arc::new(move |info: &labely_core::jobs::JobInfo| {
+                let _ = job_tx.send(Event::Job(Box::new(info.clone())));
+            })));
         Arc::new(Self {
             session: Mutex::new(session),
+            events: tx,
+            listener,
         })
     }
 
@@ -89,7 +120,18 @@ impl LabelyEngine {
             Ok(params) => self.lock().execute(&id, params),
             Err(e) => Envelope::failure(e),
         };
-        env.to_value().to_string()
+        let out = env.to_value();
+        if out["ok"] == true
+            && let Some(ev) = events::from_command(&id, &out["result"])
+        {
+            let _ = self.events.send(Event::Device(ev));
+        }
+        out.to_string()
+    }
+
+    /// Set or clear the listener for printer and job changes.
+    pub fn set_events(&self, listener: Option<Arc<dyn DeviceEvents>>) {
+        *self.listener.lock().unwrap_or_else(PoisonError::into_inner) = listener;
     }
 
     /// The command catalogue (`command.list`) as JSON.

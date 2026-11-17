@@ -172,3 +172,39 @@ fn history_records_and_reopens() {
     ok(s, "job.history_clear", json!({}));
     assert_eq!(ok(s, "job.history", json!({}))["total"], 0);
 }
+
+#[test]
+fn observer_sees_every_change_in_order() {
+    use std::sync::{Arc, Mutex};
+
+    use labely_core::jobs::{JobInfo, JobState};
+
+    let mut kit = kit_with_label();
+    let seen: Arc<Mutex<Vec<JobInfo>>> = Arc::default();
+    let sink = Arc::clone(&seen);
+    kit.session
+        .jobs()
+        .set_observer(Some(Arc::new(move |j: &JobInfo| {
+            sink.lock().unwrap().push(j.clone());
+        })));
+    ok(&mut kit.session, "print.submit", json!({"copies": 2}));
+
+    let seen = seen.lock().unwrap().clone();
+    let mut states: Vec<JobState> = seen.iter().map(|j| j.state).collect();
+    states.dedup();
+    assert_eq!(
+        states,
+        [JobState::Queued, JobState::Printing, JobState::Done],
+        "{seen:?}"
+    );
+    assert!(seen.iter().all(|j| j.id == "job-1"));
+    assert!(
+        seen.iter()
+            .any(|j| j.state == JobState::Printing && j.pages_done == 2),
+        "{seen:?}"
+    );
+    assert_eq!(seen.last().map(|j| j.pages_done), Some(2));
+
+    kit.session.jobs().set_observer(None);
+    ok(&mut kit.session, "print.submit", json!({}));
+}
