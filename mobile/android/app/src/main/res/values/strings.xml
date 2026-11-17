@@ -153,4 +153,7 @@
     <string name="settings_permissions_sub">Bluetooth access for printers</string>
     <string name="settings_version">Version</string>
     <string name="settings_engine">Engine</string>
+    <string name="settings_agent_print">Allow assistants to print</string>
+    <string name="settings_agent_print_sub">Assistants such as Gemini can print saved labels</string>
+    <string name="appfunctions_description">Create, list and print labels</string>
 </resources>
