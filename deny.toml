@@ -28,4 +28,9 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "unmaintained only; pinned by egui-winit 0.37" },
   { id = "RUSTSEC-2026-0371", reason = "unmaintained only; pinned by egui-winit 0.37" },
   { id = "RUSTSEC-2026-0372", reason = "unmaintained only; pinned by egui-winit 0.37" },
+  # chrono is unmaintained, with no known vulnerability and no fixed release. rmcp, rxing and
+  # schemars depend on it, so dropping it from labely-core would not remove it. Date bindings
+  # store chrono strftime patterns in documents, so a replacement has to accept the same
+  # patterns. Revisit when those crates move off chrono.
+  { id = "RUSTSEC-2026-0543", reason = "unmaintained only; also pulled in by rmcp, rxing and schemars" },
 ]
