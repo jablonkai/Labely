@@ -3,3 +3,8 @@
 .DS_Store
 /tmp/
 .claude/settings.local.json
+# Built by `cargo xtask xcframework` (ADR-0030).
+/mobile/ios/LabelyFFI/LabelyFFIFFI.xcframework/
+/mobile/ios/LabelyFFI/Sources/LabelyFFI/LabelyFFI.swift
+/mobile/ios/**/.build/
+/mobile/ios/**/.swiftpm/

@@ -1,4 +1,5 @@
-//! Project automation: `cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings>`.
+//! Project automation:
+//! `cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings|xcframework>`.
 
 use std::collections::BTreeMap;
 use std::process::Command;
@@ -271,6 +272,95 @@ fn bindings(language: &str, out: Option<String>) -> Result<()> {
     Ok(())
 }
 
+/// Swift package that wraps the XCFramework (ADR-0030).
+const IOS_PACKAGE: &str = "mobile/ios/LabelyFFI";
+/// Rust targets in the XCFramework: device, Apple-silicon simulator, and macOS for
+/// `swift test` on the host.
+const APPLE_TARGETS: &[&str] = &[
+    "aarch64-apple-ios",
+    "aarch64-apple-ios-sim",
+    "aarch64-apple-darwin",
+];
+
+/// Build `labely-ffi` as a static library for [`APPLE_TARGETS`], wrap it in
+/// `LabelyFFIFFI.xcframework` and put it, with the generated Swift sources, into
+/// [`IOS_PACKAGE`]. `--debug` skips `--release`.
+fn xcframework(debug: bool) -> Result<()> {
+    if std::env::consts::OS != "macos" {
+        bail!("xcframework: needs macOS and Xcode");
+    }
+    let profile = if debug { "debug" } else { "release" };
+    let envs = [
+        ("IPHONEOS_DEPLOYMENT_TARGET", "18.0"),
+        ("MACOSX_DEPLOYMENT_TARGET", "15.0"),
+    ];
+    for target in APPLE_TARGETS {
+        let mut args = vec![
+            "rustc",
+            "-p",
+            "labely-ffi",
+            "--lib",
+            "--crate-type",
+            "staticlib",
+            "--target",
+            target,
+        ];
+        if !debug {
+            args.push("--release");
+        }
+        cargo(&args, &envs)?;
+    }
+
+    let bindings_dir = "target/bindings/swift";
+    bindings("swift", Some(bindings_dir.into()))?;
+    let headers = std::path::Path::new("target/ios/headers");
+    if headers.exists() {
+        std::fs::remove_dir_all(headers)?;
+    }
+    std::fs::create_dir_all(headers)?;
+    std::fs::copy(
+        format!("{bindings_dir}/LabelyFFIFFI.h"),
+        headers.join("LabelyFFIFFI.h"),
+    )?;
+    std::fs::copy(
+        format!("{bindings_dir}/LabelyFFIFFI.modulemap"),
+        headers.join("module.modulemap"),
+    )?;
+
+    let out = format!("{IOS_PACKAGE}/LabelyFFIFFI.xcframework");
+    if std::path::Path::new(&out).exists() {
+        std::fs::remove_dir_all(&out)?;
+    }
+    let mut args: Vec<String> = vec!["-create-xcframework".into()];
+    for target in APPLE_TARGETS {
+        args.extend([
+            "-library".into(),
+            format!("target/{target}/{profile}/liblabely_ffi.a"),
+            "-headers".into(),
+            headers.display().to_string(),
+        ]);
+    }
+    args.extend(["-output".into(), out.clone()]);
+    eprintln!("$ xcodebuild {}", args.join(" "));
+    let status = Command::new("xcodebuild")
+        .args(&args)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .context("running xcodebuild")?;
+    if !status.success() {
+        bail!("xcodebuild -create-xcframework failed");
+    }
+
+    let sources = format!("{IOS_PACKAGE}/Sources/LabelyFFI");
+    std::fs::create_dir_all(&sources)?;
+    std::fs::copy(
+        format!("{bindings_dir}/LabelyFFI.swift"),
+        format!("{sources}/LabelyFFI.swift"),
+    )?;
+    eprintln!("xcframework: {out} ({profile})");
+    Ok(())
+}
+
 fn ci() -> Result<()> {
     cargo(&["fmt", "--all", "--check"], &[])?;
     layers()?;
@@ -327,9 +417,10 @@ fn main() -> Result<()> {
             &std::env::args().nth(2).unwrap_or_else(|| "kotlin".into()),
             std::env::args().nth(3),
         ),
+        "xcframework" => xcframework(std::env::args().nth(2).as_deref() == Some("--debug")),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings [kotlin|swift] [out-dir]>"
+                "usage: cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings [kotlin|swift] [out-dir]|xcframework [--debug]>"
             );
             std::process::exit(2)
         }

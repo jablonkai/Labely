@@ -12,6 +12,8 @@ cargo test -p labely-studio        # egui_kittest UI tests
 cargo test -p labely-ffi           # FFI engine and native BLE path, on the simulator
 cargo xtask bindings kotlin        # generate the UniFFI Kotlin sources into target/bindings
 (cd mobile/android && ./gradlew :app:assembleDebug)   # Android app; see mobile/android/README.md
+cargo xtask xcframework            # iOS XCFramework and Swift bindings; see mobile/ios/README.md
+(cd mobile/ios/LabelyFFI && swift test)              # Swift engine smoke tests (macOS slice)
 cargo xtask bless                  # rewrite render goldens after an intended change
 cargo xtask schema-hash            # print the command-schema hash
 ```

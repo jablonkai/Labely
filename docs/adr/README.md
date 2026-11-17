@@ -31,3 +31,4 @@
 | [0027](0027-android-ui-and-ble.md) | Android UI and BLE | proposed |
 | [0028](0028-android-appfunctions.md) | Android AppFunctions | proposed |
 | [0029](0029-phase-4-close-out.md) | Phase 4 close-out | proposed |
+| [0030](0030-ios-build.md) | iOS build (Phase 5 start) | proposed |

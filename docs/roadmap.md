@@ -121,6 +121,18 @@ Phase 4 lands in slices, one pull request each (ADR-0025).
   (ADR-0029).
 - **Exit criteria:** printing from an iPhone to the B21 Pro; the intents run from Shortcuts.
 
+### Phase 5 progress
+
+Phase 5 lands in slices, one pull request each (ADR-0030).
+
+| Slice | Scope | Status |
+|---|---|---|
+| 5.1 iOS build | staticlib, `cargo xtask xcframework`, `mobile/ios/LabelyFFI` Swift package, Swift smoke tests, CI job | done (ADR-0030) |
+| 5.2 Device events | `DeviceEvents` callback pushing printer and job state; Android drops polling | |
+| 5.3 iOS UI and BLE | Xcode app, CoreBluetooth `NativeBle`, SwiftUI screens after `design/labely-mobile.figcraft` | |
+| 5.4 App Intents | the six functions under the Android names, App Shortcuts, print consent | |
+| 5.5 Close-out | print from an iPhone to the B21 Pro; intents from Shortcuts; exit audit | |
+
 ## Phase 6: More models and vendors, packaging, releases
 
 - **More printers:** remaining NIIMBOT variants (colour and two-colour, cutter models), then
