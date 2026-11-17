@@ -56,6 +56,25 @@ struct EngineSmokeTests {
         #expect(job["state"] as? String == "done")
     }
 
+    @Test func pushesJobAndDeviceEvents() throws {
+        let e = engine()
+        let rec = Recorder()
+        e.setEvents(listener: rec)
+        try run(e, "doc.new", #"{"width_mm": 20, "height_mm": 8, "printer_model": "niimbot.b21_pro"}"#)
+        try run(e, "device.connect", #"{"address": "sim:niimbot.b21_pro"}"#)
+        try run(e, "print.submit", #"{"address": "sim:niimbot.b21_pro", "copies": 2, "wait": false}"#)
+        #expect(rec.done.wait(timeout: .now() + 10) == .success)
+        e.setEvents(listener: nil)
+
+        let states = rec.snapshot().jobs.compactMap { $0["state"] as? String }
+        #expect(states.first == "queued")
+        #expect(states.last == "done")
+        #expect(states.contains("printing"))
+        let device = try #require(rec.snapshot().devices.first)
+        #expect(device["address"] as? String == "sim:niimbot.b21_pro")
+        #expect(device["connected"] as? Bool == true)
+    }
+
     @Test func errorsAndPolicyComeBackAsEnvelopes() throws {
         let e = engine(allowPrint: false)
         #expect(try errorCode(e.execute(id: "doc.new", paramsJson: "[1]")) == "bad_params")
@@ -75,5 +94,32 @@ struct EngineSmokeTests {
         #expect(throws: EngineError.self) {
             try e.renderPng(docId: "no-such-doc", dpi: 203, page: 0)
         }
+    }
+}
+
+/// Plays the app's event listener; signals `done` when a job finishes.
+final class Recorder: DeviceEvents, @unchecked Sendable {
+    private let lock = NSLock()
+    private var jobs: [[String: Any]] = []
+    private var devices: [[String: Any]] = []
+    let done = DispatchSemaphore(value: 0)
+
+    func snapshot() -> (jobs: [[String: Any]], devices: [[String: Any]]) {
+        lock.withLock { (jobs, devices) }
+    }
+
+    func jobChanged(jobJson: String) {
+        guard let j = Self.parse(jobJson) else { return }
+        lock.withLock { jobs.append(j) }
+        if ["done", "failed", "cancelled"].contains(j["state"] as? String ?? "") { done.signal() }
+    }
+
+    func deviceChanged(eventJson: String) {
+        guard let d = Self.parse(eventJson) else { return }
+        lock.withLock { devices.append(d) }
+    }
+
+    static func parse(_ json: String) -> [String: Any]? {
+        (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
     }
 }

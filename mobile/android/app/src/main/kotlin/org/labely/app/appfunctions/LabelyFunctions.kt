@@ -12,7 +12,6 @@ import androidx.appfunctions.AppFunctionPermissionRequiredException
 import androidx.appfunctions.AppFunctionService
 import androidx.appfunctions.AppFunctionServiceEntryPoint
 import java.io.File
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.labely.app.AppState
@@ -244,7 +243,7 @@ abstract class LabelyFunctions : AppFunctionService() {
             val job = withDoc(docId) {
                 val jobId = app.engine.call("print.submit", "doc_id" to docId, "address" to address, "copies" to n, "wait" to false)
                     .getString("job_id")
-                withTimeoutOrNull(PRINT_TIMEOUT_MS) { finished(jobId) }
+                withTimeoutOrNull(PRINT_TIMEOUT_MS) { app.engine.finished(jobId) }
                     ?: throw AppFunctionAppUnknownException("job $jobId did not finish in time; the print queue may be paused")
             }
             app.refreshHistory()
@@ -271,15 +270,6 @@ abstract class LabelyFunctions : AppFunctionService() {
         } finally {
             runCatching { app.engine.call("doc.close", "doc_id" to docId) }
         }
-
-    /** Poll job [jobId] until it is done, failed or cancelled. */
-    private suspend fun finished(jobId: String): JSONObject {
-        while (true) {
-            val j = app.engine.call("job.get", "id" to jobId)
-            if (j.optString("state") in FINISHED) return j
-            delay(POLL_MS)
-        }
-    }
 
     /** Save [docId] to the label folder, list it in the app's recents and check it. */
     private suspend fun save(docId: String): SavedLabel {
@@ -347,8 +337,6 @@ abstract class LabelyFunctions : AppFunctionService() {
         const val NAME_CHARS = 40
         const val MAX_COPIES = 999
         const val SCAN_MS = 5000
-        const val POLL_MS = 300L
         const val PRINT_TIMEOUT_MS = 5 * 60_000L
-        val FINISHED = setOf("done", "failed", "cancelled")
     }
 }

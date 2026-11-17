@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use labely_ffi::{
-    BleDevice, BleError, BleNotifySink, EngineConfig, LabelyEngine, NativeBle, NativeBleLink,
+    BleDevice, BleError, BleNotifySink, DeviceEvents, EngineConfig, LabelyEngine, NativeBle,
+    NativeBleLink,
 };
 use labely_printers::sim::{SimConfig, Simulator};
 use labely_transport::Transport;
@@ -20,6 +21,8 @@ use serde_json::{Value, json};
 struct ShellBle {
     sims: Mutex<Vec<Simulator>>,
     connects: Mutex<Vec<String>>,
+    /// `open` flag of each link; clearing one drops the link as walking out of range does.
+    links: Mutex<Vec<Arc<AtomicBool>>>,
 }
 
 struct ShellLink {
@@ -83,6 +86,7 @@ impl NativeBle for ShellBle {
         self.sims.lock().unwrap().push(sim);
         let t = Arc::new(Mutex::new(t));
         let open = Arc::new(AtomicBool::new(true));
+        self.links.lock().unwrap().push(Arc::clone(&open));
         let (t2, open2) = (Arc::clone(&t), Arc::clone(&open));
         std::thread::spawn(move || {
             while open2.load(Ordering::Acquire) {
@@ -222,4 +226,121 @@ fn policy_limits_files_and_printing() {
         "{cat}"
     );
     assert_eq!(e.api_version(), labely_core::API_VERSION);
+}
+
+/// Plays the shell's event listener. It calls back into the engine, as a UI refresh would.
+struct Recorder {
+    engine: Mutex<std::sync::Weak<LabelyEngine>>,
+    tx: Mutex<std::sync::mpsc::Sender<(String, Value)>>,
+}
+
+impl DeviceEvents for Recorder {
+    fn job_changed(&self, job_json: String) {
+        if let Some(e) = self.engine.lock().unwrap().upgrade() {
+            let id: Value = serde_json::from_str(&job_json).unwrap();
+            run(&e, "job.get", json!({"id": id["id"]}));
+        }
+        let v = serde_json::from_str(&job_json).unwrap();
+        let _ = self.tx.lock().unwrap().send(("job".into(), v));
+    }
+    fn device_changed(&self, event_json: String) {
+        let v = serde_json::from_str(&event_json).unwrap();
+        let _ = self.tx.lock().unwrap().send(("device".into(), v));
+    }
+}
+
+fn listen(e: &Arc<LabelyEngine>) -> std::sync::mpsc::Receiver<(String, Value)> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    e.set_events(Some(Arc::new(Recorder {
+        engine: Mutex::new(Arc::downgrade(e)),
+        tx: Mutex::new(tx),
+    })));
+    rx
+}
+
+/// Next event of `kind`, skipping the others.
+fn next(rx: &std::sync::mpsc::Receiver<(String, Value)>, kind: &str) -> Value {
+    loop {
+        let (k, v) = rx.recv_timeout(Duration::from_secs(10)).expect("no event");
+        if k == kind {
+            return v;
+        }
+    }
+}
+
+#[test]
+fn pushes_job_and_device_events() {
+    let dir = tempfile::tempdir().unwrap();
+    let ble = Arc::new(ShellBle::default());
+    let e = engine(Some(ble.clone()), dir.path());
+    let rx = listen(&e);
+
+    run(
+        &e,
+        "doc.new",
+        json!({"width_mm": 20, "height_mm": 8, "printer_model": "niimbot.b21_pro"}),
+    );
+    run(
+        &e,
+        "element.add_text",
+        json!({"x_mm": 1, "y_mm": 1, "width_mm": 18, "height_mm": 6, "text": "Hi"}),
+    );
+    run(&e, "device.connect", json!({"address": "ble:AA:BB"}));
+    let dev = next(&rx, "device");
+    assert_eq!(dev["address"], "ble:AA:BB", "{dev}");
+    assert_eq!(dev["connected"], true);
+    assert_eq!(dev["device"]["serial"], "SIM0000001", "{dev}");
+
+    run(&e, "device.status", json!({"address": "ble:AA:BB"}));
+    let st = next(&rx, "device");
+    assert!(st["status"].is_object(), "{st}");
+
+    let job = run(
+        &e,
+        "print.submit",
+        json!({"address": "ble:AA:BB", "copies": 2, "wait": false}),
+    );
+    let mut states = Vec::new();
+    let last = loop {
+        let j = next(&rx, "job");
+        assert_eq!(j["id"], job["job_id"], "{j}");
+        let s = j["state"].as_str().unwrap().to_owned();
+        if states.last() != Some(&s) {
+            states.push(s.clone());
+        }
+        if s != "queued" && s != "printing" {
+            break j;
+        }
+    };
+    assert_eq!(states, ["queued", "printing", "done"]);
+    assert_eq!(last["pages_done"], 2, "{last}");
+
+    run(&e, "device.disconnect", json!({"address": "ble:AA:BB"}));
+    let gone = next(&rx, "device");
+    assert_eq!(gone["connected"], false, "{gone}");
+    assert!(gone.get("lost").is_none(), "{gone}");
+    // The shell's link reports the close too; that is not a lost link.
+    assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+}
+
+#[test]
+fn reports_a_lost_link_and_reconnects() {
+    let dir = tempfile::tempdir().unwrap();
+    let ble = Arc::new(ShellBle::default());
+    let e = engine(Some(ble.clone()), dir.path());
+    let rx = listen(&e);
+
+    run(&e, "device.connect", json!({"address": "ble:AA:BB"}));
+    next(&rx, "device");
+    ble.links.lock().unwrap()[0].store(false, Ordering::Release);
+    let lost = next(&rx, "device");
+    assert_eq!(lost["address"], "ble:AA:BB", "{lost}");
+    assert_eq!(lost["connected"], false);
+    assert_eq!(lost["lost"], true);
+
+    let devices = run(&e, "device.list", json!({}));
+    assert_eq!(devices["devices"], json!([]), "{devices}");
+    run(&e, "device.connect", json!({"address": "ble:AA:BB"}));
+    assert_eq!(ble.connects.lock().unwrap().len(), 2);
+    e.set_events(None);
 }

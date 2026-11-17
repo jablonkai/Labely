@@ -2,10 +2,13 @@
 //! [`labely_transport::callback`] (ADR-0006, ADR-0025).
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use labely_transport::callback::{NativeBleHost, NativeLink, NotifySink};
 use labely_transport::{Discovered, TransportError, TransportInfo, TransportKind};
+
+use crate::events::{Event, EventTx};
 
 /// A BLE failure reported by the shell. Fields are `detail`, since Kotlin exceptions already
 /// have `message`.
@@ -81,43 +84,62 @@ pub trait NativeBleLink: Send + Sync {
 
 /// Where the shell delivers notifications of a connected link.
 #[derive(Debug, uniffi::Object)]
-pub struct BleNotifySink(NotifySink);
+pub struct BleNotifySink {
+    sink: NotifySink,
+    /// Engine address of the link (`ble:<id>`), for the lost-link event.
+    address: String,
+    /// Set once the link is closed or reported lost, so it is reported at most once and not
+    /// at all after `device.disconnect`.
+    closed: Arc<AtomicBool>,
+    events: EventTx,
+}
 
 #[uniffi::export]
 impl BleNotifySink {
     /// Bytes of one notification.
     pub fn push(&self, bytes: Vec<u8>) {
-        self.0.push(bytes);
+        self.sink.push(bytes);
     }
 
     /// The link dropped.
     pub fn disconnected(&self) {
-        self.0.disconnected();
+        self.sink.disconnected();
+        if !self.closed.swap(true, Ordering::AcqRel) {
+            // A send error only means the engine is gone.
+            let _ = self.events.send(Event::Lost(self.address.clone()));
+        }
     }
 }
 
 /// [`NativeBleHost`] over the foreign [`NativeBle`].
-pub(crate) struct Host(Arc<dyn NativeBle>);
+pub(crate) struct Host {
+    ble: Arc<dyn NativeBle>,
+    events: EventTx,
+}
 
 impl Host {
-    pub(crate) fn new(ble: Arc<dyn NativeBle>) -> Self {
-        Self(ble)
+    pub(crate) fn new(ble: Arc<dyn NativeBle>, events: EventTx) -> Self {
+        Self { ble, events }
     }
 }
 
-struct Link(Arc<dyn NativeBleLink>);
+struct Link {
+    link: Arc<dyn NativeBleLink>,
+    closed: Arc<AtomicBool>,
+}
 
 impl NativeLink for Link {
     fn write(&self, bytes: Vec<u8>) -> Result<(), String> {
-        self.0.write(bytes).map_err(|e| e.to_string())
+        self.link.write(bytes).map_err(|e| e.to_string())
     }
 
     fn mtu(&self) -> u32 {
-        self.0.mtu()
+        self.link.mtu()
     }
 
     fn close(&self) {
-        self.0.disconnect();
+        self.closed.store(true, Ordering::Release);
+        self.link.disconnect();
     }
 }
 
@@ -129,7 +151,7 @@ impl NativeBleHost for Host {
     ) -> Result<Vec<Discovered>, TransportError> {
         let ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX);
         Ok(self
-            .0
+            .ble
             .scan(ms, name_prefixes.to_vec())?
             .into_iter()
             .map(|d| Discovered {
@@ -149,10 +171,15 @@ impl NativeBleHost for Host {
         address: &str,
         sink: NotifySink,
     ) -> Result<(Arc<dyn NativeLink>, String), TransportError> {
-        let link = self
-            .0
-            .connect(address.to_owned(), Arc::new(BleNotifySink(sink)))?;
+        let closed = Arc::new(AtomicBool::new(false));
+        let sink = Arc::new(BleNotifySink {
+            sink,
+            address: format!("ble:{address}"),
+            closed: Arc::clone(&closed),
+            events: self.events.clone(),
+        });
+        let link = self.ble.connect(address.to_owned(), sink)?;
         let name = link.name();
-        Ok((Arc::new(Link(link)), name))
+        Ok((Arc::new(Link { link, closed }), name))
     }
 }

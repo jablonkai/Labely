@@ -5,8 +5,19 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.util.concurrent.Executors
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.labely.ffi.DeviceEvents
 import org.labely.ffi.EngineConfig
 import org.labely.ffi.LabelyEngine
 import org.labely.ffi.NativeBle
@@ -17,11 +28,53 @@ class CommandFailure(val code: String, message: String, val hint: String?) : Exc
 /**
  * The Rust engine behind a single worker thread (ADR-0027). Every edit is a command, so the
  * shell holds no editing logic: it calls [call] and re-reads the document.
+ *
+ * The engine pushes job and printer changes (ADR-0031): [job] follows one job and [devices]
+ * carries the printer events, so nothing polls.
  */
 class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
     private val raw = LabelyEngine(EngineConfig(dataDir, emptyList(), allowPrint = true), ble)
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "labely-engine") }
     private val dispatcher = worker.asCoroutineDispatcher()
+
+    /** The latest state of each job this session, by job id (the `job.get` result). */
+    private val jobs = MutableStateFlow<Map<String, JSONObject>>(emptyMap())
+    private val deviceEvents = MutableSharedFlow<JSONObject>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /**
+     * Printer events: `{"address", "connected", "device"?, "status"?, "lost"?}` after
+     * `device.connect`, `device.disconnect`, `device.status`, or when a link drops.
+     */
+    val devices: SharedFlow<JSONObject> = deviceEvents.asSharedFlow()
+
+    init {
+        // Called on the engine's event thread, in order. Must not throw.
+        raw.setEvents(object : DeviceEvents {
+            override fun jobChanged(jobJson: String) {
+                runCatching {
+                    val j = JSONObject(jobJson)
+                    val id = j.getString("id")
+                    jobs.update { m ->
+                        LinkedHashMap(m).apply {
+                            remove(id)
+                            put(id, j)
+                            while (size > MAX_JOBS) remove(keys.first())
+                        }
+                    }
+                }
+            }
+
+            override fun deviceChanged(eventJson: String) {
+                runCatching { deviceEvents.tryEmit(JSONObject(eventJson)) }
+            }
+        })
+    }
+
+    /** Every change of job [id], starting with the latest one already seen. */
+    fun job(id: String): Flow<JSONObject> = jobs.mapNotNull { it[id] }.distinctUntilChanged { a, b -> a.toString() == b.toString() }
+
+    /** Suspend until job [id] is done, failed or cancelled; returns its last state. */
+    suspend fun finished(id: String): JSONObject = job(id).first { it.optString("state") in FINISHED }
 
     val apiVersion: Int get() = raw.apiVersion().toInt()
 
@@ -41,6 +94,7 @@ class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
         }
 
     override fun close() {
+        raw.setEvents(null)
         worker.shutdown()
         raw.close()
     }
@@ -54,6 +108,11 @@ class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
             err.optString("message"),
             err.optString("hint").ifEmpty { null },
         )
+    }
+
+    companion object {
+        val FINISHED = setOf("done", "failed", "cancelled")
+        private const val MAX_JOBS = 100
     }
 }
 
