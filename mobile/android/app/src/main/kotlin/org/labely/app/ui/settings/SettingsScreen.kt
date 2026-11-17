@@ -6,6 +6,7 @@ import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
@@ -24,8 +25,9 @@ import org.labely.app.ui.theme.Palette
 import org.labely.app.ui.theme.Type
 
 /**
- * M10 · Beállítások, reduced to what the shell has in 4.3: language (the system's per-app
- * language), app permissions and version information.
+ * M10 · Beállítások, reduced to what the shell has: language (the system's per-app language),
+ * app permissions, whether assistants may print through AppFunctions (Android 16+, ADR-0028) and
+ * version information.
  */
 @Composable
 fun SettingsScreen(state: AppState) {
@@ -57,6 +59,15 @@ fun SettingsScreen(state: AppState) {
                     onClick = { runCatching { context.startActivity(appSettings) } },
                     leading = { IconTile(Ic.Bluetooth) },
                 ) { LIcon(Ic.ChevRight, Palette.muted, 18.dp) }
+                if (android.os.Build.VERSION.SDK_INT >= AGENT_API) {
+                    RowDivider()
+                    ListRow(
+                        stringResource(R.string.settings_agent_print),
+                        stringResource(R.string.settings_agent_print_sub),
+                        onClick = { state.allowAgentPrint = !state.allowAgentPrint },
+                        leading = { IconTile(Ic.Printer) },
+                    ) { Switch(state.allowAgentPrint, onCheckedChange = { state.allowAgentPrint = it }) }
+                }
             }
         }
         item {
@@ -70,3 +81,6 @@ fun SettingsScreen(state: AppState) {
         }
     }
 }
+
+/** AppFunctions exist from Android 16 (API 36). */
+private const val AGENT_API = 36

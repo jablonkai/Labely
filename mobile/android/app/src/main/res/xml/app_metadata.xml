@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What assistants read about Labely's AppFunctions (ADR-0028). -->
+<AppFunctionAppMetadata xmlns:appfn="http://schemas.android.com/apk/androidx.appfunctions"
+    appfn:description="Labely designs and prints labels on Bluetooth thermal label printers such as the NIIMBOT B21 Pro.
+    Operational patterns:
+    - A print is two steps: create and save a label with 'createLabelFromText' or 'createLabelFromTemplate', then print its labelId with 'printLabel'.
+    - Call 'listTemplates' before 'createLabelFromTemplate' to get template ids and field names.
+    - Call 'listPrinters' to get printer ids; set scan only when no printer is known, as it takes about 5 seconds.
+    - To print several copies of one label, pass copies to one 'printLabel' call instead of calling it repeatedly.
+    Constraints:
+    - Printing uses paper and needs the user's one-time permission in Labely's settings.
+    - Saved labels appear in the app's recent labels, so the user can edit them there."
+    appfn:displayDescription="@string/appfunctions_description" />

@@ -51,7 +51,8 @@ const val SIM_ADDRESS = "sim:niimbot.b21_pro"
  */
 class AppState(private val context: Context, val engine: Engine, val scope: CoroutineScope) {
     private val prefs = context.getSharedPreferences("labely", Context.MODE_PRIVATE)
-    private val labelsDir = File(context.filesDir, "labels").apply { mkdirs() }
+    /** Where labels are saved; AppFunctions address labels by their file name here. */
+    val labelsDir = File(context.filesDir, "labels").apply { mkdirs() }
     val debug = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     var tab by mutableStateOf(Tab.Home)
@@ -76,6 +77,15 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
         private set
     var scanResults by mutableStateOf<List<Device>?>(null)
         private set
+
+    /** Whether assistants may print through AppFunctions (ADR-0028). Off until the user allows it. */
+    private var agentPrint by mutableStateOf(prefs.getBoolean("allow_agent_print", false))
+    var allowAgentPrint: Boolean
+        get() = agentPrint
+        set(allow) {
+            agentPrint = allow
+            prefs.edit { putBoolean("allow_agent_print", allow) }
+        }
 
     /** One-line message for the snackbar. */
     var message by mutableStateOf<String?>(null)
@@ -218,17 +228,25 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
     fun connect(address: String, name: String) = scope.launch {
         busy = address
         try {
-            report {
-                printer?.let { if (it.address != address) disconnectQuietly(it.address) }
-                val dev = Device.from(engine.call("device.connect", "address" to address))
-                printer = dev
-                known = (listOf(KnownPrinter(address, name.ifEmpty { dev.name })) + known.filter { it.address != address }).take(MAX_KNOWN)
-                saveKnown()
-                refreshStatus()
-            }
+            report { connectNow(address, name) }
         } finally {
             busy = null
         }
+    }
+
+    /**
+     * Connect to [address] unless it is already the connected printer, and make it the app's
+     * printer. Throws [CommandFailure]; used by the UI and by AppFunctions.
+     */
+    suspend fun connectNow(address: String, name: String = ""): Device {
+        printer?.let { if (it.address == address) return it }
+        printer?.let { disconnectQuietly(it.address) }
+        val dev = Device.from(engine.call("device.connect", "address" to address))
+        printer = dev
+        known = (listOf(KnownPrinter(address, name.ifEmpty { dev.name })) + known.filter { it.address != address }).take(MAX_KNOWN)
+        saveKnown()
+        refreshStatus()
+        return dev
     }
 
     fun disconnect() = scope.launch {

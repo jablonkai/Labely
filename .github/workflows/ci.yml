@@ -50,6 +50,9 @@ jobs:
       - name: Build app and instrumented tests
         working-directory: mobile/android
         run: ./gradlew --console=plain :app:assembleDebug :ffi:assembleDebugAndroidTest
+      - name: AppFunctions tests (Robolectric, host engine)
+        working-directory: mobile/android
+        run: ./gradlew --console=plain :app:testDebugUnitTest
 
   deny:
     runs-on: ubuntu-latest

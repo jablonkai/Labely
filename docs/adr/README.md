@@ -29,3 +29,4 @@
 | [0025](0025-ffi-engine-and-native-ble.md) | FFI engine and native BLE host (Phase 4 start) | proposed |
 | [0026](0026-android-build.md) | Android build | proposed |
 | [0027](0027-android-ui-and-ble.md) | Android UI and BLE | proposed |
+| [0028](0028-android-appfunctions.md) | Android AppFunctions | proposed |

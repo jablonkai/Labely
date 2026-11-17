@@ -153,4 +153,7 @@
     <string name="settings_permissions_sub">Bluetooth-hozzáférés a nyomtatókhoz</string>
     <string name="settings_version">Verzió</string>
     <string name="settings_engine">Motor</string>
+    <string name="settings_agent_print">Nyomtathatnak az asszisztensek</string>
+    <string name="settings_agent_print_sub">Asszisztensek, például a Gemini, kinyomtathatják a mentett címkéket</string>
+    <string name="appfunctions_description">Címkék létrehozása, listázása és nyomtatása</string>
 </resources>
