@@ -12,7 +12,8 @@ latest release (checked 2026-11-16).
 
 ## Decision
 - **Crate.** `labely-ffi` (L3, ADR-0003) uses UniFFI 0.32 in proc-macro mode. It builds as
-  `lib` and `cdylib`; `staticlib` for iOS is added in Phase 5. It is the only crate allowed to
+  `lib` and `cdylib`; the iOS `staticlib` is built by
+  `cargo xtask xcframework` without a crate-type change (ADR-0030). It is the only crate allowed to
   use `uniffi`, and it allows `unsafe_code` for the generated scaffolding.
 - **Engine.** `LabelyEngine` wraps one `Session`.
   - `new(EngineConfig { data_dir, file_roots, allow_print }, ble?)`. Templates, history and
