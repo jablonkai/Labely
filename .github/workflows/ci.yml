@@ -71,6 +71,15 @@ jobs:
       - name: Build for the iOS simulator
         working-directory: mobile/ios/LabelyFFI
         run: xcodebuild build -quiet -scheme LabelyFFI -destination 'generic/platform=iOS Simulator'
+      - name: Shell logic tests (macOS)
+        working-directory: mobile/ios/LabelyKit
+        run: swift test
+      - name: Build the app for the simulator and the device
+        working-directory: mobile/ios/Labely
+        run: |
+          for dest in 'generic/platform=iOS Simulator' 'generic/platform=iOS'; do
+            xcodebuild build -quiet -project Labely.xcodeproj -scheme Labely -destination "$dest" CODE_SIGNING_ALLOWED=NO
+          done
 
   deny:
     runs-on: ubuntu-latest

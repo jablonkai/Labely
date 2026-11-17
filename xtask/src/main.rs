@@ -155,8 +155,66 @@ fn key_diff(
 /// Android string resource directories checked by `i18n-check`.
 const ANDROID_RES: &[&str] = &["mobile/android/app/src/main/res"];
 
-/// EN and HU must define the same message ids (ADR-0009): the Fluent files and the Android
-/// string resources. iOS joins in Phase 5.
+/// iOS string catalogs checked by `i18n-check` (ADR-0032).
+const IOS_CATALOGS: &[&str] = &[
+    "mobile/ios/Labely/Labely/Localizable.xcstrings",
+    "mobile/ios/Labely/Labely/InfoPlist.xcstrings",
+];
+
+/// iOS Swift sources whose `L("key")` literals must be in `Localizable.xcstrings`.
+const IOS_SOURCES: &str = "mobile/ios/Labely/Labely";
+
+/// Every key of an Xcode string catalog must have an EN and a HU value (a string or plural
+/// variants). Returns the keys.
+fn xcstrings_check(
+    path: &std::path::Path,
+    label: &str,
+    errors: &mut Vec<String>,
+) -> Result<std::collections::BTreeSet<String>> {
+    let catalog: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
+    let strings = catalog["strings"]
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("{label}: no `strings`"))?;
+    for (key, entry) in strings {
+        for lang in ["en", "hu"] {
+            let loc = &entry["localizations"][lang];
+            let value = loc["stringUnit"]["value"]
+                .as_str()
+                .is_some_and(|v| !v.is_empty());
+            if !value && !loc["variations"].is_object() {
+                errors.push(format!("{label}: `{key}` has no {lang} value"));
+            }
+        }
+    }
+    Ok(strings.keys().cloned().collect())
+}
+
+/// `L("key")` string literals (without interpolation) in the Swift files of `dir`.
+fn swift_l_keys(dir: &std::path::Path) -> Result<Vec<(String, String)>> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_none_or(|e| e != "swift") {
+            continue;
+        }
+        let file = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let text = std::fs::read_to_string(&path)?;
+        for part in text.split("L(\"").skip(1) {
+            if let Some((key, _)) = part.split_once('"')
+                && !key.contains('\\')
+            {
+                out.push((file.clone(), key.to_owned()));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// EN and HU must define the same message ids (ADR-0009): the Fluent files, the Android
+/// string resources and the iOS string catalogs.
 fn i18n_check() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/i18n/locales");
     let en = ftl_keys(&root.join("en"))?;
@@ -170,6 +228,19 @@ fn i18n_check() -> Result<()> {
         let hu = android_string_keys(&repo.join(res).join("values-hu"))?;
         key_diff(&format!("{res}/values-hu"), &en, &hu, &mut errors);
         files += en.len();
+    }
+    for catalog in IOS_CATALOGS {
+        let keys = xcstrings_check(&repo.join(catalog), catalog, &mut errors)?;
+        if catalog.ends_with("/Localizable.xcstrings") {
+            for (file, key) in swift_l_keys(&repo.join(IOS_SOURCES))? {
+                if !keys.contains(&key) {
+                    errors.push(format!(
+                        "{IOS_SOURCES}/{file}: `L(\"{key}\")` is not in {catalog}"
+                    ));
+                }
+            }
+        }
+        files += 1;
     }
     if errors.is_empty() {
         eprintln!("i18n-check: ok ({files} files)");
