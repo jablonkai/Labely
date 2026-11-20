@@ -7,7 +7,7 @@ use super::{DEFAULT_DPI, render_options_for};
 use crate::command::{Command, CommandError, CommandMeta, Ctx, ErrorCode};
 use crate::document::MediaType;
 use crate::jobs::{JobSpec, JobState};
-use crate::services::{DeviceInfo, DeviceSettings, DeviceStatus, PrintRequest};
+use crate::services::{DeviceInfo, DeviceSettings, DeviceStatus, PagePlanes, PrintRequest};
 
 /// Longest allowed scan.
 pub const MAX_SCAN_MS: u64 = 60_000;
@@ -631,6 +631,8 @@ impl Command for PrintSubmit {
             copies: if uniform { copies } else { 1 },
             density,
             media: doc.label.media,
+            planes: PagePlanes::None,
+            half_cut: None,
         };
         let spec = JobSpec {
             address: address.clone(),

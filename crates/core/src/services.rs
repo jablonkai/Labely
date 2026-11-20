@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::document::{Document, ElementId, MediaType};
-use crate::raster::Bitmap1;
+use crate::raster::{Bitmap1, Gray4};
 
 /// Render settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -234,6 +234,21 @@ pub struct DeviceSettings {
     pub sound_bluetooth: Option<bool>,
 }
 
+/// Extra planes of the pages of a [`PrintRequest`], for printers that print more than
+/// black. A driver that cannot use them prints `pages` alone.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum PagePlanes {
+    /// Single colour: `pages` is everything.
+    #[default]
+    None,
+    /// One red plane per page, of the page's size. `pages` holds the black plane. A
+    /// printer without red prints the red dots black.
+    Red(Vec<Bitmap1>),
+    /// One gray map per page, of the page's size. `pages` holds the 1-bit version for
+    /// printers without gray levels.
+    Gray(Vec<Gray4>),
+}
+
 /// A rendered job handed to a device.
 #[derive(Debug, Clone)]
 pub struct PrintRequest {
@@ -242,6 +257,10 @@ pub struct PrintRequest {
     pub copies: u16,
     pub density: u8,
     pub media: MediaType,
+    /// Red or gray planes of `pages`.
+    pub planes: PagePlanes,
+    /// Switch the printer's half-cut on or off for this job. `None` leaves it alone.
+    pub half_cut: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]

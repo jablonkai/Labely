@@ -132,6 +132,24 @@ No numeric Conflict was found. Note, though, that nbl lists the DZ-family models
 | H1 | 3840 | 203 | 96 | nbl:625 |
 | HI_D110 | 2305 | 203 | 120 | nbl:647 |
 
+All nine are in the Labely registry (ADR-0036), after the vendor models, so a shared code (256, 2305) still resolves to the vendor model unless the BLE name says otherwise.
+
+| Model | Task | Media | Density | Direction | Max W × H mm (inferred) |
+|---|---|---|---|---|---|
+| A1_PRO | auto | cont (perforated is not a Labely media type) | 1–5 / 3 | left | 25 × 200 |
+| A8 | auto | gap,black,cont | 1–5 / 3 | top | 75 × 200 |
+| D11_H | D110M_V4 | gap,transp | 1–5 / 3 | left | 15 × 100 |
+| D11_PRO | auto | gap,transp | 1–5 / 3 | left | 15 × 100 |
+| D110_M | auto (B1; v≥4→D110M_V4) | gap,transp | 1–5 / 3 | left | 15 × 100 |
+| D11S | D11_V1 | gap,transp | 1–3 / 2 | left | 15 × 100 |
+| ET10 | auto | cont | 3–3 / 3 | top | 200 × 300 |
+| H1 | auto | gap,transp | 1–3 / 2 | left | 15 × 100 |
+| HI_D110 | auto | gap,transp | 1–3 / 3 | left | 15 × 100 |
+
+- Task, media, density and direction: nbl `printer_models.ts` and `print_tasks/index.ts:77-85`.
+- **Inferred:** nbl has no label size. The sizes follow registry models with the same head (A1_PRO and ET10: the head width, and a length that is a guess). UNCERTAIN.
+- **RFID:** nbl does not say. The registry has it off, so the driver does not ask these printers for the roll.
+
 ## B21 Pro summary
 
 | Property | Value | Evidence | Tag |

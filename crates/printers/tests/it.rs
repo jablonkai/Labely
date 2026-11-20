@@ -1,10 +1,10 @@
 //! Driver ↔ simulator integration tests (no hardware).
 
-use labely_core::Bitmap1;
 use labely_core::document::MediaType;
-use labely_core::services::{DeviceError, DeviceHub, JobControl, PrintRequest};
+use labely_core::services::{DeviceError, DeviceHub, JobControl, PagePlanes, PrintRequest};
+use labely_core::{Bitmap1, Gray4};
 use labely_printers::Hub;
-use labely_printers::driver::{Driver, prepare_for_head};
+use labely_printers::driver::{Driver, prepare_for_head, prepare_gray_for_head};
 use labely_printers::niimbot::NiimbotDriver;
 use labely_printers::registry::Registry;
 use labely_printers::sim::{SimConfig, Simulator};
@@ -43,6 +43,8 @@ fn b21_pro_job_roundtrips_through_simulator() {
         copies: 2,
         density: 4,
         media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: None,
     };
     let control = JobControl::new();
     let report = drv.print(&job, &control).unwrap();
@@ -74,6 +76,8 @@ fn cancelled_job_sends_no_page() {
         copies: 1,
         density: 3,
         media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: None,
     };
     let control = JobControl::new();
     control.cancel();
@@ -115,6 +119,8 @@ fn printer_error_is_reported() {
         copies: 1,
         density: 3,
         media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: None,
     };
     let err = drv.print(&job, &JobControl::new()).unwrap_err();
     assert!(err.to_string().contains("CoverOpen"), "{err}");
@@ -132,6 +138,8 @@ fn hub_fake_printer_writes_png() {
         copies: 1,
         density: 3,
         media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: None,
     };
     hub.print(&addr, job, &JobControl::new()).unwrap();
     let png = dir.path().join("job-0001/page-01.png");
@@ -174,6 +182,8 @@ fn hub_stays_responsive_while_printing() {
                 copies: 1,
                 density: 3,
                 media: MediaType::Gap,
+                planes: PagePlanes::None,
+                half_cut: None,
             };
             hub.print(&addr, job, &control)
         })
@@ -306,6 +316,8 @@ fn native_ble_host_prints_through_simulator() {
         copies: 2,
         density: 3,
         media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: None,
     };
     let report = hub.print("ble:SIM-B21", job, &JobControl::new()).unwrap();
     assert_eq!(report.pages_printed, 2); // copies count
@@ -349,6 +361,8 @@ fn every_registered_model_prints_on_the_simulator() {
             copies: 2,
             density: model.density.default,
             media: MediaType::Gap,
+            planes: PagePlanes::None,
+            half_cut: None,
         };
         let control = JobControl::new();
         let report = drv
@@ -396,4 +410,198 @@ fn ble_name_decides_between_models_that_share_a_code() {
     let (_sim, transport) = Simulator::start(SimConfig::for_model(hi));
     let mut drv = NiimbotDriver::new(Box::new(transport));
     assert_eq!(drv.connect().unwrap().model.unwrap().id, d11.id);
+}
+
+/// A 96 x 40 label with a black frame row and a red bar.
+fn two_color_label() -> (Bitmap1, Bitmap1) {
+    let (w, h) = (96, 40);
+    let (mut black, mut red) = (Bitmap1::new(w, h), Bitmap1::new(w, h));
+    for x in 0..w {
+        black.set(x, 2, true);
+    }
+    for y in 10..20 {
+        for x in 8..40 {
+            red.set(x, y, true);
+        }
+        // Rows with both colours.
+        black.set(60, y, true);
+    }
+    (black, red)
+}
+
+fn connect_sim(config: SimConfig) -> (Simulator, NiimbotDriver) {
+    let (sim, transport) = Simulator::start(config);
+    let mut drv = NiimbotDriver::new(Box::new(transport));
+    assert!(drv.connect().is_ok(), "the simulator answers the handshake");
+    (sim, drv)
+}
+
+#[test]
+fn two_colour_job_reaches_a_colour_printer_as_two_planes() {
+    let (sim, mut drv) = connect_sim(SimConfig {
+        color: true,
+        ..SimConfig::b21_pro()
+    });
+    let (black, red) = two_color_label();
+    let job = PrintRequest {
+        pages: vec![black.clone()],
+        copies: 1,
+        density: 3,
+        media: MediaType::Gap,
+        planes: PagePlanes::Red(vec![red.clone()]),
+        half_cut: None,
+    };
+    let report = drv.print(&job, &JobControl::new()).unwrap();
+    assert_eq!(report.pages_printed, 1);
+
+    let log = sim.log();
+    let model = Registry::builtin().by_id("niimbot.b21_pro").unwrap();
+    assert_eq!(log.color_mode, Some(1));
+    assert!(log.commands.contains(&0x8A));
+    assert!(!log.commands.iter().any(|c| matches!(c, 0x84 | 0x85)));
+    assert_eq!(log.pages[0].0, prepare_for_head(&black, model));
+    assert_eq!(log.red_pages, vec![prepare_for_head(&red, model)]);
+}
+
+#[test]
+fn red_prints_black_on_a_printer_without_a_second_colour() {
+    let (sim, mut drv) = connect_sim(SimConfig::b21_pro());
+    let (black, red) = two_color_label();
+    let job = PrintRequest {
+        pages: vec![black.clone()],
+        copies: 1,
+        density: 3,
+        media: MediaType::Gap,
+        planes: PagePlanes::Red(vec![red.clone()]),
+        half_cut: None,
+    };
+    drv.print(&job, &JobControl::new()).unwrap();
+
+    let log = sim.log();
+    assert_eq!(log.color_mode, Some(0));
+    assert!(!log.commands.contains(&0x8A));
+    assert!(log.red_pages.is_empty());
+    let page = &log.pages[0].0;
+    assert_eq!(page.count_black(), black.count_black() + red.count_black());
+    assert!(page.get(8, 10) && page.get(60, 10) && page.get(0, 2));
+
+    // A plane count that does not match the pages is refused.
+    let bad = PrintRequest {
+        planes: PagePlanes::Red(Vec::new()),
+        ..job
+    };
+    assert!(matches!(
+        drv.print(&bad, &JobControl::new()),
+        Err(DeviceError::Other(_))
+    ));
+}
+
+#[test]
+fn gray_job_reaches_the_printer_with_its_levels() {
+    let (sim, mut drv) = connect_sim(SimConfig::b21_pro());
+    let (w, h) = (96u32, 300u32);
+    let mut gray = Gray4::new(w, h);
+    for y in 20..h {
+        for x in 0..w {
+            // A ramp, flat areas (runs) and noise-like columns.
+            let level = match x {
+                0..=31 => (x / 2) as u8,
+                32..=79 => 9,
+                _ => ((x + y) % 16) as u8,
+            };
+            gray.set(x, y, level);
+        }
+    }
+    let job = PrintRequest {
+        pages: vec![Bitmap1::new(w, h)],
+        copies: 2,
+        density: 3,
+        media: MediaType::Gap,
+        planes: PagePlanes::Gray(vec![gray.clone()]),
+        half_cut: None,
+    };
+    let report = drv.print(&job, &JobControl::new()).unwrap();
+    assert_eq!(report.pages_printed, 2);
+
+    let log = sim.log();
+    let model = Registry::builtin().by_id("niimbot.b21_pro").unwrap();
+    assert_eq!(log.color_mode, Some(3));
+    assert!(log.commands.contains(&0x8D));
+    assert_eq!(log.gray_pages, vec![prepare_gray_for_head(&gray, model)]);
+    assert_eq!(log.pages[0].1, 2);
+}
+
+#[test]
+fn gray_falls_back_to_the_bitmap_when_the_task_has_no_gray_rows() {
+    let registry = Registry::builtin();
+    let model = registry.by_id("niimbot.b1").unwrap();
+    let (sim, mut drv) = connect_sim(SimConfig::for_model(model));
+    let mut page = Bitmap1::new(96, 10);
+    page.set(5, 5, true);
+    let job = PrintRequest {
+        pages: vec![page.clone()],
+        copies: 1,
+        density: 3,
+        media: MediaType::Gap,
+        planes: PagePlanes::Gray(vec![Gray4::new(96, 10)]),
+        half_cut: None,
+    };
+    drv.print(&job, &JobControl::new()).unwrap();
+    let log = sim.log();
+    assert!(log.gray_pages.is_empty());
+    assert_eq!(log.pages[0].0, prepare_for_head(&page, model));
+}
+
+#[test]
+fn half_cut_is_set_before_the_job() {
+    let registry = Registry::builtin();
+    let model = registry.by_id("niimbot.h1s").unwrap();
+    let (sim, mut drv) = connect_sim(SimConfig::for_model(model));
+    let mut page = Bitmap1::new(96, 10);
+    page.set(5, 5, true);
+    let job = PrintRequest {
+        pages: vec![page],
+        copies: 1,
+        density: 2,
+        media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: Some(true),
+    };
+    drv.print(&job, &JobControl::new()).unwrap();
+    let log = sim.log();
+    assert_eq!(log.half_cut, Some(true));
+    let at = |c: u8| log.commands.iter().position(|x| *x == c).unwrap();
+    assert!(at(0x5C) < at(0x01));
+    // The H1S page size carries the cut fields; they stay zero.
+    assert_eq!((log.page_size_len, log.cut), (Some(9), Some((0, 0))));
+}
+
+#[test]
+fn oss_only_models_are_registered() {
+    let registry = Registry::builtin();
+    for (id, code, name) in [
+        ("niimbot.a1_pro", 7424, "A1_PRO-1234"),
+        ("niimbot.a8", 256, "A8-1234"),
+        ("niimbot.d11_h", 528, "D11_H-1234"),
+        ("niimbot.d11_pro", 531, "D11_PRO-1234"),
+        ("niimbot.d110_m", 2320, "D110_M-1234"),
+        ("niimbot.d11s", 514, "D11S-1234"),
+        ("niimbot.et10", 5376, "ET10-1234"),
+        ("niimbot.h1", 3840, "H1-1234"),
+        ("niimbot.hi_d110", 2305, "Hi-D110-1234"),
+    ] {
+        let model = registry.by_id(id).unwrap();
+        assert!(model.model_codes.contains(&code), "{id}");
+        assert_eq!(registry.guess_by_name(name).unwrap().id, id);
+    }
+    // A shared code still resolves to the vendor's model when the name does not say.
+    assert_eq!(registry.by_code("niimbot", 256).unwrap().id, "niimbot.b3s");
+    assert_eq!(
+        registry.by_code("niimbot", 2305).unwrap().id,
+        "niimbot.d110"
+    );
+    assert_eq!(
+        registry.guess_by_name("H1S-1234").unwrap().id,
+        "niimbot.h1s"
+    );
 }

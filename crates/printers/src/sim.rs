@@ -1,13 +1,14 @@
 //! In-process NIIMBOT printer simulator for tests and demos.
 //!
-//! It answers the handshake, status and RFID requests, reassembles 0x84/0x85 rows into
-//! pages, and models the B21 Pro firmware quirks (no reply to the first packet after
+//! It answers the handshake, status and RFID requests, reassembles 0x84/0x85 rows, the
+//! two-colour 0x8A rows and the grayscale 0x8D rows into pages, and models the B21 Pro firmware quirks (no reply to the first packet after
 //! PrintStart). [`SimConfig::for_model`] sets it up for any registry model, so every print
 //! task runs against it. Behaviour follows docs/protocol.md; it is not a capture replay.
 
 use std::sync::{Arc, Mutex};
 
-use labely_core::Bitmap1;
+use labely_core::{Bitmap1, Gray4};
+use labely_protocol::niimbot::rows::{decode_color_row, decode_gray_row};
 use labely_protocol::niimbot::{Decoder, Packet, cmd};
 use labely_transport::memory::{MemoryPeer, MemoryTransport};
 
@@ -22,8 +23,19 @@ pub struct SimLog {
     pub label_type: Option<u8>,
     pub print_start_len: Option<usize>,
     pub page_size_len: Option<usize>,
-    /// Reassembled pages (as sent, head orientation) with their copy count.
+    /// Reassembled pages (as sent, head orientation) with their copy count. For a
+    /// two-colour job this is the black plane; for a grayscale job it stays white.
     pub pages: Vec<(Bitmap1, u16)>,
+    /// Colour field of the last PrintStart that has one (0 single, 1 two-colour, 3 gray).
+    pub color_mode: Option<u8>,
+    /// Red plane of every page of a two-colour job.
+    pub red_pages: Vec<Bitmap1>,
+    /// Every page of a grayscale job.
+    pub gray_pages: Vec<Gray4>,
+    /// Cut height and cut type of the last SetPageSize that has them.
+    pub cut: Option<(u16, u8)>,
+    /// The last half-cut request.
+    pub half_cut: Option<bool>,
     /// Label type byte of each calibration request.
     pub calibrations: Vec<u8>,
 }
@@ -43,6 +55,8 @@ pub struct SimConfig {
     pub page_index_events: bool,
     /// Page width when SetPageSize carries no columns (old D11).
     pub head_dots: u16,
+    /// Report a second colour in the status data (B5 byte 10).
+    pub color: bool,
 }
 
 impl SimConfig {
@@ -55,6 +69,7 @@ impl SimConfig {
             fail_page_end: None,
             page_index_events: false,
             head_dots: 591,
+            color: false,
         }
     }
 
@@ -70,6 +85,7 @@ impl SimConfig {
             fail_page_end: None,
             page_index_events: model.task == "d11_v1",
             head_dots: u16::try_from(model.head_dots).unwrap_or(u16::MAX),
+            color: false,
         }
     }
 }
@@ -97,9 +113,22 @@ impl Simulator {
 }
 
 struct PageState {
-    cols: u16,
     copies: u16,
     bitmap: Bitmap1,
+    red: Bitmap1,
+    gray: Gray4,
+}
+
+/// Set the dots of `data` (MSB first) in `rows` of `bitmap`.
+fn put_rows(bitmap: &mut Bitmap1, rows: std::ops::Range<u32>, data: &[u8]) {
+    for r in rows {
+        for x in 0..bitmap.width() {
+            let byte = data.get((x / 8) as usize).copied().unwrap_or(0);
+            if byte & (0x80 >> (x % 8)) != 0 {
+                bitmap.set(x, r, true);
+            }
+        }
+    }
 }
 
 fn reply(peer: &MemoryPeer, cmd: u8, payload: &[u8]) -> bool {
@@ -110,8 +139,9 @@ fn reply(peer: &MemoryPeer, cmd: u8, payload: &[u8]) -> bool {
 }
 
 fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
-    let mut dec = Decoder::new();
+    let mut dec = Decoder::for_requests();
     let mut page: Option<PageState> = None;
+    let mut color_mode: u8 = 0;
     let mut printed: u16 = 0;
     let mut total: u16 = 0;
     let mut skip_next_reply = false;
@@ -127,7 +157,10 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
             let b0 = p.payload.first().copied().unwrap_or(0);
             if skip_next_reply {
                 skip_next_reply = false;
-                if !matches!(p.cmd, cmd::ROWS_EMPTY | cmd::ROW_BITMAP) {
+                if !matches!(
+                    p.cmd,
+                    cmd::ROWS_EMPTY | cmd::ROW_BITMAP | cmd::ROW_COLOR | cmd::ROW_GRAY
+                ) {
                     continue;
                 }
             }
@@ -137,6 +170,7 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                     let mut b = [0u8; 13];
                     b[11] = (cfg.version_code / 100) as u8;
                     b[12] = (cfg.version_code % 100) as u8;
+                    b[10] = u8::from(cfg.color);
                     reply(&peer, cmd::STATUS_DATA_RESP, &b)
                 }
                 cmd::PRINTER_INFO if b0 == 8 => reply(&peer, 0x48, &cfg.model_code.to_be_bytes()),
@@ -207,6 +241,10 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                         0
                     };
                     printed = 0;
+                    color_mode = p.payload.get(6).copied().unwrap_or(0);
+                    if p.payload.len() >= 7 {
+                        l.color_mode = Some(color_mode);
+                    }
                     skip_next_reply = cfg.quirk_no_reply_after_start;
                     reply(&peer, cmd::PRINT_START_RESP, &[1])
                 }
@@ -237,10 +275,15 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                         cfg.head_dots
                     };
                     let copies = if p.payload.len() >= 6 { g(4) } else { 1 };
+                    if p.payload.len() >= 9 {
+                        l.cut = Some((g(6), p.payload[8]));
+                    }
+                    let (w, h) = (u32::from(cols), u32::from(rows));
                     page = Some(PageState {
-                        cols,
                         copies,
-                        bitmap: Bitmap1::new(u32::from(cols), u32::from(rows)),
+                        bitmap: Bitmap1::new(w, h),
+                        red: Bitmap1::new(w, h),
+                        gray: Gray4::new(w, h),
                     });
                     reply(&peer, cmd::SET_PAGE_SIZE_RESP, &[1])
                 }
@@ -252,17 +295,36 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                     {
                         let row = u32::from(u16::from_be_bytes([p.payload[0], p.payload[1]]));
                         let repeat = u32::from(p.payload[5]);
-                        let data = &p.payload[6..];
-                        for r in row..row + repeat {
-                            for x in 0..u32::from(pg.cols) {
-                                let byte = data.get((x / 8) as usize).copied().unwrap_or(0);
-                                if byte & (0x80 >> (x % 8)) != 0 {
-                                    pg.bitmap.set(x, r, true);
-                                }
+                        put_rows(&mut pg.bitmap, row..row + repeat, &p.payload[6..]);
+                    }
+                    true
+                }
+                cmd::ROW_COLOR => {
+                    if let Some(pg) = page.as_mut()
+                        && let Some(row) =
+                            decode_color_row(&p.payload, (pg.bitmap.width() as usize).div_ceil(8))
+                    {
+                        let rows = u32::from(row.row)..u32::from(row.row) + u32::from(row.repeat);
+                        put_rows(&mut pg.bitmap, rows.clone(), &row.black);
+                        put_rows(&mut pg.red, rows, &row.red);
+                    }
+                    true
+                }
+                cmd::ROW_GRAY => {
+                    if let Some(pg) = page.as_mut()
+                        && let Some(row) = decode_gray_row(&p.payload)
+                    {
+                        for r in u32::from(row.row)..u32::from(row.row) + u32::from(row.repeat) {
+                            for (x, level) in row.levels.iter().enumerate() {
+                                pg.gray.set(x as u32, r, *level);
                             }
                         }
                     }
                     true
+                }
+                cmd::HALF_CUT if p.payload.len() >= 2 => {
+                    l.half_cut = Some(p.payload[1] != 0);
+                    reply(&peer, cmd::HALF_CUT_RESP, &[1])
                 }
                 cmd::PAGE_END => {
                     if let Some(code) = cfg.fail_page_end {
@@ -272,6 +334,11 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                         if let Some(pg) = page.take() {
                             printed = printed.saturating_add(pg.copies);
                             l.pages.push((pg.bitmap, pg.copies));
+                            match color_mode {
+                                1 => l.red_pages.push(pg.red),
+                                3 => l.gray_pages.push(pg.gray),
+                                _ => {}
+                            }
                         }
                         let mut ok = reply(&peer, cmd::PAGE_END_RESP, &[1]);
                         if cfg.page_index_events {

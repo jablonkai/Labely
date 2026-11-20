@@ -1,10 +1,10 @@
 //! Driver trait and shared raster preparation.
 
-use labely_core::Bitmap1;
 use labely_core::document::MediaType;
 use labely_core::services::{
     DeviceError, DeviceSettings, DeviceStatus, JobControl, PrintReport, PrintRequest,
 };
+use labely_core::{Bitmap1, Gray4};
 
 use crate::registry::{Model, PrintDirection};
 
@@ -81,10 +81,56 @@ pub fn prepare_for_head(bitmap: &Bitmap1, model: &Model) -> Bitmap1 {
     out
 }
 
+/// As [`prepare_for_head`], for a gray map.
+pub fn prepare_gray_for_head(gray: &Gray4, model: &Model) -> Gray4 {
+    let oriented = match model.print_direction {
+        PrintDirection::Top => gray.clone(),
+        PrintDirection::Left => gray.rotate_cw(),
+    };
+    let w = oriented.width();
+    let padded = w.div_ceil(8) * 8;
+    let (target, left) = if padded <= model.head_dots {
+        (padded, 0)
+    } else {
+        let target = (model.head_dots / 8) * 8;
+        (target, w.saturating_sub(target) / 2)
+    };
+    let mut out = Gray4::new(target, oriented.height());
+    for y in 0..oriented.height() {
+        for x in 0..target {
+            out.set(x, y, oriented.get(x + left, y));
+        }
+    }
+    out
+}
+
+/// The dots of `a` and `b` on one bitmap of `a`'s size.
+pub(crate) fn union(a: &Bitmap1, b: &Bitmap1) -> Bitmap1 {
+    let mut out = a.clone();
+    for y in 0..a.height().min(b.height()) {
+        for x in 0..a.width().min(b.width()) {
+            if b.get(x, y) {
+                out.set(x, y, true);
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::registry::Registry;
+
+    #[test]
+    fn gray_is_fitted_like_a_bitmap() {
+        let m = Registry::builtin().by_id("niimbot.b21_pro").unwrap();
+        let mut g = Gray4::new(591, 4);
+        g.set(3, 0, 9);
+        let p = prepare_gray_for_head(&g, m);
+        assert_eq!((p.width(), p.get(0, 0)), (584, 9));
+        assert_eq!(prepare_gray_for_head(&Gray4::new(355, 5), m).width(), 360);
+    }
 
     #[test]
     fn b21_pro_50mm_crops_to_584() {

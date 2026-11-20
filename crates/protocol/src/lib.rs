@@ -7,4 +7,4 @@
 pub mod niimbot;
 pub mod raster;
 
-pub use raster::{RasterError, RasterView};
+pub use raster::{GrayView, RasterError, RasterView};

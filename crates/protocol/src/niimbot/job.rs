@@ -5,10 +5,13 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::request::{self, ColorMode, HeartbeatType, LabelType, PageSizeFormat, PrintStart};
-use super::rows::{CHECK_LINE_INTERVAL, CountMode, encode_rows, encode_rows_checked};
+use super::request::{self, ColorMode, Cut, HeartbeatType, LabelType, PageSizeFormat, PrintStart};
+use super::rows::{
+    CHECK_LINE_INTERVAL, CountMode, encode_rows, encode_rows_checked, encode_rows_gray,
+    encode_rows_two_color,
+};
 use super::{Packet, PacketError, cmd};
-use crate::RasterView;
+use crate::{GrayView, RasterView};
 
 /// Print-task variant (docs/protocol.md §5.2). Selected per model in the registry.
 ///
@@ -28,7 +31,7 @@ pub enum PrintTask {
     D110,
     /// 7-byte PrintStart, PageStart, 6-byte size (B1, D110_M, B21_C2B, N1).
     B1,
-    /// 2-byte PrintStart, PageStart, 9-byte size with the cut fields at zero (H1S).
+    /// 2-byte PrintStart, PageStart, 9-byte size with the cut fields (H1S).
     H1s,
     /// 9-byte PrintStart, one-way status, 13-byte size, no PageStart (B21 Pro, B1 Pro, D11_H).
     D110mV4,
@@ -52,6 +55,51 @@ impl PrintTask {
     /// The printer takes no copy count: every copy is sent as a page.
     fn per_copy(self) -> bool {
         matches!(self, Self::B21V1 | Self::B21L2b)
+    }
+
+    /// Whether the task can send pages of `color` (§7.5, per OSS). Only the tasks whose
+    /// PrintStart has a colour field can: two-colour on `B1` and `D110mV4`, grayscale on
+    /// `D110mV4`.
+    pub fn supports(self, color: ColorMode) -> bool {
+        match color {
+            ColorMode::Single => true,
+            ColorMode::TwoColor => matches!(self, Self::B1 | Self::D110mV4),
+            ColorMode::Gray => self == Self::D110mV4,
+            ColorMode::Alt => false,
+        }
+    }
+}
+
+/// One page of a job. All pages of a job are of the same kind.
+#[derive(Debug, Clone, Copy)]
+pub enum Page<'a> {
+    /// Single colour.
+    Mono(RasterView<'a>),
+    /// A black and a red plane of the same size (0x8A rows).
+    TwoColor {
+        black: RasterView<'a>,
+        red: RasterView<'a>,
+    },
+    /// 16 gray levels (0x8D rows).
+    Gray(GrayView<'a>),
+}
+
+impl Page<'_> {
+    /// The PrintStart colour field for this page.
+    pub fn color(&self) -> ColorMode {
+        match self {
+            Page::Mono(_) => ColorMode::Single,
+            Page::TwoColor { .. } => ColorMode::TwoColor,
+            Page::Gray(_) => ColorMode::Gray,
+        }
+    }
+
+    /// `(width, height)` in dots.
+    fn size(&self) -> (u32, u32) {
+        match self {
+            Page::Mono(r) | Page::TwoColor { black: r, .. } => (r.width(), r.height()),
+            Page::Gray(g) => (g.width(), g.height()),
+        }
     }
 }
 
@@ -151,6 +199,10 @@ pub struct JobSettings {
     pub count_mode: CountMode,
     /// PrintStart V9 byte 7 (speed/quality). UNCERTAIN on hardware; default 0.
     pub quality: u8,
+    /// Cut fields of the 9- and 13-byte page size; other tasks ignore them.
+    pub cut: Cut,
+    /// Switch the half-cut on or off before the job (0x5C). `None` leaves it alone.
+    pub half_cut: Option<bool>,
 }
 
 impl Default for JobSettings {
@@ -161,6 +213,8 @@ impl Default for JobSettings {
             copies: 1,
             count_mode: CountMode::default(),
             quality: 0,
+            cut: Cut::default(),
+            half_cut: None,
         }
     }
 }
@@ -179,21 +233,44 @@ pub enum JobError {
     },
     #[error("total page count exceeds 65535")]
     TooManyPages,
+    #[error("the pages of a job must all be single-colour, two-colour or grayscale")]
+    MixedPages,
+    #[error("page {page}: the black and the red plane differ in size")]
+    PlaneMismatch { page: usize },
+    #[error("print task {task:?} cannot print {color:?} pages")]
+    Unsupported { task: PrintTask, color: ColorMode },
     #[error(transparent)]
     Packet(#[from] PacketError),
 }
 
-/// Build the step program for printing `pages` with `task`.
+/// Build the step program for printing single-colour `pages` with `task`.
 pub fn build(
     task: PrintTask,
     settings: &JobSettings,
     pages: &[RasterView<'_>],
 ) -> Result<Vec<Step>, JobError> {
-    if pages.is_empty() {
+    let pages: Vec<Page<'_>> = pages.iter().copied().map(Page::Mono).collect();
+    build_pages(task, settings, &pages)
+}
+
+/// Build the step program for printing `pages` with `task`.
+pub fn build_pages(
+    task: PrintTask,
+    settings: &JobSettings,
+    pages: &[Page<'_>],
+) -> Result<Vec<Step>, JobError> {
+    let Some(first) = pages.first() else {
         return Err(JobError::Empty);
-    }
+    };
     if settings.copies == 0 {
         return Err(JobError::NoCopies);
+    }
+    let color = first.color();
+    if pages.iter().any(|p| p.color() != color) {
+        return Err(JobError::MixedPages);
+    }
+    if !task.supports(color) {
+        return Err(JobError::Unsupported { task, color });
     }
     let total = (pages.len() as u32)
         .checked_mul(u32::from(settings.copies))
@@ -204,42 +281,55 @@ pub fn build(
         Step::exchange(request::set_label_type(settings.label_type)),
         Step::exchange(request::set_density(settings.density)),
     ];
+    if let Some(on) = settings.half_cut {
+        steps.push(Step::exchange(request::set_half_cut(on)));
+    }
     steps.push(Step::exchange(request::print_start(match task {
         PrintTask::D11V1 | PrintTask::B21V1 | PrintTask::B21L2b | PrintTask::D110 => PrintStart::V1,
         PrintTask::H1s => PrintStart::V2 { total_pages: total },
         PrintTask::B1 => PrintStart::V7 {
             total_pages: total,
-            color: ColorMode::Single,
+            color,
         },
         PrintTask::D110mV4 => PrintStart::V9 {
             total_pages: total,
-            color: ColorMode::Single,
+            color,
             quality: settings.quality,
             flag: 0,
         },
     })));
 
     for (i, page) in pages.iter().enumerate() {
-        let rows = u16::try_from(page.height()).map_err(|_| JobError::TooLarge {
+        let (width, height) = page.size();
+        let rows = u16::try_from(height).map_err(|_| JobError::TooLarge {
             page: i,
             dim: "height",
-            value: page.height(),
+            value: height,
         })?;
-        let cols = u16::try_from(page.width()).map_err(|_| JobError::TooLarge {
+        let cols = u16::try_from(width).map_err(|_| JobError::TooLarge {
             page: i,
             dim: "width",
-            value: page.width(),
+            value: width,
         })?;
         let copies = settings.copies;
-        // The B21 tasks use the total count and check-lines (OSS).
-        let row_packets = if task.per_copy() {
-            encode_rows_checked(page, CountMode::Total, Some(CHECK_LINE_INTERVAL))?
-        } else {
-            encode_rows(page, settings.count_mode)?
+        let row_packets = match page {
+            // The B21 tasks use the total count and check-lines (OSS).
+            Page::Mono(r) if task.per_copy() => {
+                encode_rows_checked(r, CountMode::Total, Some(CHECK_LINE_INTERVAL))?
+            }
+            Page::Mono(r) => encode_rows(r, settings.count_mode)?,
+            Page::TwoColor { black, red } => {
+                if (black.width(), black.height()) != (red.width(), red.height()) {
+                    return Err(JobError::PlaneMismatch { page: i });
+                }
+                encode_rows_two_color(black, red)?
+            }
+            Page::Gray(g) => encode_rows_gray(g)?,
         };
         let sends = if task.per_copy() { copies } else { 1 };
         for _ in 0..sends {
-            let size = |format| request::set_page_size(format, rows, cols, copies);
+            let size =
+                |format| request::set_page_size_cut(format, rows, cols, copies, settings.cut);
             match task {
                 PrintTask::D11V1 | PrintTask::D110 => {
                     let format = if task == PrintTask::D11V1 {
@@ -521,6 +611,96 @@ mod tests {
         assert_eq!(payload_of(&steps, 0x01), vec![0, 3]);
         assert_eq!(payload_of(&steps, 0x13), vec![0, 3, 0, 96, 0, 3, 0, 0, 0]);
         assert!(steps.iter().any(|s| matches!(s, Step::WaitPages { .. })));
+    }
+
+    #[test]
+    fn two_color_job() {
+        let black = page(4);
+        let mut red = vec![0u8; 74 * 4];
+        red[74 * 3] = 0x0F;
+        let pages = [Page::TwoColor {
+            black: RasterView::new(584, 4, 74, &black).unwrap(),
+            red: RasterView::new(584, 4, 74, &red).unwrap(),
+        }];
+        for (task, at) in [(PrintTask::B1, 4), (PrintTask::D110mV4, 4)] {
+            let steps = build_pages(task, &JobSettings::default(), &pages).unwrap();
+            // Colour field of PrintStart.
+            assert_eq!(payload_of(&steps, 0x01)[6], 1, "{task:?}");
+            let trace = command_trace(&steps);
+            assert_eq!(trace[at], (0x13, Some(0x14)), "{task:?}");
+            // Two blank rows, a black row, a red row: all one-way 0x8A.
+            assert_eq!(trace[at + 1..at + 4], [(0x8A, None); 3], "{task:?}");
+            assert_eq!(trace[at + 4], (0xE3, Some(0xE4)), "{task:?}");
+            assert!(!trace.iter().any(|c| matches!(c.0, 0x84 | 0x85)));
+        }
+        assert_eq!(
+            build_pages(PrintTask::D110, &JobSettings::default(), &pages),
+            Err(JobError::Unsupported {
+                task: PrintTask::D110,
+                color: ColorMode::TwoColor
+            })
+        );
+        let short = RasterView::new(584, 3, 74, &red).unwrap();
+        let pages = [Page::TwoColor {
+            black: RasterView::new(584, 4, 74, &black).unwrap(),
+            red: short,
+        }];
+        assert_eq!(
+            build_pages(PrintTask::B1, &JobSettings::default(), &pages),
+            Err(JobError::PlaneMismatch { page: 0 })
+        );
+    }
+
+    #[test]
+    fn gray_job() {
+        let mut levels = vec![0u8; 8 * 3];
+        levels[8] = 9;
+        let gray = Page::Gray(GrayView::new(8, 3, &levels).unwrap());
+        let steps = build_pages(PrintTask::D110mV4, &JobSettings::default(), &[gray]).unwrap();
+        assert_eq!(payload_of(&steps, 0x01)[6], 3);
+        let cmds: Vec<u8> = command_trace(&steps).iter().map(|c| c.0).collect();
+        assert_eq!(
+            cmds,
+            vec![
+                0x23, 0x21, 0x01, 0xA3, 0x13, 0x8D, 0x8D, 0x8D, 0xE3, 0xF3, 0xDC
+            ]
+        );
+        assert!(matches!(
+            build_pages(PrintTask::B1, &JobSettings::default(), &[gray]),
+            Err(JobError::Unsupported { .. })
+        ));
+        let data = page(3);
+        let mono = Page::Mono(RasterView::new(8, 3, 74, &data).unwrap());
+        assert_eq!(
+            build_pages(PrintTask::D110mV4, &JobSettings::default(), &[gray, mono]),
+            Err(JobError::MixedPages)
+        );
+    }
+
+    #[test]
+    fn cut_and_half_cut() {
+        let data = page(3);
+        let r = RasterView::new(96, 3, 74, &data).unwrap();
+        let settings = JobSettings {
+            cut: Cut {
+                height: 40,
+                kind: 1,
+            },
+            half_cut: Some(true),
+            ..JobSettings::default()
+        };
+        let steps = build(PrintTask::H1s, &settings, &[r]).unwrap();
+        let trace = command_trace(&steps);
+        // The half-cut is set before PrintStart.
+        assert_eq!(trace[2], (0x5C, Some(0x6C)));
+        assert_eq!(trace[3], (0x01, Some(0x02)));
+        assert_eq!(payload_of(&steps, 0x5C), vec![1, 1]);
+        assert_eq!(payload_of(&steps, 0x13), vec![0, 3, 0, 96, 0, 1, 0, 40, 1]);
+        let steps = build(PrintTask::D110mV4, &settings, &[r]).unwrap();
+        assert_eq!(payload_of(&steps, 0x13)[6..], [0, 40, 1, 0, 0, 0, 0]);
+        // A task without cut fields sends the same size as before.
+        let steps = build(PrintTask::B1, &settings, &[r]).unwrap();
+        assert_eq!(payload_of(&steps, 0x13).len(), 6);
     }
 
     #[test]

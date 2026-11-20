@@ -39,7 +39,7 @@ Each packet, in either direction:
 - Header, tail and the 8-bit length: **Confirmed** [E: V:jc `cPrinterV4::packageCommand` @0xd14e0 writes 0x5555 @0xd153c and 0xAAAA @0xd1520, and checks length ≤0xFF @0xd154c] [E: O:nbl src/packets/packet.ts:11-12,80-124] [E: O:np niimprint/niimbotpacket.py].
 - XOR checksum: **OSS-only**. The vendor checksum loop was not traced instruction by instruction [E: O:nbl packet.ts:72-78].
 - **Connect exception:** the Connect request (0xC1) is sent with one extra byte, `0x03`, in front of the header. **Confirmed** [E: V:jc `cPrinterV4::jcSetConnect` stores 0x03 and inserts it at the start of the buffer @0xd1b4c-0xd1b5c] [E: O:nbl packet.ts:116-121].
-- **16-bit length variant:** the grayscale row command 0x8D uses a 2-byte big-endian length, and its checksum covers both length bytes. **OSS-only** [E: O:nbl packet.ts:178-230; commands.ts:255-258]. The vendor has a 4-argument `cPrinterV6::packageCommand(…,int,int)` overload that may be the long form (unverified).
+- **16-bit length variant:** the grayscale row command 0x8D uses a 2-byte big-endian length, and its checksum covers both length bytes. **OSS-only** [E: O:nbl packet.ts:178-230; commands.ts:255-258]. The vendor has a 4-argument `cPrinterV6::packageCommand(…,int,int)` overload that may be the long form (unverified). Labely frames 0x8D this way and decodes it only on the printer side (ADR-0036).
 - **Firmware variant:** firmware commands (0x91, 0x92, 0x9B, 0x9C, 0x90, 0x9A, 0x9D, 0x9E) carry a 2-byte chunk number before the length and a 4-byte big-endian CRC32 instead of the XOR byte. **OSS-only** [E: O:nbl packet.ts:281-396]. Labely should not implement firmware upgrade.
 - Receive side: one transport read can hold several packets, and one packet can span several reads. Split the stream on header, length and tail [E: O:nbl packet_parser.ts:35-117] [E: O:npa printer.py `_recv`].
 - Multi-byte integers are big-endian everywhere. **Confirmed** [E: V:jc `packageOneColorData` @0x1bebc8 stores the row number high byte first] [E: O:nbl utils.ts `u16ToBytes`].
@@ -108,7 +108,7 @@ stored as a command half-word, RX code passed to `jcSendCommand`). One-way means
 | 54 | 64 | RFID success times / print counter | `01` | — | V:jc `getPrinterTimes`; O:nbl commands.ts:32 | Confirmed |
 | 5A | 6A | Paper measurement / test page | `01` | — | V:jc `paperMeasurement` (V5/V6); O:nbl `PrintTestPage` 0x5A | Confirmed (code); meaning differs by source |
 | 80 | 81 | Print test page | `01` | — | V:jc `jcSetPrintTestPage` | Vendor-only |
-| 5C | 6C | Half-cut get/set | 2 bytes | — | V:jc `cPrinterV6::setHalfCut/getHalfCut`; O:nbl packet_generator.ts:604 | Confirmed |
+| 5C | 6C | Half-cut get/set | 2 bytes; set is `[01][on]` | — | V:jc `cPrinterV6::setHalfCut/getHalfCut`; O:nbl packet_generator.ts:604 | Confirmed |
 | 0E / 0F | 0E / 0F | Tube settings / tube type and width | 3–5 bytes | — | V:jc `cPrinterV6::setTubeInfo`; O:nbl packet_generator.ts:599 | Confirmed |
 | 07 | 08 | Printer config-2 (time get/set) | 2 or 8 bytes | — | V:jc `cPrinterV5/V6::setPrinterTime` len 8; O:nbl packet_generator.ts:608 | Confirmed |
 | 09 | 0A | Key function get/set | 2–3 bytes | — | V:jc `get/setKeyFunction` | Confirmed |
@@ -203,6 +203,8 @@ differs per class [E: V:jc `jcSetPrintAllTime`: V2 1 B, V3 2 B @0xb5340, V4 7 B 
 
 Labely implements all seven OSS tasks (ADR-0035). Only D110M_V4 has run on hardware (B21 Pro); the other six are checked against the simulator.
 
+Two-colour pages can be sent by the B1 and D110M_V4 tasks, and grayscale pages by D110M_V4: these are the tasks whose PrintStart has the colour field [E: O:nbl print_tasks/index.ts:48-61 `printTasksCapabilities`]. **OSS-only.** Labely follows this (ADR-0036).
+
 - PrintStart byte layout: **Confirmed** for 7 B and 9 B. The vendor writes the total-page count high byte first, then four zero bytes, then one class field (V4), or three class fields (V6) [E: V:jc addresses above] [E: O:nbl packet_generator.ts:229-236].
 - Colour field values: 0 single, 1 two-colour, 2 alt, 3 grayscale [E: O:nbl enumerations.ts:157-162]. **OSS-only.**
 
@@ -214,7 +216,7 @@ Labely implements all seven OSS tasks (ADR-0035). Only D110M_V4 has run on hardw
 | 4 | rows u16, cols u16 | B21 V1, D110 |
 | 6 | rows u16, cols u16, copies u16 | B1-class. Vendor V3/V4/V5 `jcSetPageInfo` sends 6 bytes, each field rendered as a 4-hex-digit (u16 BE) group [E: V:jc @0xb65e8, 0xd33ac, 0xed37c] |
 | 9 | + cut height u16, cut type u8 | H1S |
-| 13 | + 00, send-all u8, part height u16 | D110M_V4 / B21 Pro (OSS) |
+| 13 | + cut height u16, cut type u8, 00, send-all u8, part height u16 | D110M_V4 / B21 Pro (OSS) |
 | 45 | 13 bytes + 32-byte "local template id" | Vendor V6 `jcSetPageInfo(int×7)` [E: V:jc @0x10ec38-0x10ec90] |
 
 - "rows" is the page length in printer rows (the feed direction). "cols" is the row width in pixels.
@@ -265,6 +267,35 @@ more than 6 are sent [E: O:nbl packet_generator.ts:274-291, 442].
 - 0x8A wraps a single-colour row (mode 1 red / 2 black) or carries a mixed mask plus colour-bit stream.
 - 0x8D carries 4-bit grayscale rows with a run-length descriptor scheme.
 [E: O:nbl packet_generator.ts:265-318, 335-423; V:jc `packageTwoColorData`, `package16GrayData`]
+
+**Two-colour rows (0x8A).** The first byte is the mode: 0 empty, 1 red, 2 black, 3 mixed [E: O:nbl enumerations.ts:168-173]. The rows carry no count bytes. **OSS-only.**
+
+| Row | Payload |
+|---|---|
+| Blank rows | `[00][84][row u16][count u8]` |
+| One colour | `[01 red / 02 black][85][row u16][repeat u8][row bytes]` |
+| Both colours | `[03][row u16][repeat u8][mask bytes][colour bytes]` |
+
+- The mask has one bit per dot, set for every dot that prints (black or red). It is as long as a row.
+- One colour byte follows for each **non-zero** mask byte, in order. A set bit means the dot is red.
+- [E: O:nbl packet_generator.ts:265-272, 293-318, 527-553]
+
+**Grayscale rows (0x8D).** The packet has the 16-bit length of section 1. A level is 4 bits: 0 white, 15 black. The width must be even. **OSS-only.**
+
+| Row | Payload |
+|---|---|
+| Blank rows | `[84][row u16][count u8][00]` |
+| Data row | `[86][row u16][repeat u8][n u8][n run bytes][data bytes]` |
+
+- The data holds two levels per byte, high nibble first.
+- A run descriptor is 2 bytes: `(dots + 2) | bit 8 of the data position`, then the low byte of the position. The data byte at that position holds two equal dots, and the printer repeats its level for `dots` more dots, which are left out of the data. `dots` is even and at most 252.
+- `n` counts descriptor bytes, not runs. A run shorter than 8 dots is sent as data.
+- OSS sends no check-line with grayscale rows. The vendor interval of 100 rows (section 7.2) is not used by any OSS task.
+- [E: O:nbl packet_generator.ts:335-423, 481-520]
+
+**Cut and half-cut.** The cut height and cut type of the 9- and 13-byte SetPageSize are zero in every OSS task, and their values are not documented. UNCERTAIN. The half-cut is switched with 0x5C `[01][on]`, answered with 0x6C [E: O:nbl packet_generator.ts:603-605, commands.ts:240].
+
+Labely implements the row formats, the cut fields and the half-cut switch in the protocol crate and the driver (ADR-0036). None has run on hardware.
 
 The vendor V6 also has a compressed image path (`processOneColorCompressImageData`, `sendCompressedPrintData`, capability `ImageCompressSupport`). Wire format: UNCERTAIN.
 

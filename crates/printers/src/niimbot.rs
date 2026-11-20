@@ -4,17 +4,21 @@ use std::time::{Duration, Instant};
 
 use labely_core::document::MediaType;
 use labely_core::services::{
-    DeviceError, DeviceSettings, DeviceStatus, JobControl, PaperInfo, PrintReport, PrintRequest,
+    DeviceError, DeviceSettings, DeviceStatus, JobControl, PagePlanes, PaperInfo, PrintReport,
+    PrintRequest,
 };
-use labely_protocol::RasterView;
-use labely_protocol::niimbot::job::{self, JobSettings, PrintTask, Retry, Step};
-use labely_protocol::niimbot::request::{self, HeartbeatType, InfoType, LabelType, SoundKind};
+use labely_core::{Bitmap1, Gray4};
+use labely_protocol::niimbot::job::{self, JobSettings, Page, PrintTask, Retry, Step};
+use labely_protocol::niimbot::request::{
+    self, ColorMode, HeartbeatType, InfoType, LabelType, SoundKind,
+};
 use labely_protocol::niimbot::response::{self, ConnectResult, ParseError, ProtocolVersion};
 use labely_protocol::niimbot::{Decoder, Packet, cmd};
+use labely_protocol::{GrayView, RasterError, RasterView};
 use labely_transport::{Transport, TransportError};
 use tracing::{debug, trace};
 
-use crate::driver::{Driver, Identity, prepare_for_head};
+use crate::driver::{Driver, Identity, prepare_for_head, prepare_gray_for_head, union};
 use crate::registry::{Model, Registry};
 
 /// Reply timeout for one request.
@@ -36,10 +40,20 @@ pub struct NiimbotDriver {
     model: Option<Model>,
     model_code: Option<u16>,
     protocol: ProtocolVersion,
+    /// The printer reported a second colour at connect (0xB5 byte 10).
+    color: bool,
     /// Model to assume if the printer's model code is unknown.
     fallback_model: Option<Model>,
     /// Last page reported by an unsolicited PageIndex (old D11 task).
     page_index: u16,
+}
+
+/// The pages of a job as they go to the head.
+enum Prepared {
+    Mono(Vec<Bitmap1>),
+    /// Black and red plane of each page.
+    TwoColor(Vec<(Bitmap1, Bitmap1)>),
+    Gray(Vec<Gray4>),
 }
 
 impl std::fmt::Debug for NiimbotDriver {
@@ -96,6 +110,7 @@ impl NiimbotDriver {
             model: None,
             model_code: None,
             protocol: ProtocolVersion(0),
+            color: false,
             fallback_model: None,
             page_index: 0,
         }
@@ -215,6 +230,51 @@ impl NiimbotDriver {
                 ))
             }),
         }
+    }
+
+    /// Orient and fit the pages of `job` for the head, with the planes this printer can
+    /// print. Red dots go to the black plane when the printer or its task has no second
+    /// colour. Gray maps are used by every task that can send them, because no printer
+    /// reports whether it prints gray levels.
+    fn prepare(
+        &self,
+        job: &PrintRequest,
+        task: PrintTask,
+        model: &Model,
+    ) -> Result<Prepared, DeviceError> {
+        let fit = |b: &Bitmap1| prepare_for_head(b, model);
+        let same_count = |planes: usize| {
+            if planes == job.pages.len() {
+                Ok(())
+            } else {
+                Err(DeviceError::Other(format!(
+                    "the job has {planes} extra planes for {} pages",
+                    job.pages.len()
+                )))
+            }
+        };
+        Ok(match &job.planes {
+            PagePlanes::Red(red) => {
+                same_count(red.len())?;
+                let both = job.pages.iter().zip(red);
+                if self.color && task.supports(ColorMode::TwoColor) {
+                    Prepared::TwoColor(both.map(|(b, r)| (fit(b), fit(r))).collect())
+                } else {
+                    Prepared::Mono(both.map(|(b, r)| fit(&union(b, r))).collect())
+                }
+            }
+            PagePlanes::Gray(gray) if task.supports(ColorMode::Gray) => {
+                same_count(gray.len())?;
+                Prepared::Gray(
+                    gray.iter()
+                        .map(|g| prepare_gray_for_head(g, model))
+                        .collect(),
+                )
+            }
+            PagePlanes::Gray(_) | PagePlanes::None => {
+                Prepared::Mono(job.pages.iter().map(fit).collect())
+            }
+        })
     }
 
     fn run_steps(
@@ -366,10 +426,13 @@ impl Driver for NiimbotDriver {
         }
         let result =
             result.ok_or_else(|| DeviceError::Timeout("printer did not answer Connect".into()))?;
+        self.color = false;
         self.protocol = match result {
             ConnectResult::ConnectedQueryVersion => {
                 let p = self.exchange(&request::status_data(), cmd::STATUS_DATA_RESP)?;
-                response::status_data(&p).map_err(parse_err)?.0
+                let (version, color) = response::status_data(&p).map_err(parse_err)?;
+                self.color = color;
+                version
             }
             ConnectResult::ConnectedV1 => ProtocolVersion(1),
             ConnectResult::ConnectedLegacy => ProtocolVersion(0),
@@ -467,24 +530,39 @@ impl Driver for NiimbotDriver {
         })?;
         let task = self.resolve_task(&model)?;
         let density = job.density.clamp(model.density.min, model.density.max);
-        let pages: Vec<_> = job
-            .pages
-            .iter()
-            .map(|b| prepare_for_head(b, &model))
-            .collect();
-        let views = pages
-            .iter()
-            .map(|b| RasterView::new(b.width(), b.height(), b.stride(), b.data()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| DeviceError::Other(e.to_string()))?;
+        let prepared = self.prepare(job, task, &model)?;
+        fn view(b: &Bitmap1) -> Result<RasterView<'_>, RasterError> {
+            RasterView::new(b.width(), b.height(), b.stride(), b.data())
+        }
+        let pages = match &prepared {
+            Prepared::Mono(pages) => pages
+                .iter()
+                .map(|b| view(b).map(Page::Mono))
+                .collect::<Result<Vec<_>, _>>(),
+            Prepared::TwoColor(pages) => pages
+                .iter()
+                .map(|(black, red)| {
+                    Ok(Page::TwoColor {
+                        black: view(black)?,
+                        red: view(red)?,
+                    })
+                })
+                .collect(),
+            Prepared::Gray(pages) => pages
+                .iter()
+                .map(|g| GrayView::new(g.width(), g.height(), g.data()).map(Page::Gray))
+                .collect(),
+        }
+        .map_err(|e| DeviceError::Other(e.to_string()))?;
         let settings = JobSettings {
             density,
             label_type: label_type(job.media),
             copies: job.copies.max(1),
+            half_cut: job.half_cut,
             ..JobSettings::default()
         };
-        let steps =
-            job::build(task, &settings, &views).map_err(|e| DeviceError::Other(e.to_string()))?;
+        let steps = job::build_pages(task, &settings, &pages)
+            .map_err(|e| DeviceError::Other(e.to_string()))?;
         self.drain_input();
         let total = job.pages.len() as u32 * u32::from(settings.copies);
         control.set_progress(0, total);
