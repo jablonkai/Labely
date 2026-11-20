@@ -175,6 +175,8 @@ pub fn sound_set(kind: SoundKind, on: bool) -> Packet {
 pub enum PrintStart {
     /// 1 byte `01` (D11 / B21 V1 / D110 tasks).
     V1,
+    /// 2 bytes: total u16 (H1S task, vendor V3).
+    V2 { total_pages: u16 },
     /// 7 bytes: total u16, four zero bytes, colour (B1 task, vendor V4).
     V7 { total_pages: u16, color: ColorMode },
     /// 9 bytes: as V7 plus quality/speed and flag (D110M_V4 task, vendor V6; B21 Pro).
@@ -189,6 +191,9 @@ pub enum PrintStart {
 pub fn print_start(start: PrintStart) -> Packet {
     match start {
         PrintStart::V1 => Packet::small(cmd::PRINT_START, &[0x01]),
+        PrintStart::V2 { total_pages } => {
+            Packet::small(cmd::PRINT_START, &total_pages.to_be_bytes())
+        }
         PrintStart::V7 { total_pages, color } => {
             let [hi, lo] = total_pages.to_be_bytes();
             Packet::small(cmd::PRINT_START, &[hi, lo, 0, 0, 0, 0, color as u8])
@@ -222,6 +227,8 @@ pub enum PageSizeFormat {
     Len4,
     /// rows, cols, copies
     Len6,
+    /// rows, cols, copies, cut height u16 and cut type u8, both zero (H1S)
+    Len9,
     /// rows, cols, copies, then 7 zero bytes (B21 Pro per OSS)
     Len13,
 }
@@ -233,8 +240,14 @@ pub fn set_page_size(format: PageSizeFormat, rows: u16, cols: u16, copies: u16) 
     if format != PageSizeFormat::Len2 {
         p.extend_from_slice(&cols.to_be_bytes());
     }
-    if matches!(format, PageSizeFormat::Len6 | PageSizeFormat::Len13) {
+    if matches!(
+        format,
+        PageSizeFormat::Len6 | PageSizeFormat::Len9 | PageSizeFormat::Len13
+    ) {
         p.extend_from_slice(&copies.to_be_bytes());
+    }
+    if format == PageSizeFormat::Len9 {
+        p.extend_from_slice(&[0; 3]);
     }
     if format == PageSizeFormat::Len13 {
         p.extend_from_slice(&[0; 7]);
@@ -248,6 +261,12 @@ pub fn set_quantity(copies: u16) -> Packet {
 
 pub fn print_clear() -> Packet {
     Packet::small(cmd::PRINT_CLEAR, &[0x01])
+}
+
+/// Row check-line after `row` (§7): `[row u16][01]`, answered with 0xD3.
+pub fn check_line(row: u16) -> Packet {
+    let [hi, lo] = row.to_be_bytes();
+    Packet::small(cmd::CHECK_LINE, &[hi, lo, 0x01])
 }
 
 pub fn page_end() -> Packet {
@@ -292,6 +311,7 @@ pub fn expected_response(request_cmd: u8, first_payload_byte: Option<u8>) -> Opt
         cmd::SET_PAGE_SIZE => cmd::SET_PAGE_SIZE_RESP,
         cmd::SET_QUANTITY => cmd::SET_QUANTITY_RESP,
         cmd::PRINT_CLEAR => cmd::PRINT_CLEAR_RESP,
+        cmd::CHECK_LINE => cmd::CHECK_LINE_RESP,
         cmd::PAGE_END => cmd::PAGE_END_RESP,
         cmd::PRINT_STATUS => cmd::PRINT_STATUS_RESP,
         cmd::PRINT_END => cmd::PRINT_END_RESP,

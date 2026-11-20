@@ -36,7 +36,8 @@ pub struct Model {
     pub ble_name_prefixes: Vec<String>,
     /// Driver family: `niimbot` or `fake`.
     pub driver: String,
-    /// Driver-specific task variant (NIIMBOT: `d110`, `b1`, `d110m_v4`, `auto`, …).
+    /// Driver-specific task variant. NIIMBOT: `d11_v1`, `b21_v1`, `b21_l2b`, `d110`, `b1`,
+    /// `h1s`, `d110m_v4`, or `auto` (by protocol version).
     pub task: String,
     pub dpi: u32,
     pub head_dots: u32,

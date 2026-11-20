@@ -315,3 +315,85 @@ fn native_ble_host_prints_through_simulator() {
     hub.disconnect("ble:SIM-B21").unwrap();
     assert!(hub.connect("ble:OTHER").is_err());
 }
+
+/// Every NIIMBOT model in the registry prints on a simulator set up for it: the task
+/// resolves, the job completes and the pages arrive as prepared for the head.
+#[test]
+fn every_registered_model_prints_on_the_simulator() {
+    let registry = Registry::builtin();
+    let models: Vec<_> = registry
+        .models()
+        .iter()
+        .filter(|m| m.driver == "niimbot")
+        .collect();
+    assert!(models.len() > 40);
+    for model in models {
+        assert!(!model.model_codes.is_empty(), "{} has no code", model.id);
+        let (sim, transport) = Simulator::start(SimConfig::for_model(model));
+        // The model guessed from the BLE name decides between models that share a code.
+        let by_name = registry.guess_by_name(&model.name).cloned();
+        let mut drv = NiimbotDriver::new(Box::new(transport)).with_fallback_model(by_name);
+        let id = drv.connect().unwrap();
+        let resolved = registry.by_id(&id.model.unwrap().id).unwrap();
+        assert_eq!(resolved.task, model.task, "{}", model.id);
+        assert_eq!(resolved.head_dots, model.head_dots, "{}", model.id);
+
+        // Taller than one check-line interval, so the B21 tasks send a check-line.
+        let (w, h) = (model.head_dots.min(96), 230);
+        let mut label = Bitmap1::new(w, h);
+        for y in 0..h {
+            label.set(y % w, y, true);
+        }
+        let job = PrintRequest {
+            pages: vec![label.clone()],
+            copies: 2,
+            density: model.density.default,
+            media: MediaType::Gap,
+        };
+        let control = JobControl::new();
+        let report = drv
+            .print(&job, &control)
+            .unwrap_or_else(|e| panic!("{} ({}): {e}", model.id, model.task));
+        assert_eq!(report.pages_printed, 2, "{}", model.id);
+        assert_eq!(control.progress(), (2, 2), "{}", model.id);
+
+        let log = sim.log();
+        let expected = prepare_for_head(&label, resolved);
+        let copies: u32 = log.pages.iter().map(|p| u32::from(p.1)).sum();
+        assert_eq!(copies, 2, "{}", model.id);
+        for (page, _) in &log.pages {
+            assert_eq!(page, &expected, "{} ({})", model.id, model.task);
+        }
+        let per_copy = matches!(model.task.as_str(), "b21_v1" | "b21_l2b");
+        assert_eq!(
+            log.pages.len(),
+            if per_copy { 2 } else { 1 },
+            "{}",
+            model.id
+        );
+        assert_eq!(
+            log.commands.contains(&0x86),
+            per_copy,
+            "{}: check-lines",
+            model.id
+        );
+    }
+}
+
+#[test]
+fn ble_name_decides_between_models_that_share_a_code() {
+    let registry = Registry::builtin();
+    let d11 = registry.by_id("niimbot.d11").unwrap();
+    let hi = registry.by_id("niimbot.hi_nb_d11").unwrap();
+    assert_eq!(d11.model_codes, hi.model_codes);
+    for (name, expected) in [("D11-A1B2C3", d11), ("Hi-NB-D11-0001", hi)] {
+        let (_sim, transport) = Simulator::start(SimConfig::for_model(expected));
+        let mut drv = NiimbotDriver::new(Box::new(transport))
+            .with_fallback_model(registry.guess_by_name(name).cloned());
+        assert_eq!(drv.connect().unwrap().model.unwrap().id, expected.id);
+    }
+    // Without a name the first model registered for the code is used.
+    let (_sim, transport) = Simulator::start(SimConfig::for_model(hi));
+    let mut drv = NiimbotDriver::new(Box::new(transport));
+    assert_eq!(drv.connect().unwrap().model.unwrap().id, d11.id);
+}

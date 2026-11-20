@@ -36,3 +36,4 @@
 | [0032](0032-ios-ui-and-ble.md) | iOS UI and BLE | proposed |
 | [0033](0033-ios-app-intents.md) | iOS App Intents | proposed |
 | [0034](0034-phase-5-close-out.md) | Phase 5 close-out | proposed |
+| [0035](0035-print-tasks.md) | NIIMBOT print tasks (Phase 6 start) | proposed |

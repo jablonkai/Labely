@@ -48,6 +48,11 @@ pub mod cmd {
     pub const PRINT_CLEAR_RESP: u8 = 0x30;
     pub const ROWS_EMPTY: u8 = 0x84;
     pub const ROW_BITMAP: u8 = 0x85;
+    /// Row check-line: the printer answers when it has taken the rows so far (§7).
+    pub const CHECK_LINE: u8 = 0x86;
+    pub const CHECK_LINE_RESP: u8 = 0xD3;
+    /// Unsolicited page counter of the old D11 task (§5.2): payload is the page as u16.
+    pub const PAGE_INDEX: u8 = 0xE0;
     pub const PAGE_END: u8 = 0xE3;
     pub const PAGE_END_RESP: u8 = 0xE4;
     pub const PRINT_STATUS: u8 = 0xA3;
