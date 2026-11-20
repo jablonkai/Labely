@@ -2,7 +2,8 @@
 
 Status: proposed (Phase 0). Decisions are recorded in [`docs/adr/`](adr/). Conventions follow
 [`prior-art.md` §4](prior-art.md#4-conventions-labely-adopts). Where this document departs from
-them it says so. Protocol facts are in [`protocol.md`](protocol.md), models in
+them it says so. Protocol facts are in [`protocol.md`](protocol.md) (NIIMBOT) and
+[`protocol-languages.md`](protocol-languages.md) (other vendors), models in
 [`printers.md`](printers.md), and the parity target in [`feature-matrix.md`](feature-matrix.md).
 
 ## 1. Goals and non-goals
@@ -25,7 +26,7 @@ them it says so. Protocol facts are in [`protocol.md`](protocol.md), models in
 Cargo.toml                 workspace; edition 2024; license MIT OR Apache-2.0; Cargo.lock committed
 rust-toolchain.toml        pinned stable (1.100.0 at time of writing), MSRV 1.95 (egui 0.37)
 crates/
-  protocol/   labely-protocol    pure encode/decode, no I/O, no async (NIIMBOT first; later ESC/POS, TSPL, ZPL, Phomemo…)
+  protocol/   labely-protocol    pure encode/decode, no I/O, no async (NIIMBOT, ESC/POS, Phomemo, Marklife, TSPL, ZPL)
   core/       labely-core        document model, command registry, Session, undo/redo, batch, templates, data merge, check rules
   render/     labely-render      Document → grayscale → 1-bit Bitmap1 (text, barcodes, 2D codes, images, shapes, dithering)
   transport/  labely-transport   Transport trait; ble (btleplug), serial/usb, memory, callback (FFI)
@@ -184,10 +185,10 @@ otherwise only the media type.
 ```
 print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, job queue)
                                │  Driver (trait)          ◀── model registry entry
-                               │    NiimbotDriver{variant}  FakePrinter  (later: EscPos, Tspl, Zpl, Phomemo…)
+                               │    NiimbotDriver{variant}  StreamDriver{language}  FakePrinter
                                │  uses labely-protocol encoders
                                ▼
-                             Transport (trait): Ble(btleplug) | Serial(USB CDC) | Callback(FFI) | Sim
+                             Transport (trait): Ble(btleplug) | Serial(USB CDC) | Tcp | Callback(FFI) | Sim
 ```
 
 - **Transport.**
@@ -223,6 +224,7 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
     "rfid": true, "transports": ["ble","usb"] }
   ```
   The model code (PrinterInfo 0x40, type 8) is authoritative and the BLE name only filters scans ([printers.md](printers.md#how-models-are-identified)). `task` is one of `d110`, `b1`, `d110m_v4` or `auto` (picked from the protocol version); other variants listed in protocol.md §5.2 are recorded but not yet implemented.
+  Printers of other vendors do not report a model. `driver` and `task` pick their language ([protocol-languages.md](protocol-languages.md)), and the model comes from the BLE name or from `?model=<id>` on the address (ADR-0037).
 - **FakePrinter.** A `driver: "fake"` model writes each page as `<out>/<job>-<page>.png` plus a
   `job.json` (density, copies, label type). It is the default in tests, the CLI `--printer
   fake:<dir>` and demo mode.
@@ -231,6 +233,7 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
   quirks, and reassembles the raster, so driver tests run real byte streams without hardware
   (`sim:<model id>` address). It lives in `printers`, not `transport`, because it needs the
   protocol crate. Captured vendor traces (`fixtures/`) are replayed against encoders and decoders.
+  `labely-printers::stream_sim` does the same for the stream languages of the other vendors.
 - **Queue and multiple printers.** The `DeviceHub` keeps one `PrinterSession` per connected
   printer. Each session has a FIFO queue with per-job progress events (`device.*` notifications,
   forwarded over MCP as progress). Batches over data records are expanded lazily, one record at a

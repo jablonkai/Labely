@@ -1,0 +1,168 @@
+{
+ "schema": 1,
+ "source": "docs/protocol-languages.md",
+ "models": [
+  {
+   "id": "generic.escpos_58",
+   "vendor": "generic",
+   "name": "ESC/POS 58 mm",
+   "ble_name_prefixes": [],
+   "driver": "escpos",
+   "task": "raster",
+   "dpi": 203,
+   "head_dots": 384,
+   "max_width_mm": 48.0,
+   "max_length_mm": 1000.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 1,
+    "default": 1
+   },
+   "transports": [
+    "tcp",
+    "usb",
+    "ble"
+   ]
+  },
+  {
+   "id": "generic.escpos_80",
+   "vendor": "generic",
+   "name": "ESC/POS 80 mm",
+   "ble_name_prefixes": [],
+   "driver": "escpos",
+   "task": "raster_cut",
+   "dpi": 203,
+   "head_dots": 576,
+   "max_width_mm": 72.0,
+   "max_length_mm": 1000.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 1,
+    "default": 1
+   },
+   "transports": [
+    "tcp",
+    "usb",
+    "ble"
+   ]
+  },
+  {
+   "id": "generic.tspl_203",
+   "vendor": "generic",
+   "name": "TSPL 203 dpi",
+   "ble_name_prefixes": [],
+   "driver": "tspl",
+   "task": "bitmap",
+   "dpi": 203,
+   "head_dots": 832,
+   "max_width_mm": 104.0,
+   "max_length_mm": 300.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 0,
+    "max": 15,
+    "default": 8
+   },
+   "transports": [
+    "tcp",
+    "usb",
+    "ble"
+   ]
+  },
+  {
+   "id": "generic.tspl_300",
+   "vendor": "generic",
+   "name": "TSPL 300 dpi",
+   "ble_name_prefixes": [],
+   "driver": "tspl",
+   "task": "bitmap",
+   "dpi": 300,
+   "head_dots": 1248,
+   "max_width_mm": 105.7,
+   "max_length_mm": 300.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 0,
+    "max": 15,
+    "default": 8
+   },
+   "transports": [
+    "tcp",
+    "usb",
+    "ble"
+   ]
+  },
+  {
+   "id": "generic.zpl_203",
+   "vendor": "generic",
+   "name": "ZPL 203 dpi",
+   "ble_name_prefixes": [],
+   "driver": "zpl",
+   "task": "gfa",
+   "dpi": 203,
+   "head_dots": 832,
+   "max_width_mm": 104.0,
+   "max_length_mm": 300.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 0,
+    "max": 30,
+    "default": 15
+   },
+   "transports": [
+    "tcp",
+    "usb"
+   ]
+  },
+  {
+   "id": "generic.zpl_300",
+   "vendor": "generic",
+   "name": "ZPL 300 dpi",
+   "ble_name_prefixes": [],
+   "driver": "zpl",
+   "task": "gfa",
+   "dpi": 300,
+   "head_dots": 1280,
+   "max_width_mm": 108.4,
+   "max_length_mm": 300.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 0,
+    "max": 30,
+    "default": 15
+   },
+   "transports": [
+    "tcp",
+    "usb"
+   ]
+  }
+ ]
+}

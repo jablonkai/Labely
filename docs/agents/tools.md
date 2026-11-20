@@ -142,6 +142,10 @@ Settings a printer does not report are left out of `device.settings`.
 Printer addresses:
 - `ble:<id>`
 - `usb:<port>`
+- `tcp:<host>[:<port>]`: a network printer, port 9100 by default.
+- `ble:`, `usb:` and `tcp:` take `?model=<id>` for a printer that is not a NIIMBOT and cannot
+  say what it is, for example `tcp:192.168.1.50?model=generic.zpl_203`. `device.models` lists
+  the ids.
 - `sim:<model id>`: the protocol simulator.
 - `fake:<dir>[?model=<id>&delay_ms=<n>]`: writes PNGs to `<dir>/job-NNNN/`; `delay_ms` makes
   each page take that long, to watch the queue.

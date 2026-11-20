@@ -15,6 +15,7 @@ pub mod gatt;
 pub mod memory;
 #[cfg(feature = "serial")]
 pub mod serial;
+pub mod tcp;
 
 /// Transport kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,26 +25,29 @@ pub enum TransportKind {
     Serial,
     Memory,
     Callback,
+    Tcp,
 }
 
 /// Identity of an open or discovered endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransportInfo {
     pub kind: TransportKind,
-    /// Address without scheme: BLE peripheral id, serial port path, memory name.
+    /// Address without scheme: BLE peripheral id, serial port path, memory name, TCP
+    /// `host:port`.
     pub address: String,
     /// Human-readable name (BLE advertised name, USB product string).
     pub name: String,
 }
 
 impl TransportInfo {
-    /// `ble:<id>`, `usb:<port>`, `mem:<name>`, `cb:<id>`.
+    /// `ble:<id>`, `usb:<port>`, `mem:<name>`, `cb:<id>`, `tcp:<host:port>`.
     pub fn uri(&self) -> String {
         let scheme = match self.kind {
             TransportKind::Ble => "ble",
             TransportKind::Serial => "usb",
             TransportKind::Memory => "mem",
             TransportKind::Callback => "cb",
+            TransportKind::Tcp => "tcp",
         };
         format!("{scheme}:{}", self.address)
     }

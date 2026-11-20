@@ -90,6 +90,73 @@ impl<'a> RasterView<'a> {
     }
 }
 
+/// An owned 1-bit raster in the layout of [`RasterView`], with the tightest stride. The
+/// decoders return it; rows are appended as they arrive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Raster {
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+}
+
+impl Raster {
+    /// An empty raster `width` dots wide.
+    pub fn new(width: u32) -> Self {
+        Self {
+            width,
+            height: 0,
+            data: Vec::new(),
+        }
+    }
+
+    /// Width in dots.
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Height in rows.
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Bytes per row.
+    pub fn row_bytes(&self) -> usize {
+        (self.width as usize).div_ceil(8)
+    }
+
+    /// Packed rows, `row_bytes * height` bytes.
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// Append whole rows. `rows` must hold a multiple of [`Self::row_bytes`] bytes; a
+    /// trailing partial row is dropped.
+    pub fn push_rows(&mut self, rows: &[u8]) {
+        let rb = self.row_bytes();
+        if rb == 0 {
+            return;
+        }
+        let whole = rows.len() / rb;
+        self.data.extend_from_slice(&rows[..whole * rb]);
+        self.height += whole as u32;
+    }
+
+    /// Whether dot `(x, y)` is black.
+    pub fn get(&self, x: u32, y: u32) -> bool {
+        self.view().get(x, y)
+    }
+
+    /// Borrow as a view.
+    pub fn view(&self) -> RasterView<'_> {
+        RasterView {
+            width: self.width,
+            height: self.height,
+            stride: self.row_bytes(),
+            data: &self.data,
+        }
+    }
+}
+
 /// A 16-level gray raster: one byte per dot, 0 = white, 15 = black. Larger values count
 /// as black.
 ///

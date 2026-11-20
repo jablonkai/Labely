@@ -1,7 +1,9 @@
 //! `DeviceHub` implementation: one connection (and driver) per address.
 //!
 //! Address schemes: `fake:<dir>[?model=<id>&delay_ms=<n>]`, `sim:[<model id>]`, `ble:<peripheral id>`,
-//! `usb:<serial port>`.
+//! `usb:<serial port>`, `tcp:<host>[:<port>]`. The last three take `?model=<id>` to name the
+//! model of a printer that cannot say what it is (docs/protocol-languages.md §1); without it
+//! a `ble:` printer is recognised by its name and anything else is taken for a NIIMBOT.
 //!
 //! On mobile, `ble:` goes through the shell's [`NativeBleHost`] ([`Hub::with_native_ble`],
 //! ADR-0025) instead of btleplug.
@@ -24,14 +26,35 @@ use crate::fake::FakePrinter;
 use crate::niimbot::NiimbotDriver;
 use crate::registry::{Model, Registry};
 use crate::sim::{SimConfig, Simulator};
+use crate::stream::{Language, StreamDriver};
+use crate::stream_sim::StreamSim;
 
 /// Model used by `fake:` and `sim:` when none is given.
 pub const DEFAULT_VIRTUAL_MODEL: &str = "niimbot.b21_pro";
+/// How long a `tcp:` printer gets to accept the connection.
+const TCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct Connection {
     driver: Box<dyn Driver>,
     info: DeviceInfo,
-    _sim: Option<Simulator>,
+    /// Keeps the simulator of a `sim:` connection alive.
+    _sim: Option<Box<dyn std::any::Any + Send>>,
+}
+
+/// The driver for `model` on an open transport: the stream driver for the languages it
+/// speaks, NIIMBOT otherwise (which then asks the printer for its model and keeps `model`
+/// as the fallback).
+fn driver_for(
+    transport: Box<dyn labely_transport::Transport>,
+    model: Option<Model>,
+) -> Box<dyn Driver> {
+    match model.as_ref().and_then(Language::of) {
+        Some(language) => match model {
+            Some(model) => Box::new(StreamDriver::new(transport, model, language)),
+            None => Box::new(NiimbotDriver::new(transport)),
+        },
+        None => Box::new(NiimbotDriver::new(transport).with_fallback_model(model)),
+    }
 }
 
 type Shared = Arc<Mutex<Connection>>;
@@ -101,6 +124,7 @@ impl Hub {
         &self,
         host: &Arc<dyn NativeBleHost>,
         id: &str,
+        model: Option<Model>,
     ) -> Result<Box<dyn Driver>, DeviceError> {
         let mut name = String::new();
         let t = CallbackTransport::connect_with(
@@ -116,10 +140,8 @@ impl Hub {
             },
         )
         .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
-        let fallback = self.registry.guess_by_name(&name).cloned();
-        Ok(Box::new(
-            NiimbotDriver::new(Box::new(t)).with_fallback_model(fallback),
-        ))
+        let model = model.or_else(|| self.registry.guess_by_name(&name).cloned());
+        Ok(driver_for(Box::new(t), model))
     }
 
     fn scan_native_ble(
@@ -159,11 +181,31 @@ impl Hub {
             .ok_or_else(|| DeviceError::NotFound(format!("model '{id}' (see `labely models`)")))
     }
 
+    /// Split `<target>[?model=<id>]` of a `ble:`, `usb:` or `tcp:` address.
+    fn target_and_model<'a>(
+        &self,
+        address: &str,
+        rest: &'a str,
+    ) -> Result<(&'a str, Option<Model>), DeviceError> {
+        let Some((target, query)) = rest.split_once('?') else {
+            return Ok((rest, None));
+        };
+        match query.split_once('=') {
+            Some(("model", id)) if !id.is_empty() => {
+                Ok((target, Some(self.model_or_default(Some(id))?)))
+            }
+            _ => Err(DeviceError::NotFound(format!(
+                "'{address}': unknown option '{query}' (use model=)"
+            ))),
+        }
+    }
+
     fn open(&self, address: &str) -> Result<Connection, DeviceError> {
         let (scheme, rest) = address
             .split_once(':')
             .ok_or_else(|| DeviceError::NotFound(format!("'{address}': expected scheme:target")))?;
-        let (mut driver, sim): (Box<dyn Driver>, Option<Simulator>) = match scheme {
+        type Sim = Option<Box<dyn std::any::Any + Send>>;
+        let (mut driver, sim): (Box<dyn Driver>, Sim) = match scheme {
             "fake" => {
                 let (dir, query) = rest.split_once('?').unwrap_or((rest, ""));
                 let mut model_id = None;
@@ -195,19 +237,42 @@ impl Hub {
             }
             "sim" => {
                 let model = self.model_or_default(Some(rest))?;
-                let mut cfg = SimConfig::b21_pro();
-                cfg.model_code = model.model_codes.first().copied().unwrap_or(0);
-                let (sim, transport) = Simulator::start(cfg);
-                (Box::new(NiimbotDriver::new(Box::new(transport))), Some(sim))
+                match StreamSim::start(&model) {
+                    Some((sim, transport)) => (
+                        driver_for(Box::new(transport), Some(model)),
+                        Some(Box::new(sim)),
+                    ),
+                    None => {
+                        let mut cfg = SimConfig::b21_pro();
+                        cfg.model_code = model.model_codes.first().copied().unwrap_or(0);
+                        let (sim, transport) = Simulator::start(cfg);
+                        (
+                            Box::new(NiimbotDriver::new(Box::new(transport))),
+                            Some(Box::new(sim)),
+                        )
+                    }
+                }
             }
-            "ble" => match &self.native_ble {
-                Some(host) => (self.open_native_ble(host, rest)?, None),
-                None => (self.open_ble(rest)?, None),
-            },
-            "usb" => (self.open_serial(rest)?, None),
+            "ble" => {
+                let (id, model) = self.target_and_model(address, rest)?;
+                match &self.native_ble {
+                    Some(host) => (self.open_native_ble(host, id, model)?, None),
+                    None => (self.open_ble(id, model)?, None),
+                }
+            }
+            "usb" => {
+                let (port, model) = self.target_and_model(address, rest)?;
+                (self.open_serial(port, model)?, None)
+            }
+            "tcp" => {
+                let (host, model) = self.target_and_model(address, rest)?;
+                let t = labely_transport::tcp::open(host, TCP_CONNECT_TIMEOUT)
+                    .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
+                (driver_for(Box::new(t), model), None)
+            }
             other => {
                 return Err(DeviceError::NotFound(format!(
-                    "unknown scheme '{other}' (use fake:, sim:, ble:, usb:)"
+                    "unknown scheme '{other}' (use fake:, sim:, ble:, usb:, tcp:)"
                 )));
             }
         };
@@ -229,34 +294,41 @@ impl Hub {
     }
 
     #[cfg(feature = "ble")]
-    fn open_ble(&self, id: &str) -> Result<Box<dyn Driver>, DeviceError> {
+    fn open_ble(&self, id: &str, model: Option<Model>) -> Result<Box<dyn Driver>, DeviceError> {
         let t = labely_transport::ble::open(id, Duration::from_secs(15))
             .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
-        let fallback = self
-            .registry
-            .guess_by_name(&labely_transport::Transport::info(&t).name)
-            .cloned();
-        Ok(Box::new(
-            NiimbotDriver::new(Box::new(t)).with_fallback_model(fallback),
-        ))
+        let model = model.or_else(|| {
+            self.registry
+                .guess_by_name(&labely_transport::Transport::info(&t).name)
+                .cloned()
+        });
+        Ok(driver_for(Box::new(t), model))
     }
 
     #[cfg(not(feature = "ble"))]
-    fn open_ble(&self, _id: &str) -> Result<Box<dyn Driver>, DeviceError> {
+    fn open_ble(&self, _id: &str, _model: Option<Model>) -> Result<Box<dyn Driver>, DeviceError> {
         Err(DeviceError::Unavailable(
             "built without Bluetooth support (feature `ble`)".into(),
         ))
     }
 
     #[cfg(feature = "serial")]
-    fn open_serial(&self, path: &str) -> Result<Box<dyn Driver>, DeviceError> {
+    fn open_serial(
+        &self,
+        path: &str,
+        model: Option<Model>,
+    ) -> Result<Box<dyn Driver>, DeviceError> {
         let t = labely_transport::serial::open(path, labely_transport::serial::DEFAULT_BAUD)
             .map_err(|e| DeviceError::Unavailable(e.to_string()))?;
-        Ok(Box::new(NiimbotDriver::new(Box::new(t))))
+        Ok(driver_for(Box::new(t), model))
     }
 
     #[cfg(not(feature = "serial"))]
-    fn open_serial(&self, _path: &str) -> Result<Box<dyn Driver>, DeviceError> {
+    fn open_serial(
+        &self,
+        _path: &str,
+        _model: Option<Model>,
+    ) -> Result<Box<dyn Driver>, DeviceError> {
         Err(DeviceError::Unavailable(
             "built without USB serial support (feature `serial`)".into(),
         ))

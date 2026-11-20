@@ -18,7 +18,7 @@ use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
 use crate::gatt::{
-    BLE_PACKET_GAP_MS, CharCandidate, payload_for_att_mtu, scan_matches, select_characteristic,
+    BLE_PACKET_GAP_MS, CharCandidate, payload_for_att_mtu, scan_matches, select_link,
 };
 use crate::{Discovered, Transport, TransportError, TransportInfo, TransportKind, recv_while_open};
 
@@ -146,21 +146,26 @@ pub fn open(address: &str, timeout: Duration) -> Result<BleTransport, TransportE
                             .contains(CharPropFlags::WRITE_WITHOUT_RESPONSE),
                     })
                     .collect();
-                let characteristic = select_characteristic(&candidates)
-                    .and_then(|i| chars.get(i).cloned())
-                    .ok_or_else(|| {
-                        TransportError::Unsupported(
-                            "no characteristic with notify + write-without-response".into(),
-                        )
-                    })?;
+                let unsupported = || {
+                    TransportError::Unsupported(
+                        "no characteristics to write to and be notified on".into(),
+                    )
+                };
+                let link = select_link(&candidates).ok_or_else(unsupported)?;
+                let characteristic = chars.get(link.write).cloned().ok_or_else(unsupported)?;
+                let listen: Vec<Characteristic> = link
+                    .notify
+                    .iter()
+                    .filter_map(|&i| chars.get(i).cloned())
+                    .collect();
 
                 // Open both streams before subscribing so no early notification is lost.
                 let mut notifications = peripheral.notifications().await.map_err(bt)?;
                 let mut events = adapter.events().await.map_err(bt)?;
-                let uuid = characteristic.uuid;
+                let uuids: Vec<_> = listen.iter().map(|c| c.uuid).collect();
                 let forward = tokio::spawn(async move {
                     while let Some(n) = notifications.next().await {
-                        if n.uuid == uuid && tx.send(n.value).is_err() {
+                        if uuids.contains(&n.uuid) && tx.send(n.value).is_err() {
                             break;
                         }
                     }
@@ -175,7 +180,9 @@ pub fn open(address: &str, timeout: Duration) -> Result<BleTransport, TransportE
                         }
                     }
                 });
-                peripheral.subscribe(&characteristic).await.map_err(bt)?;
+                for c in &listen {
+                    peripheral.subscribe(c).await.map_err(bt)?;
+                }
                 Ok::<_, TransportError>((characteristic, vec![forward, watch]))
             };
             match setup.await {

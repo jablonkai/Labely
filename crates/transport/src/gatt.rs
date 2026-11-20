@@ -1,5 +1,6 @@
 //! Pure GATT helpers shared by the btleplug transport and the native mobile shells:
-//! known NIIMBOT UUIDs (docs/protocol.md §3.1), scan filtering and characteristic choice.
+//! known NIIMBOT UUIDs (docs/protocol.md §3.1), the split serial service of other vendors
+//! (docs/protocol-languages.md §7.2), scan filtering and characteristic choice.
 
 /// Standard NIIMBOT service.
 pub const NIIMBOT_SERVICE: &str = "e7810a71-73ae-499d-8c15-faa9aef0c3f2";
@@ -70,6 +71,40 @@ pub fn select_characteristic(chars: &[CharCandidate]) -> Option<usize> {
         }
     }
     chars.iter().position(CharCandidate::usable)
+}
+
+/// Serial service of Phomemo and Marklife printers (16-bit alias): host writes go to
+/// [`SPLIT_WRITE`], replies arrive on the other characteristics of the service.
+pub const SPLIT_SERVICE: &str = "ff00";
+/// Write characteristic of [`SPLIT_SERVICE`].
+pub const SPLIT_WRITE: &str = "ff02";
+
+/// The characteristics of a connection: one to write to, one or more to listen on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Link {
+    /// Index into the candidates.
+    pub write: usize,
+    /// Indexes into the candidates. Everything they notify is one byte stream.
+    pub notify: Vec<usize>,
+}
+
+/// Pick the characteristics of a connection: one characteristic for both directions if
+/// [`select_characteristic`] finds it, otherwise the split serial service.
+pub fn select_link(chars: &[CharCandidate]) -> Option<Link> {
+    if let Some(i) = select_characteristic(chars) {
+        return Some(Link {
+            write: i,
+            notify: vec![i],
+        });
+    }
+    let in_service = |c: &CharCandidate| uuid_matches(&c.service, SPLIT_SERVICE);
+    let write = chars.iter().position(|c| {
+        in_service(c) && c.write_without_response && uuid_matches(&c.characteristic, SPLIT_WRITE)
+    })?;
+    let notify: Vec<usize> = (0..chars.len())
+        .filter(|&i| in_service(&chars[i]) && chars[i].notify)
+        .collect();
+    (!notify.is_empty()).then_some(Link { write, notify })
 }
 
 /// Scan filter: keep a device that advertises the NIIMBOT service, or whose name starts
@@ -169,6 +204,49 @@ mod tests {
         assert_eq!(select_characteristic(&any), Some(1));
         assert_eq!(select_characteristic(&any[..1]), None);
         assert_eq!(select_characteristic(&[]), None);
+    }
+
+    #[test]
+    fn split_service_link() {
+        let svc = "0000ff00-0000-1000-8000-00805f9b34fb";
+        let ch = |n: &str, notify, wwr| {
+            c(
+                svc,
+                &format!("0000{n}-0000-1000-8000-00805f9b34fb"),
+                notify,
+                wwr,
+            )
+        };
+        // Marklife: ff01 and ff03 notify, ff02 takes writes.
+        let chars = [
+            c("0000180a-0000-1000-8000-00805f9b34fb", "2a29", true, false),
+            ch("ff01", true, false),
+            ch("ff02", false, true),
+            ch("ff03", true, false),
+        ];
+        assert_eq!(select_characteristic(&chars), None);
+        assert_eq!(
+            select_link(&chars),
+            Some(Link {
+                write: 2,
+                notify: vec![1, 3]
+            })
+        );
+        // No write characteristic, or nothing to listen on.
+        assert_eq!(select_link(&chars[..2]), None);
+        assert_eq!(select_link(&chars[2..3]), None);
+        // One characteristic for both directions still wins.
+        let both = [
+            ch("ff02", false, true),
+            c(NIIMBOT_SERVICE, NIIMBOT_CHARACTERISTIC, true, true),
+        ];
+        assert_eq!(
+            select_link(&both),
+            Some(Link {
+                write: 1,
+                notify: vec![1]
+            })
+        );
     }
 
     #[test]

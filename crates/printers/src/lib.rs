@@ -8,6 +8,8 @@ pub mod hub;
 pub mod niimbot;
 pub mod registry;
 pub mod sim;
+pub mod stream;
+pub mod stream_sim;
 
 pub use driver::{Driver, Identity};
 pub use hub::Hub;
