@@ -147,6 +147,26 @@ struct StateTests {
         #expect(app.printer == nil)
     }
 
+    @Test func deviceEventsUpdateTheConnectedPrinter() async throws {
+        await app.connect(AppState.simAddress, name: "Sim").value
+        #expect(app.printer != nil)
+
+        // Events for other printers are ignored.
+        app.onDeviceEvent(["address": .string("sim:other"), "connected": .bool(false), "lost": .bool(true)])
+        #expect(app.printer != nil && app.message == nil)
+
+        app.onDeviceEvent([
+            "address": .string(AppState.simAddress), "connected": .bool(true),
+            "status": ["battery_percent": .int(42), "paper_present": .bool(true)],
+        ])
+        #expect(app.printerStatus == DeviceStatus(batteryPercent: 42, paperPresent: true))
+
+        // A dropped link clears the printer and tells the user.
+        app.onDeviceEvent(["address": .string(AppState.simAddress), "connected": .bool(false), "lost": .bool(true)])
+        #expect(app.printer == nil && app.printerStatus == nil)
+        #expect(app.message == .printerLost)
+    }
+
     @Test func failuresBecomeMessages() async {
         await app.connect("sim:no.such_model", name: "").value
         #expect(app.printer == nil)

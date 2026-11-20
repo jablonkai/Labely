@@ -25,7 +25,12 @@
 | printLabel(docId, printerId, copies) | print.submit (needs a one-time user consent) |
 
 Android names the parameters `widthMm, heightMm` and `labelId`, and print consent is a
-setting the user turns on once (ADR-0028, ADR-0029).
+setting the user turns on once (ADR-0028, ADR-0029). iOS uses the same names (ADR-0033).
+
+**As built.** There is no `template.instantiate` command. `createLabelFromTemplate` runs
+`template.new` and then `element.set_props` for each field (ADR-0028). iOS targets iOS 18, not
+17, and has no `LongRunningIntent`: that is iOS 27 only, and a conformance cannot be guarded
+by `#available` (ADR-0033).
 
 ## Consequences
 - The shells hold no editing logic.

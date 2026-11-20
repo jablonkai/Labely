@@ -22,6 +22,10 @@ public final class CoreBle: NSObject, NativeBle, CBCentralManagerDelegate, @unch
     /// permission prompt.
     private static let stateTimeout: TimeInterval = 60
 
+    /// `Unavailable` details the assistant maps to its Bluetooth error (ADR-0033).
+    static let permissionDenied = "Bluetooth permission not granted"
+    static let poweredOff = "Bluetooth is off"
+
     override public init() {
         super.init()
     }
@@ -59,6 +63,11 @@ public final class CoreBle: NSObject, NativeBle, CBCentralManagerDelegate, @unch
             try link.open()
         } catch {
             link.disconnect()
+            // A connection that never opened may get no disconnect callback; drop the entry so a
+            // late callback cannot hit the next link to this printer.
+            queue.sync {
+                if links[uuid] === link { links.removeValue(forKey: uuid) }
+            }
             throw error
         }
         return link
@@ -79,9 +88,9 @@ public final class CoreBle: NSObject, NativeBle, CBCentralManagerDelegate, @unch
             case .poweredOn:
                 return central
             case .unauthorized:
-                throw BleError.Unavailable(detail: "Bluetooth permission not granted")
+                throw BleError.Unavailable(detail: Self.permissionDenied)
             case .poweredOff:
-                throw BleError.Unavailable(detail: "Bluetooth is off")
+                throw BleError.Unavailable(detail: Self.poweredOff)
             case .unsupported:
                 throw BleError.Unavailable(detail: "no Bluetooth on this device")
             default:
