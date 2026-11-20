@@ -1,0 +1,36 @@
+{
+  "name": "labely-studio",
+  "productName": "Labely",
+  "identifier": "org.labely.studio",
+  "publisher": "Labely",
+  "description": "Label designer for thermal label printers",
+  "longDescription": "Labely designs labels with text, barcodes, QR codes and images, fills them from data, and prints them on NIIMBOT, Phomemo, Marklife, ESC/POS, TSPL and ZPL label printers over Bluetooth, USB serial and the network.",
+  "homepage": "https://github.com/labely/labely",
+  "copyright": "Copyright (c) the Labely authors. MIT OR Apache-2.0.",
+  "category": "Productivity",
+  "licenseFile": "LICENSE-MIT",
+  "binaries": [{ "path": "labely-studio", "main": true }],
+  "icons": [
+    "crates/studio/packaging/icons/32x32.png",
+    "crates/studio/packaging/icons/128x128.png",
+    "crates/studio/packaging/icons/256x256.png",
+    "crates/studio/packaging/icons/512x512.png",
+    "crates/studio/packaging/icons/labely.icns",
+    "crates/studio/packaging/icons/labely.ico"
+  ],
+  "macos": {
+    "minimumSystemVersion": "11.0",
+    "infoPlistPath": "crates/studio/packaging/macos/Info.plist"
+  },
+  "deb": {
+    "section": "graphics",
+    "depends": [
+      "libc6",
+      "libdbus-1-3",
+      "libudev1",
+      "libxkbcommon0",
+      "libwayland-client0 | libx11-6",
+      "libvulkan1 | libgl1 | libegl1"
+    ]
+  }
+}

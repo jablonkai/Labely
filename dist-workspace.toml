@@ -1,0 +1,25 @@
+# dist (cargo-dist) packages the `labely` CLI (ADR-0038). The studio is packaged by
+# `cargo xtask package`; the tag-driven release workflow is slice 6.5.
+[workspace]
+members = ["cargo:."]
+
+[dist]
+# The dist version every build uses (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.34.0"
+# No CI backend yet: slice 6.5 adds `ci = "github"` and the generated release workflow.
+ci = []
+hosting = "github"
+# Installers for the CLI
+installers = ["shell", "powershell"]
+# Target platforms (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# Where the installers put the binary
+install-path = "CARGO_HOME"
+# A sha256 file next to every archive
+checksum = "sha256"
+
+# System libraries of the Linux build: BlueZ over D-Bus (BLE) and libudev (serial).
+[dist.dependencies.apt]
+libdbus-1-dev = "*"
+libudev-dev = "*"
+pkg-config = "*"

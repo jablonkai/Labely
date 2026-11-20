@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- The Labely mark: a blue label with a dot and a bar (same as the mobile launcher icon). -->
+  <path fill="#4C6EF5" d="M10,0h28a10,10 0 0 1 10,10v28a10,10 0 0 1 -10,10h-28a10,10 0 0 1 -10,-10v-28a10,10 0 0 1 10,-10z"/>
+  <path fill="#FFFFFF" d="M8,16h32a3,3 0 0 1 3,3v10a3,3 0 0 1 -3,3h-32a3,3 0 0 1 -3,-3v-10a3,3 0 0 1 3,-3z"/>
+  <circle fill="#4C6EF5" cx="14" cy="24" r="3"/>
+  <path fill="#4C6EF5" d="M21,22.5h15a1.5,1.5 0 0 1 0,3h-15a1.5,1.5 0 0 1 0,-3z"/>
+</svg>

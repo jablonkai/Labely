@@ -34,3 +34,7 @@ required-features = ["bindgen"]
 
 [lints]
 workspace = true
+
+# `uniffi-bindgen` is a build tool, not a release artefact (ADR-0038).
+[package.metadata.dist]
+dist = false

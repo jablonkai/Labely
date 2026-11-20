@@ -37,3 +37,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+# Packaged by `cargo xtask package`, not by dist (ADR-0038).
+[package.metadata.dist]
+dist = false
