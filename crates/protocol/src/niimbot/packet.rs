@@ -1,6 +1,8 @@
 //! NIIMBOT packet framing (docs/protocol.md §1).
 //!
 //! `55 55 | cmd | len | payload[len] | xor(cmd, len, payload) | AA AA`
+//!
+//! A grayscale row (0x8D) has a 2-byte big-endian length, and both bytes are in the checksum.
 
 use thiserror::Error;
 
@@ -16,7 +18,7 @@ const MAX_BUFFER: usize = 64 * 1024;
 /// Framing errors.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum PacketError {
-    #[error("payload of {0} bytes exceeds the 255-byte limit")]
+    #[error("payload of {0} bytes is too long for one packet")]
     PayloadTooLong(usize),
     #[error(
         "checksum mismatch for command 0x{cmd:02X}: expected 0x{expected:02X}, got 0x{got:02X}"
@@ -34,9 +36,19 @@ pub struct Packet {
 }
 
 impl Packet {
-    /// Create a packet, rejecting payloads longer than 255 bytes.
+    /// Whether `cmd` is framed with a 2-byte length.
+    fn long(cmd: u8) -> bool {
+        cmd == cmd::ROW_GRAY
+    }
+
+    /// Create a packet, rejecting payloads longer than 255 bytes (65535 for a grayscale row).
     pub fn new(cmd: u8, payload: Vec<u8>) -> Result<Self, PacketError> {
-        if payload.len() > u8::MAX as usize {
+        let max = if Self::long(cmd) {
+            usize::from(u16::MAX)
+        } else {
+            usize::from(u8::MAX)
+        };
+        if payload.len() > max {
             return Err(PacketError::PayloadTooLong(payload.len()));
         }
         Ok(Self { cmd, payload })
@@ -53,16 +65,21 @@ impl Packet {
 
     /// XOR checksum over command, length and payload.
     pub fn checksum(&self) -> u8 {
+        let len = self.payload.len();
+        // The high length byte is zero in a short packet.
         self.payload
             .iter()
-            .fold(self.cmd ^ self.payload.len() as u8, |acc, b| acc ^ b)
+            .fold(self.cmd ^ (len >> 8) as u8 ^ len as u8, |acc, b| acc ^ b)
     }
 
     /// Encode as a frame (no Connect prefix). Used for fixtures and responses.
     pub fn encode(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.payload.len() + 7);
+        let mut out = Vec::with_capacity(self.payload.len() + 8);
         out.extend_from_slice(&HEAD);
         out.push(self.cmd);
+        if Self::long(self.cmd) {
+            out.push((self.payload.len() >> 8) as u8);
+        }
         out.push(self.payload.len() as u8);
         out.extend_from_slice(&self.payload);
         out.push(self.checksum());
@@ -97,11 +114,22 @@ impl Packet {
 #[derive(Debug, Default)]
 pub struct Decoder {
     buf: Vec<u8>,
+    /// Decode grayscale rows (0x8D) with their 2-byte length.
+    requests: bool,
 }
 
 impl Decoder {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A decoder for the printer side, which also receives the long grayscale rows. A host
+    /// never gets one, so [`Self::new`] keeps every frame short.
+    pub fn for_requests() -> Self {
+        Self {
+            buf: Vec::new(),
+            requests: true,
+        }
     }
 
     /// Append received bytes.
@@ -133,8 +161,18 @@ impl Decoder {
             return None;
         }
         let cmd = self.buf[2];
-        let len = self.buf[3] as usize;
-        let total = len + 7;
+        let (len, head) = if self.requests && Packet::long(cmd) {
+            if self.buf.len() < 5 {
+                return None;
+            }
+            (
+                usize::from(u16::from_be_bytes([self.buf[3], self.buf[4]])),
+                5,
+            )
+        } else {
+            (usize::from(self.buf[3]), 4)
+        };
+        let total = head + len + 3;
         if self.buf.len() < total {
             return None;
         }
@@ -148,9 +186,9 @@ impl Decoder {
         }
         let packet = Packet {
             cmd,
-            payload: frame[4..4 + len].to_vec(),
+            payload: frame[head..head + len].to_vec(),
         };
-        let got = frame[4 + len];
+        let got = frame[head + len];
         let expected = packet.checksum();
         if got != expected {
             return Some(Err(PacketError::Checksum { cmd, expected, got }));
@@ -203,6 +241,22 @@ mod tests {
     }
 
     #[test]
+    fn gray_row_has_a_16_bit_length() {
+        let p = Packet::new(cmd::ROW_GRAY, vec![0x11; 300]).unwrap();
+        let frame = p.encode();
+        assert_eq!(frame[..5], [0x55, 0x55, 0x8D, 0x01, 0x2C]);
+        assert_eq!(frame.len(), 300 + 8);
+        // 300 equal bytes cancel out; the checksum is cmd ^ len_hi ^ len_lo.
+        assert_eq!(frame[305], 0x8D ^ 0x01 ^ 0x2C);
+        let mut d = Decoder::for_requests();
+        d.push(&frame[..200]);
+        assert_eq!(d.next_packet(), None);
+        d.push(&frame[200..]);
+        assert_eq!(d.next_packet(), Some(Ok(p)));
+        assert!(Packet::new(cmd::ROW_GRAY, vec![0; 65536]).is_err());
+    }
+
+    #[test]
     fn decodes_split_and_joined_reads() {
         let a = Packet::small(0x31, &[0x01]).encode();
         let b = Packet::small(0xB3, &[0x00, 0x01, 0x64, 0x64]).encode();
@@ -240,7 +294,7 @@ mod tests {
         #[test]
         fn roundtrip(cmd in any::<u8>(), payload in proptest::collection::vec(any::<u8>(), 0..=255)) {
             let p = Packet::new(cmd, payload).unwrap();
-            let mut d = Decoder::new();
+            let mut d = Decoder::for_requests();
             d.push(&p.encode());
             prop_assert_eq!(d.next_packet(), Some(Ok(p)));
         }

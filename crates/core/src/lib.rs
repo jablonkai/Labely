@@ -24,7 +24,7 @@ pub use command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCod
 pub use document::{Document, Element, ElementId, ElementKind, LabelSpec};
 pub use envelope::Envelope;
 pub use policy::Policy;
-pub use raster::Bitmap1;
+pub use raster::{Bitmap1, Gray4};
 pub use registry::{CommandInfo, Registry};
 pub use services::{DeviceHub, Renderer, Services};
 pub use session::{JournalEntry, Session};

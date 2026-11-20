@@ -1,4 +1,4 @@
-//! Borrowed 1-bit raster view shared by all protocol encoders.
+//! Borrowed raster views shared by all protocol encoders.
 
 use thiserror::Error;
 
@@ -9,6 +9,8 @@ pub enum RasterError {
     StrideTooSmall { width: u32, stride: usize },
     #[error("raster buffer has {have} bytes, needs {need}")]
     BufferTooSmall { have: usize, need: usize },
+    #[error("grayscale raster width {0} is not even")]
+    OddWidth(u32),
 }
 
 /// A 1-bit raster: rows packed MSB first, bit set = black (burn).
@@ -88,6 +90,55 @@ impl<'a> RasterView<'a> {
     }
 }
 
+/// A 16-level gray raster: one byte per dot, 0 = white, 15 = black. Larger values count
+/// as black.
+///
+/// Row `y` occupies `data[y * width .. (y + 1) * width]`. The width is even, because the
+/// wire format packs two dots per byte.
+#[derive(Debug, Clone, Copy)]
+pub struct GrayView<'a> {
+    width: u32,
+    height: u32,
+    data: &'a [u8],
+}
+
+impl<'a> GrayView<'a> {
+    /// Create a view, validating the width and buffer length.
+    pub fn new(width: u32, height: u32, data: &'a [u8]) -> Result<Self, RasterError> {
+        if !width.is_multiple_of(2) {
+            return Err(RasterError::OddWidth(width));
+        }
+        let need = width as usize * height as usize;
+        if data.len() < need {
+            return Err(RasterError::BufferTooSmall {
+                have: data.len(),
+                need,
+            });
+        }
+        Ok(Self {
+            width,
+            height,
+            data,
+        })
+    }
+
+    /// Width in dots.
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Height in rows.
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// The levels of row `y`.
+    pub fn row(&self, y: u32) -> &'a [u8] {
+        let w = self.width as usize;
+        &self.data[y as usize * w..(y as usize + 1) * w]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,6 +150,17 @@ mod tests {
         assert_eq!(v.row(0), vec![0xFF, 0xF0]);
         assert!(v.get(11, 0));
         assert!(!v.get(12, 0));
+    }
+
+    #[test]
+    fn gray_view_checks_width_and_length() {
+        assert_eq!(
+            GrayView::new(3, 1, &[0; 3]).unwrap_err(),
+            RasterError::OddWidth(3)
+        );
+        assert!(GrayView::new(4, 2, &[0; 7]).is_err());
+        let data = [0, 1, 2, 3, 4, 5, 6, 7];
+        assert_eq!(GrayView::new(4, 2, &data).unwrap().row(1), &[4, 5, 6, 7]);
     }
 
     #[test]

@@ -48,6 +48,13 @@ pub mod cmd {
     pub const PRINT_CLEAR_RESP: u8 = 0x30;
     pub const ROWS_EMPTY: u8 = 0x84;
     pub const ROW_BITMAP: u8 = 0x85;
+    /// Two-colour row wrapper, one-way (§7.5).
+    pub const ROW_COLOR: u8 = 0x8A;
+    /// Grayscale row, one-way; the only packet with a 16-bit length (§1, §7.5).
+    pub const ROW_GRAY: u8 = 0x8D;
+    /// Half-cut on or off (§2).
+    pub const HALF_CUT: u8 = 0x5C;
+    pub const HALF_CUT_RESP: u8 = 0x6C;
     /// Row check-line: the printer answers when it has taken the rows so far (§7).
     pub const CHECK_LINE: u8 = 0x86;
     pub const CHECK_LINE_RESP: u8 = 0xD3;

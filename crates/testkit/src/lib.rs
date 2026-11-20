@@ -582,6 +582,8 @@ mod tests {
             copies: 2,
             density: 3,
             media: MediaType::Gap,
+            planes: labely_core::services::PagePlanes::None,
+            half_cut: None,
         }
     }
 }

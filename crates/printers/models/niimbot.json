@@ -1814,6 +1814,284 @@
    "transports": [
     "ble"
    ]
+  },
+  {
+   "id": "niimbot.a1_pro",
+   "vendor": "niimbot",
+   "name": "A1 Pro",
+   "model_codes": [
+    7424
+   ],
+   "ble_name_prefixes": [
+    "A1"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 300,
+   "head_dots": 296,
+   "max_width_mm": 25.0,
+   "max_length_mm": 200.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 5,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.a8",
+   "vendor": "niimbot",
+   "name": "A8",
+   "model_codes": [
+    256
+   ],
+   "ble_name_prefixes": [
+    "A8"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 203,
+   "head_dots": 576,
+   "max_width_mm": 75.0,
+   "max_length_mm": 200.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 5,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.d11_h",
+   "vendor": "niimbot",
+   "name": "D11_H",
+   "model_codes": [
+    528
+   ],
+   "ble_name_prefixes": [
+    "D11"
+   ],
+   "driver": "niimbot",
+   "task": "d110m_v4",
+   "dpi": 300,
+   "head_dots": 142,
+   "max_width_mm": 15.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "transparent"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 5,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.d11_pro",
+   "vendor": "niimbot",
+   "name": "D11 Pro",
+   "model_codes": [
+    531
+   ],
+   "ble_name_prefixes": [
+    "D11"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 300,
+   "head_dots": 142,
+   "max_width_mm": 15.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "transparent"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 5,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.d110_m",
+   "vendor": "niimbot",
+   "name": "D110_M",
+   "model_codes": [
+    2320
+   ],
+   "ble_name_prefixes": [
+    "D110"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 203,
+   "head_dots": 96,
+   "max_width_mm": 15.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "transparent"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 5,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.d11s",
+   "vendor": "niimbot",
+   "name": "D11S",
+   "model_codes": [
+    514
+   ],
+   "ble_name_prefixes": [
+    "D11S"
+   ],
+   "driver": "niimbot",
+   "task": "d11_v1",
+   "dpi": 203,
+   "head_dots": 96,
+   "max_width_mm": 15.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "transparent"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 3,
+    "default": 2
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.et10",
+   "vendor": "niimbot",
+   "name": "ET10",
+   "model_codes": [
+    5376
+   ],
+   "ble_name_prefixes": [
+    "ET10"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 203,
+   "head_dots": 1600,
+   "max_width_mm": 200.0,
+   "max_length_mm": 300.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 3,
+    "max": 3,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.h1",
+   "vendor": "niimbot",
+   "name": "H1",
+   "model_codes": [
+    3840
+   ],
+   "ble_name_prefixes": [
+    "H1"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 203,
+   "head_dots": 96,
+   "max_width_mm": 15.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "transparent"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 3,
+    "default": 2
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "niimbot.hi_d110",
+   "vendor": "niimbot",
+   "name": "Hi-D110",
+   "model_codes": [
+    2305
+   ],
+   "ble_name_prefixes": [
+    "Hi"
+   ],
+   "driver": "niimbot",
+   "task": "auto",
+   "dpi": 203,
+   "head_dots": 120,
+   "max_width_mm": 15.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "transparent"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 3,
+    "default": 3
+   },
+   "rfid": false,
+   "transports": [
+    "ble"
+   ]
   }
  ]
 }

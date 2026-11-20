@@ -1,4 +1,4 @@
-//! 1-bit raster produced by `labely-render` and consumed by printer drivers.
+//! Rasters produced by `labely-render` and consumed by printer drivers.
 
 use serde::{Deserialize, Serialize};
 
@@ -149,9 +149,94 @@ impl Bitmap1 {
     }
 }
 
+/// 16-level gray map for printers with grayscale rows: one byte per dot, 0 = white,
+/// 15 = black. Same orientation as [`Bitmap1`].
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Gray4 {
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+}
+
+impl std::fmt::Debug for Gray4 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Gray4")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Gray4 {
+    /// Highest level (black).
+    pub const BLACK: u8 = 15;
+
+    /// All-white map.
+    pub fn new(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            data: vec![0; width as usize * height as usize],
+        }
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// The levels, row by row: `width * height` bytes.
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// Level of dot `(x, y)`; white outside the map.
+    pub fn get(&self, x: u32, y: u32) -> u8 {
+        if x >= self.width || y >= self.height {
+            return 0;
+        }
+        self.data[y as usize * self.width as usize + x as usize]
+    }
+
+    /// Set dot `(x, y)`; levels above 15 become 15, and out-of-range coordinates are
+    /// ignored.
+    pub fn set(&mut self, x: u32, y: u32, level: u8) {
+        if x >= self.width || y >= self.height {
+            return;
+        }
+        self.data[y as usize * self.width as usize + x as usize] = level.min(Self::BLACK);
+    }
+
+    /// Rotate 90° clockwise.
+    pub fn rotate_cw(&self) -> Self {
+        let mut out = Self::new(self.height, self.width);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                out.set(self.height - 1 - y, x, self.get(x, y));
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gray_set_get_rotate() {
+        let mut g = Gray4::new(3, 2);
+        g.set(2, 0, 200);
+        g.set(0, 1, 7);
+        g.set(9, 9, 1);
+        assert_eq!((g.get(2, 0), g.get(0, 1), g.get(9, 9)), (15, 7, 0));
+        let r = g.rotate_cw();
+        assert_eq!((r.width(), r.height()), (2, 3));
+        assert_eq!((r.get(1, 2), r.get(0, 0)), (15, 7));
+    }
 
     #[test]
     fn set_get_rotate() {

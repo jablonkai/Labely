@@ -227,14 +227,33 @@ pub enum PageSizeFormat {
     Len4,
     /// rows, cols, copies
     Len6,
-    /// rows, cols, copies, cut height u16 and cut type u8, both zero (H1S)
+    /// rows, cols, copies, cut height u16 and cut type u8 (H1S)
     Len9,
-    /// rows, cols, copies, then 7 zero bytes (B21 Pro per OSS)
+    /// rows, cols, copies, cut height u16, cut type u8, then 4 zero bytes (B21 Pro per OSS)
     Len13,
 }
 
-/// Page size: `rows` along the feed, `cols` across the head (dots).
+/// Cut fields of the 9- and 13-byte SetPageSize (§5.3). Zero leaves the cutter to the
+/// printer. The values are not documented: UNCERTAIN, and never tried on hardware.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cut {
+    pub height: u16,
+    pub kind: u8,
+}
+
+/// Page size: `rows` along the feed, `cols` across the head (dots). The cut fields are zero.
 pub fn set_page_size(format: PageSizeFormat, rows: u16, cols: u16, copies: u16) -> Packet {
+    set_page_size_cut(format, rows, cols, copies, Cut::default())
+}
+
+/// As [`set_page_size`], with the cut fields of the formats that have them.
+pub fn set_page_size_cut(
+    format: PageSizeFormat,
+    rows: u16,
+    cols: u16,
+    copies: u16,
+    cut: Cut,
+) -> Packet {
     let mut p = Vec::with_capacity(13);
     p.extend_from_slice(&rows.to_be_bytes());
     if format != PageSizeFormat::Len2 {
@@ -246,17 +265,23 @@ pub fn set_page_size(format: PageSizeFormat, rows: u16, cols: u16, copies: u16) 
     ) {
         p.extend_from_slice(&copies.to_be_bytes());
     }
-    if format == PageSizeFormat::Len9 {
-        p.extend_from_slice(&[0; 3]);
+    if matches!(format, PageSizeFormat::Len9 | PageSizeFormat::Len13) {
+        p.extend_from_slice(&cut.height.to_be_bytes());
+        p.push(cut.kind);
     }
     if format == PageSizeFormat::Len13 {
-        p.extend_from_slice(&[0; 7]);
+        p.extend_from_slice(&[0; 4]);
     }
     Packet::small(cmd::SET_PAGE_SIZE, &p)
 }
 
 pub fn set_quantity(copies: u16) -> Packet {
     Packet::small(cmd::SET_QUANTITY, &copies.to_be_bytes())
+}
+
+/// Switch the half-cut on or off (§2): `[01][on]`, answered with 0x6C.
+pub fn set_half_cut(on: bool) -> Packet {
+    Packet::small(cmd::HALF_CUT, &[0x01, u8::from(on)])
 }
 
 pub fn print_clear() -> Packet {
@@ -306,6 +331,7 @@ pub fn expected_response(request_cmd: u8, first_payload_byte: Option<u8>) -> Opt
         cmd::SET_AUTO_OFF => cmd::SET_AUTO_OFF_RESP,
         cmd::CALIBRATE => cmd::CALIBRATE_RESP,
         cmd::SOUND => cmd::SOUND_RESP,
+        cmd::HALF_CUT => cmd::HALF_CUT_RESP,
         cmd::PRINT_START => cmd::PRINT_START_RESP,
         cmd::PAGE_START => cmd::PAGE_START_RESP,
         cmd::SET_PAGE_SIZE => cmd::SET_PAGE_SIZE_RESP,
@@ -341,6 +367,28 @@ mod tests {
         assert_eq!(p.payload.len(), 13);
         assert_eq!(&p.payload[..6], &[0x01, 0x62, 0x02, 0x48, 0x00, 0x03]);
         assert!(p.payload[6..].iter().all(|b| *b == 0));
+    }
+
+    #[test]
+    fn page_size_cut_fields() {
+        let cut = Cut {
+            height: 0x0102,
+            kind: 3,
+        };
+        let p = set_page_size_cut(PageSizeFormat::Len9, 1, 2, 3, cut);
+        assert_eq!(p.payload, vec![0, 1, 0, 2, 0, 3, 1, 2, 3]);
+        let p = set_page_size_cut(PageSizeFormat::Len13, 1, 2, 3, cut);
+        assert_eq!(p.payload, vec![0, 1, 0, 2, 0, 3, 1, 2, 3, 0, 0, 0, 0]);
+        // Formats without cut fields ignore them.
+        let p = set_page_size_cut(PageSizeFormat::Len6, 1, 2, 3, cut);
+        assert_eq!(p.payload.len(), 6);
+    }
+
+    #[test]
+    fn half_cut_layout() {
+        assert_eq!(set_half_cut(true).payload, vec![1, 1]);
+        assert_eq!(set_half_cut(false).payload, vec![1, 0]);
+        assert_eq!(expected_response(cmd::HALF_CUT, Some(1)), Some(0x6C));
     }
 
     #[test]
