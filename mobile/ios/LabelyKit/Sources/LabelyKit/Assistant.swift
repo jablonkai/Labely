@@ -397,7 +397,7 @@ public final class Assistant {
             let msg = [e.message.isEmpty ? e.code : e.message, e.hint].compactMap { $0 }.joined(separator: "; ")
             switch e.code {
             case "device_unavailable":
-                if msg.localizedCaseInsensitiveContains("permission") || msg.contains("Bluetooth is off") {
+                if msg.contains(CoreBle.permissionDenied) || msg.contains(CoreBle.poweredOff) {
                     throw AssistantError.bluetooth(msg)
                 }
                 throw AssistantError.unreachable(msg)

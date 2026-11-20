@@ -131,7 +131,7 @@ Phase 5 lands in slices, one pull request each (ADR-0030).
 | 5.2 Device events | `DeviceEvents` callback pushing printer and job state; Android drops polling | done (ADR-0031) |
 | 5.3 iOS UI and BLE | Xcode app, CoreBluetooth `NativeBle`, SwiftUI screens after `design/labely-mobile.figcraft` | done (ADR-0032) |
 | 5.4 App Intents | the six functions under the Android names, App Shortcuts, print consent | done (ADR-0033) |
-| 5.5 Close-out | print from an iPhone to the B21 Pro; intents from Shortcuts; exit audit | |
+| 5.5 Close-out | print from an iPhone to the B21 Pro; intents from Shortcuts; exit audit | exit audit done (ADR-0034); the iPhone checks are open |
 
 ## Phase 6: More models and vendors, packaging, releases
 

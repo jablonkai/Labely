@@ -59,7 +59,8 @@ without one.
 - **CI.** The `ios` job also runs `swift test` in `LabelyKit` and builds the app for the
   simulator and the device without signing.
 - **Deferred.** The assistant print consent comes with App Intents (5.4). The mobile parity
-  items of ADR-0029 stay deferred. Printing from an iPhone to the B21 Pro is checked in 5.5.
+  items of ADR-0029 stay deferred, so both shells get them from one design pass.
+  Printing from an iPhone to the B21 Pro is checked in 5.5.
 
 ## Consequences
 - No new dependencies: SwiftUI, Observation, CoreBluetooth and the generated bindings.
