@@ -15,6 +15,8 @@ cargo xtask bindings kotlin        # generate the UniFFI Kotlin sources into tar
 cargo xtask xcframework            # iOS XCFramework and Swift bindings; see mobile/ios/README.md
 (cd mobile/ios/LabelyFFI && swift test)              # Swift engine smoke tests (macOS slice)
 (cd mobile/ios/LabelyKit && swift test)              # iOS shell logic on the engine (macOS)
+cargo xtask package                # studio packages with cargo-packager (ADR-0038): app, dmg, MSI, AppImage, deb
+dist build --artifacts=local --target <triple>   # CLI archive with dist
 cargo xtask bless                  # rewrite render goldens after an intended change
 cargo xtask schema-hash            # print the command-schema hash
 ```

@@ -1,5 +1,5 @@
 //! Project automation:
-//! `cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings|xcframework>`.
+//! `cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings|xcframework|package>`.
 
 use std::collections::BTreeMap;
 use std::process::Command;
@@ -442,6 +442,78 @@ fn xcframework(debug: bool) -> Result<()> {
     Ok(())
 }
 
+/// The cargo profile of release artefacts; dist builds the CLI with the same one.
+const DIST_PROFILE: &str = "dist";
+
+/// The packager config of the studio: the checked-in `packager.json` plus what only the build
+/// knows. `signing_identity` is the macOS code-signing identity, if the build signs.
+fn packager_config(
+    base: &str,
+    target_dir: &std::path::Path,
+    signing_identity: Option<&str>,
+) -> Result<serde_json::Value> {
+    let mut config: serde_json::Value =
+        serde_json::from_str(base).context("parsing packager.json")?;
+    let obj = config
+        .as_object_mut()
+        .context("packager.json is not an object")?;
+    obj.insert("version".into(), env!("CARGO_PKG_VERSION").into());
+    obj.insert(
+        "binariesDir".into(),
+        target_dir.join(DIST_PROFILE).to_string_lossy().into(),
+    );
+    obj.insert(
+        "outDir".into(),
+        target_dir.join("packager").to_string_lossy().into(),
+    );
+    if let Some(identity) = signing_identity {
+        obj.entry("macos")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .context("packager.json: macos is not an object")?
+            .insert("signingIdentity".into(), identity.into());
+    }
+    Ok(config)
+}
+
+/// Builds the studio and packages it with cargo-packager (ADR-0038): `.app` and `.dmg` on
+/// macOS, MSI on Windows, AppImage and deb on Linux. `formats` narrows that list.
+///
+/// macOS signs when `LABELY_SIGNING_IDENTITY` is set, and notarises when the `APPLE_*`
+/// variables of cargo-packager are set too.
+fn package(formats: Option<String>) -> Result<()> {
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let repo = repo.canonicalize().context("finding the repository")?;
+    let target_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map_or_else(|| repo.join("target"), std::path::PathBuf::from);
+    cargo(
+        &["build", "--profile", DIST_PROFILE, "-p", "labely-studio"],
+        &[],
+    )?;
+    let base = std::fs::read_to_string(repo.join("crates/studio/packaging/packager.json"))
+        .context("reading packager.json")?;
+    let identity = std::env::var("LABELY_SIGNING_IDENTITY").ok();
+    if identity.is_none() && cfg!(target_os = "macos") {
+        eprintln!("package: LABELY_SIGNING_IDENTITY is not set, the app is not signed");
+    }
+    let config = packager_config(&base, &target_dir, identity.as_deref())?;
+    let mut cmd = Command::new(env!("CARGO"));
+    cmd.current_dir(&repo)
+        .args(["packager", "--config", &config.to_string()]);
+    if let Some(formats) = &formats {
+        cmd.args(["--formats", formats]);
+    }
+    eprintln!("$ cargo packager --config <packager.json> {formats:?}");
+    let status = cmd.status().context(
+        "running cargo packager (install it with `cargo install cargo-packager --locked`)",
+    )?;
+    if !status.success() {
+        bail!("cargo packager failed");
+    }
+    eprintln!("package: {}", target_dir.join("packager").display());
+    Ok(())
+}
+
 fn ci() -> Result<()> {
     cargo(&["fmt", "--all", "--check"], &[])?;
     layers()?;
@@ -499,11 +571,58 @@ fn main() -> Result<()> {
             std::env::args().nth(3),
         ),
         "xcframework" => xcframework(std::env::args().nth(2).as_deref() == Some("--debug")),
+        "package" => package(std::env::args().nth(2)),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings [kotlin|swift] [out-dir]|xcframework [--debug]>"
+                "usage: cargo xtask <ci|layers|bless|i18n-check|schema-hash|bindings [kotlin|swift] [out-dir]|xcframework [--debug]|package [formats]>"
             );
             std::process::exit(2)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BASE: &str = include_str!("../../crates/studio/packaging/packager.json");
+
+    #[test]
+    fn packager_config_adds_build_facts() -> Result<()> {
+        let config = packager_config(BASE, std::path::Path::new("/t"), None)?;
+        assert_eq!(config["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(config["binariesDir"], "/t/dist");
+        assert_eq!(config["outDir"], "/t/packager");
+        assert_eq!(config["macos"]["signingIdentity"], serde_json::Value::Null);
+        // The checked-in part stays.
+        assert_eq!(config["identifier"], "org.labely.studio");
+        Ok(())
+    }
+
+    #[test]
+    fn packager_config_signs_with_the_given_identity() -> Result<()> {
+        let config = packager_config(BASE, std::path::Path::new("/t"), Some("Developer ID"))?;
+        assert_eq!(config["macos"]["signingIdentity"], "Developer ID");
+        assert_eq!(config["macos"]["minimumSystemVersion"], "11.0");
+        Ok(())
+    }
+
+    #[test]
+    fn packaged_files_exist() -> Result<()> {
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let config: serde_json::Value = serde_json::from_str(BASE)?;
+        let mut paths: Vec<&str> = config["icons"]
+            .as_array()
+            .context("icons")?
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        paths.extend(config["macos"]["infoPlistPath"].as_str());
+        paths.extend(config["licenseFile"].as_str());
+        assert!(paths.len() >= 8, "{paths:?}");
+        for path in paths {
+            assert!(repo.join(path).is_file(), "{path} is missing");
+        }
+        Ok(())
     }
 }

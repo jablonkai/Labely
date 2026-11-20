@@ -1,5 +1,8 @@
 //! `labely-studio [FILE] [--no-mcp] [--mcp-port N] [--agent-root DIR]… [--lang en|hu]`
 
+// A release build on Windows is a GUI program, so the installed app opens no console window.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 
 use labely_studio::{LabelyApp, StudioOptions};
@@ -47,11 +50,22 @@ fn main() -> Result<(), String> {
         .with_writer(std::io::stderr)
         .init();
     let opts = parse_args()?;
+    #[cfg_attr(target_os = "macos", allow(unused_mut))]
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("Labely")
+        // Matches `labely-studio.desktop`, so Linux shells show the packaged name and icon.
+        .with_app_id("labely-studio")
+        .with_inner_size([1200.0, 760.0])
+        .with_min_inner_size([640.0, 420.0]);
+    // The window icon on Windows and Linux. macOS takes it from the app bundle.
+    #[cfg(not(target_os = "macos"))]
+    if let Ok(icon) =
+        eframe::icon_data::from_png_bytes(include_bytes!("../packaging/icons/256x256.png"))
+    {
+        viewport = viewport.with_icon(icon);
+    }
     let native = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Labely")
-            .with_inner_size([1200.0, 760.0])
-            .with_min_inner_size([640.0, 420.0]),
+        viewport,
         ..Default::default()
     };
     eframe::run_native(
