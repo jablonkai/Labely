@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Packet, PacketError, cmd};
+use super::{Packet, PacketError, cmd, request};
 use crate::RasterView;
 
 /// How the three "count" bytes of a 0x85 row are filled (§7.3).
@@ -37,19 +37,36 @@ fn counts(row: &[u8], mode: CountMode) -> [u8; 3] {
     }
 }
 
+/// Rows between two check-lines of the B21 tasks (§7).
+pub const CHECK_LINE_INTERVAL: u32 = 200;
+
 /// Encode all rows of `raster` as one-way packets in feed order.
 ///
 /// Blank runs become 0x84 (≤255 rows each); identical consecutive non-blank rows are
 /// merged with the 0x85 repeat byte (≤255).
 pub fn encode_rows(raster: &RasterView<'_>, mode: CountMode) -> Result<Vec<Packet>, PacketError> {
+    encode_rows_checked(raster, mode, None)
+}
+
+/// As [`encode_rows`]. With `check_every = Some(n)`, a check-line (0x86) follows every
+/// `n`th row, and no run crosses one. The printer answers each check-line, so the caller
+/// must wait for the reply.
+pub fn encode_rows_checked(
+    raster: &RasterView<'_>,
+    mode: CountMode,
+    check_every: Option<u32>,
+) -> Result<Vec<Packet>, PacketError> {
     let mut out = Vec::new();
     let height = raster.height();
+    let check_every = check_every.filter(|n| *n > 0);
     let mut y = 0u32;
     while y < height {
         let row = raster.row(y);
         let blank = row.iter().all(|b| *b == 0);
+        // Rows left before the next check-line, this one included.
+        let limit = check_every.map_or(255, |n| (n - y % n).min(255));
         let mut run = 1u32;
-        while y + run < height && run < 255 && raster.row(y + run) == row {
+        while y + run < height && run < limit && raster.row(y + run) == row {
             run += 1;
         }
         let [hi, lo] = (y as u16).to_be_bytes();
@@ -63,6 +80,9 @@ pub fn encode_rows(raster: &RasterView<'_>, mode: CountMode) -> Result<Vec<Packe
             out.push(Packet::new(cmd::ROW_BITMAP, payload)?);
         }
         y += run;
+        if check_every.is_some_and(|n| y.is_multiple_of(n)) {
+            out.push(request::check_line((y - 1) as u16));
+        }
     }
     Ok(out)
 }
@@ -100,5 +120,20 @@ mod tests {
         let p = encode_rows(&r, CountMode::Zero).unwrap();
         assert_eq!(p.len(), 2);
         assert_eq!(p[1].payload, vec![0, 255, 45]);
+    }
+
+    #[test]
+    fn check_lines_split_runs() {
+        // 450 identical rows: runs of 200, 200 and 50, with a check-line after rows 199 and 399.
+        let data = vec![0x80u8; 450];
+        let r = RasterView::new(8, 450, 1, &data).unwrap();
+        let p = encode_rows_checked(&r, CountMode::Total, Some(CHECK_LINE_INTERVAL)).unwrap();
+        let cmds: Vec<u8> = p.iter().map(|p| p.cmd).collect();
+        assert_eq!(cmds, vec![0x85, 0x86, 0x85, 0x86, 0x85]);
+        assert_eq!(p[0].payload[..6], [0, 0, 0, 1, 0, 200]);
+        assert_eq!(p[1].payload, vec![0, 199, 1]);
+        assert_eq!(p[2].payload[..2], [0, 200]);
+        assert_eq!(p[3].payload, vec![0x01, 0x8F, 1]);
+        assert_eq!(p[4].payload[..6], [0x01, 0x90, 0, 1, 0, 50]);
     }
 }

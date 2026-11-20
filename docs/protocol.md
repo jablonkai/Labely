@@ -198,7 +198,10 @@ differs per class [E: V:jc `jcSetPrintAllTime`: V2 1 B, V3 2 B @0xb5340, V4 7 B 
 | D110 | 1 B | Clear, PageStart, Size 4 B, Qty(15), rows, PageEnd | Poll A3 | V2 | B21S, B21S_C2B, D110, D11 v1/v2 |
 | B1 | 7 B `[total u16][00 00 00 00][colour]` | PageStart, Size 6 B (rows, cols, copies), rows, PageEnd | Poll A3 | **V4** (7 B, Confirmed @0xd214c-0xd2190) | B1, D110_M, B21_C2B, M2_H, N1, D101 |
 | D110M_V4 | 9 B `[total u16][00 00 00 00][colour][speed/quality][flag]` | (one-way A3), Size 13 B, rows, PageEnd | Poll A3; PrintEnd, then a one-way heartbeat | **V6** (9 B, Confirmed @0x10d6dc-0x10d730) | **B21_PRO**, B1_PRO, D11_H, D110_M v4, C1, EP1C; fallback for any protocol ≥4 |
+| H1S | 2 B `[total u16]` | PageStart, Size 9 B (rows, cols, copies, cut height, cut type), rows, PageEnd | Poll A3 | V3 (2 B) | H1S |
 | (none) | 8 B | ? | ? | V5 | UNCERTAIN |
+
+Labely implements all seven OSS tasks (ADR-0035). Only D110M_V4 has run on hardware (B21 Pro); the other six are checked against the simulator.
 
 - PrintStart byte layout: **Confirmed** for 7 B and 9 B. The vendor writes the total-page count high byte first, then four zero bytes, then one class field (V4), or three class fields (V6) [E: V:jc addresses above] [E: O:nbl packet_generator.ts:229-236].
 - Colour field values: 0 single, 1 two-colour, 2 alt, 3 grayscale [E: O:nbl enumerations.ts:157-162]. **OSS-only.**

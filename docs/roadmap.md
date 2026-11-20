@@ -142,6 +142,20 @@ Phase 5 lands in slices, one pull request each (ADR-0030).
   AppImage/deb (ADR at phase start); Play and App Store builds; tag-driven release workflow with
   SHA256SUMS.
 
+### Phase 6 progress
+
+Phase 6 lands in slices, one pull request each (ADR-0035). The three Phase 5 hardware checks
+(ADR-0034) are still open.
+
+| Slice | Scope | Status |
+|---|---|---|
+| 6.1 Print tasks | the four missing NIIMBOT tasks (D11_V1, B21_V1, B21_L2B, H1S); every registered model prints on the simulator; shared model codes | done (ADR-0035) |
+| 6.2 NIIMBOT variants | two-colour and grayscale rows, cutter and half-cut, the OSS-only models | |
+| 6.3 Other vendors | Phomemo, Marklife, generic ESC/POS, TSPL and ZPL drivers | |
+| 6.4 Desktop packaging | cargo-dist for the CLI; signed and notarised macOS app, Windows MSI, Linux AppImage and deb | |
+| 6.5 Store builds and releases | Play and App Store builds; tag-driven release workflow with SHA256SUMS | |
+| 6.6 Close-out | exit audit; the open hardware checks | |
+
 ## Later (after Phase 6)
 
 Ideas parked until everything above is done.

@@ -38,6 +38,8 @@ pub struct NiimbotDriver {
     protocol: ProtocolVersion,
     /// Model to assume if the printer's model code is unknown.
     fallback_model: Option<Model>,
+    /// Last page reported by an unsolicited PageIndex (old D11 task).
+    page_index: u16,
 }
 
 impl std::fmt::Debug for NiimbotDriver {
@@ -95,6 +97,7 @@ impl NiimbotDriver {
             model_code: None,
             protocol: ProtocolVersion(0),
             fallback_model: None,
+            page_index: 0,
         }
     }
 
@@ -117,12 +120,19 @@ impl NiimbotDriver {
             while let Some(res) = self.decoder.next_packet() {
                 match res {
                     Ok(p)
-                        if p.cmd == expect
+                        if (p.cmd == expect && expect != cmd::PAGE_INDEX)
                             || p.cmd == cmd::ERROR
                             || p.cmd == cmd::NOT_SUPPORTED =>
                     {
                         trace!(rx = p.cmd, "niimbot rx");
                         return Ok(p);
+                    }
+                    // The old D11 task counts pages this way; a report can come at any time.
+                    Ok(p) if p.cmd == cmd::PAGE_INDEX && p.payload.len() >= 2 => {
+                        self.page_index = u16::from_be_bytes([p.payload[0], p.payload[1]]);
+                        if expect == cmd::PAGE_INDEX {
+                            return Ok(p);
+                        }
                     }
                     Ok(p) => debug!(cmd = p.cmd, "ignoring unsolicited packet"),
                     Err(e) => debug!(%e, "dropping corrupt frame"),
@@ -196,15 +206,14 @@ impl NiimbotDriver {
 
     fn resolve_task(&self, model: &Model) -> Result<PrintTask, DeviceError> {
         match model.task.as_str() {
-            "d110" => Ok(PrintTask::D110),
-            "b1" => Ok(PrintTask::B1),
-            "d110m_v4" => Ok(PrintTask::D110mV4),
             "auto" if self.protocol >= ProtocolVersion(4) => Ok(PrintTask::D110mV4),
             "auto" => Ok(PrintTask::B1),
-            other => Err(DeviceError::Unavailable(format!(
-                "print task '{other}' for {} is not implemented yet",
-                model.name
-            ))),
+            name => PrintTask::from_name(name).ok_or_else(|| {
+                DeviceError::Unavailable(format!(
+                    "print task '{name}' for {} is not known",
+                    model.name
+                ))
+            }),
         }
     }
 
@@ -216,6 +225,11 @@ impl NiimbotDriver {
     ) -> Result<u32, DeviceError> {
         let gap = self.transport.packet_gap();
         let mut printed = 0u32;
+        // Tasks without a wait step send every copy as a page: count the answered PageEnds.
+        let counted = steps
+            .iter()
+            .any(|s| matches!(s, Step::WaitPages { .. } | Step::WaitPageIndex { .. }));
+        self.page_index = 0;
         // Stop between pages, never inside one: before the job starts, and after
         // PrintStart or a PageEnd has been answered.
         let mut at_boundary = true;
@@ -259,6 +273,36 @@ impl NiimbotDriver {
                             hint: "check labels and lid, then retry".into(),
                         });
                     }
+                    if !counted && packet.cmd == cmd::PAGE_END {
+                        printed += 1;
+                        control.set_progress(printed, total);
+                    }
+                }
+                Step::Sync { packet, expect } => {
+                    let reply = self.exchange(packet, *expect)?;
+                    response::check(&reply, *expect).map_err(parse_err)?;
+                }
+                Step::WaitPageIndex {
+                    total_pages,
+                    stall_timeout_ms,
+                } => {
+                    let stall = Duration::from_millis(u64::from(*stall_timeout_ms));
+                    let mut page = self.page_index;
+                    while page < *total_pages {
+                        if control.is_cancelled() {
+                            return Err(DeviceError::Cancelled);
+                        }
+                        let reply = self.wait_for(cmd::PAGE_INDEX, stall).map_err(|e| match e {
+                            DeviceError::Timeout(_) => DeviceError::Timeout(format!(
+                                "printing stalled at page {page} of {total_pages}"
+                            )),
+                            other => other,
+                        })?;
+                        response::check(&reply, cmd::PAGE_INDEX).map_err(parse_err)?;
+                        page = self.page_index;
+                        control.set_progress(u32::from(page), total);
+                    }
+                    printed = u32::from(page);
                 }
                 Step::WaitPages {
                     total_pages,
@@ -346,9 +390,12 @@ impl Driver for NiimbotDriver {
         let reply = self.exchange(&info, InfoType::ModelId.response_cmd())?;
         let code = response::model_id(&reply).map_err(parse_err)?;
         self.model_code = Some(code);
-        self.model = Registry::builtin()
-            .by_code("niimbot", code)
-            .cloned()
+        // Some codes are shared (512: D11 and Hi-NB-D11): the name decides between them.
+        self.model = self
+            .fallback_model
+            .clone()
+            .filter(|m| m.model_codes.contains(&code))
+            .or_else(|| Registry::builtin().by_code("niimbot", code).cloned())
             .or_else(|| self.fallback_model.clone());
         debug!(code, protocol = self.protocol.0, model = ?self.model.as_ref().map(|m| &m.id), "connected");
         // Best effort: older firmware may not answer these.

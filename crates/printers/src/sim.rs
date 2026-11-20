@@ -2,13 +2,16 @@
 //!
 //! It answers the handshake, status and RFID requests, reassembles 0x84/0x85 rows into
 //! pages, and models the B21 Pro firmware quirks (no reply to the first packet after
-//! PrintStart). Behaviour follows docs/protocol.md; it is not a capture replay.
+//! PrintStart). [`SimConfig::for_model`] sets it up for any registry model, so every print
+//! task runs against it. Behaviour follows docs/protocol.md; it is not a capture replay.
 
 use std::sync::{Arc, Mutex};
 
 use labely_core::Bitmap1;
 use labely_protocol::niimbot::{Decoder, Packet, cmd};
 use labely_transport::memory::{MemoryPeer, MemoryTransport};
+
+use crate::registry::Model;
 
 /// What the simulator observed.
 #[derive(Debug, Default, Clone)]
@@ -36,6 +39,10 @@ pub struct SimConfig {
     pub rfid: Option<(String, u16, u16, u8)>,
     /// Report this error code on PageEnd (simulate e.g. cover open = 1).
     pub fail_page_end: Option<u8>,
+    /// Send an unsolicited PageIndex (0xE0) for every printed page (old D11).
+    pub page_index_events: bool,
+    /// Page width when SetPageSize carries no columns (old D11).
+    pub head_dots: u16,
 }
 
 impl SimConfig {
@@ -46,6 +53,23 @@ impl SimConfig {
             quirk_no_reply_after_start: true,
             rfid: Some(("6972842743589".into(), 230, 12, 1)),
             fail_page_end: None,
+            page_index_events: false,
+            head_dots: 591,
+        }
+    }
+
+    /// A printer of `model`, with the firmware its print task needs. `auto` models report
+    /// protocol 4.
+    pub fn for_model(model: &Model) -> Self {
+        let v4 = matches!(model.task.as_str(), "auto" | "d110m_v4");
+        Self {
+            model_code: model.model_codes.first().copied().unwrap_or(0),
+            version_code: if v4 { 300 } else { 200 },
+            quirk_no_reply_after_start: v4,
+            rfid: None,
+            fail_page_end: None,
+            page_index_events: model.task == "d11_v1",
+            head_dots: u16::try_from(model.head_dots).unwrap_or(u16::MAX),
         }
     }
 }
@@ -187,6 +211,11 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                     reply(&peer, cmd::PRINT_START_RESP, &[1])
                 }
                 cmd::PAGE_START | cmd::PRINT_CLEAR | cmd::SET_QUANTITY => {
+                    if p.cmd == cmd::SET_QUANTITY
+                        && let (Some(pg), [hi, lo, ..]) = (page.as_mut(), p.payload.as_slice())
+                    {
+                        pg.copies = u16::from_be_bytes([*hi, *lo]);
+                    }
                     let resp = match p.cmd {
                         cmd::PAGE_START => cmd::PAGE_START_RESP,
                         cmd::PRINT_CLEAR => cmd::PRINT_CLEAR_RESP,
@@ -201,7 +230,12 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                             .get(i..i + 2)
                             .map_or(0, |s| u16::from_be_bytes([s[0], s[1]]))
                     };
-                    let (rows, cols) = (g(0), g(2));
+                    let rows = g(0);
+                    let cols = if p.payload.len() >= 4 {
+                        g(2)
+                    } else {
+                        cfg.head_dots
+                    };
                     let copies = if p.payload.len() >= 6 { g(4) } else { 1 };
                     page = Some(PageState {
                         cols,
@@ -211,6 +245,7 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                     reply(&peer, cmd::SET_PAGE_SIZE_RESP, &[1])
                 }
                 cmd::ROWS_EMPTY => true,
+                cmd::CHECK_LINE => reply(&peer, cmd::CHECK_LINE_RESP, &[1]),
                 cmd::ROW_BITMAP => {
                     if let Some(pg) = page.as_mut()
                         && p.payload.len() >= 6
@@ -233,11 +268,18 @@ fn run(cfg: SimConfig, peer: MemoryPeer, log: Arc<Mutex<SimLog>>) {
                     if let Some(code) = cfg.fail_page_end {
                         reply(&peer, cmd::ERROR, &[code])
                     } else {
+                        let before = printed;
                         if let Some(pg) = page.take() {
                             printed = printed.saturating_add(pg.copies);
                             l.pages.push((pg.bitmap, pg.copies));
                         }
-                        reply(&peer, cmd::PAGE_END_RESP, &[1])
+                        let mut ok = reply(&peer, cmd::PAGE_END_RESP, &[1]);
+                        if cfg.page_index_events {
+                            for n in before + 1..=printed {
+                                ok = ok && reply(&peer, cmd::PAGE_INDEX, &n.to_be_bytes());
+                            }
+                        }
+                        ok
                     }
                 }
                 cmd::PRINT_STATUS => {
