@@ -1,0 +1,195 @@
+{
+ "schema": 1,
+ "source": "docs/protocol-languages.md",
+ "models": [
+  {
+   "id": "phomemo.m02",
+   "vendor": "phomemo",
+   "name": "M02",
+   "ble_name_prefixes": [
+    "M02"
+   ],
+   "driver": "phomemo",
+   "task": "m02",
+   "dpi": 203,
+   "head_dots": 384,
+   "max_width_mm": 48.0,
+   "max_length_mm": 1000.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 1,
+    "default": 1
+   },
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "phomemo.m02_pro",
+   "vendor": "phomemo",
+   "name": "M02 Pro",
+   "ble_name_prefixes": [
+    "M02 Pro"
+   ],
+   "driver": "phomemo",
+   "task": "m02",
+   "dpi": 300,
+   "head_dots": 624,
+   "max_width_mm": 53.0,
+   "max_length_mm": 1000.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 1,
+    "default": 1
+   },
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "phomemo.t02",
+   "vendor": "phomemo",
+   "name": "T02",
+   "ble_name_prefixes": [
+    "T02"
+   ],
+   "driver": "phomemo",
+   "task": "m02",
+   "dpi": 203,
+   "head_dots": 384,
+   "max_width_mm": 48.0,
+   "max_length_mm": 1000.0,
+   "media": [
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 1,
+    "default": 1
+   },
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "phomemo.m110",
+   "vendor": "phomemo",
+   "name": "M110",
+   "ble_name_prefixes": [
+    "M110"
+   ],
+   "driver": "phomemo",
+   "task": "m110",
+   "dpi": 203,
+   "head_dots": 384,
+   "max_width_mm": 48.0,
+   "max_length_mm": 200.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 15,
+    "default": 8
+   },
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "phomemo.m120",
+   "vendor": "phomemo",
+   "name": "M120",
+   "ble_name_prefixes": [
+    "M120"
+   ],
+   "driver": "phomemo",
+   "task": "m110",
+   "dpi": 203,
+   "head_dots": 384,
+   "max_width_mm": 48.0,
+   "max_length_mm": 200.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 15,
+    "default": 8
+   },
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "phomemo.m220",
+   "vendor": "phomemo",
+   "name": "M220",
+   "ble_name_prefixes": [
+    "M220"
+   ],
+   "driver": "phomemo",
+   "task": "m110",
+   "dpi": 203,
+   "head_dots": 576,
+   "max_width_mm": 72.0,
+   "max_length_mm": 200.0,
+   "media": [
+    "gap",
+    "black_mark",
+    "continuous"
+   ],
+   "print_direction": "top",
+   "density": {
+    "min": 1,
+    "max": 15,
+    "default": 8
+   },
+   "transports": [
+    "ble"
+   ]
+  },
+  {
+   "id": "phomemo.d30",
+   "vendor": "phomemo",
+   "name": "D30",
+   "ble_name_prefixes": [
+    "D30"
+   ],
+   "driver": "phomemo",
+   "task": "d30",
+   "dpi": 203,
+   "head_dots": 96,
+   "max_width_mm": 12.0,
+   "max_length_mm": 100.0,
+   "media": [
+    "gap",
+    "continuous"
+   ],
+   "print_direction": "left",
+   "density": {
+    "min": 1,
+    "max": 1,
+    "default": 1
+   },
+   "transports": [
+    "ble"
+   ]
+  }
+ ]
+}

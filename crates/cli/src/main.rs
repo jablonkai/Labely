@@ -105,7 +105,8 @@ enum Cmd {
     /// Print a document.
     Print {
         file: PathBuf,
-        /// `ble:<id>`, `usb:<port>`, `fake:<dir>[?model=<id>]` or `sim:<model id>`.
+        /// `ble:<id>`, `usb:<port>`, `tcp:<host>[:<port>]`, `fake:<dir>[?model=<id>]` or
+        /// `sim:<model id>`. Add `?model=<id>` for a printer that is not a NIIMBOT.
         #[arg(short, long)]
         printer: String,
         #[arg(long, default_value_t = 1)]

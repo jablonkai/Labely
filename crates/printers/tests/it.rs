@@ -605,3 +605,280 @@ fn oss_only_models_are_registered() {
         "niimbot.h1s"
     );
 }
+
+// ---- Stream printers: ESC/POS, Phomemo, Marklife, TSPL, ZPL (docs/protocol-languages.md) ----
+
+use labely_printers::stream::{Language, StreamDriver};
+use labely_printers::stream_sim::{StreamSim, StreamSimState};
+
+fn stream_job(label: &Bitmap1, copies: u16, density: u8) -> PrintRequest {
+    PrintRequest {
+        pages: vec![label.clone()],
+        copies,
+        density,
+        media: MediaType::Gap,
+        planes: PagePlanes::None,
+        half_cut: None,
+    }
+}
+
+/// A stream driver on a simulator of model `id`; `None` if `id` is not a stream model.
+fn try_connect_stream(id: &str) -> Option<(StreamSim, StreamDriver)> {
+    let model = Registry::builtin().by_id(id)?;
+    let (sim, transport) = StreamSim::start(model)?;
+    let language = Language::of(model)?;
+    let mut drv = StreamDriver::new(Box::new(transport), model.clone(), language);
+    let identity = drv.connect().ok()?;
+    (identity.model?.id == id).then_some((sim, drv))
+}
+
+fn connect_stream(id: &str) -> (StreamSim, StreamDriver) {
+    match try_connect_stream(id) {
+        Some(pair) => pair,
+        None => unreachable!("{id} is a stream model with a simulator"),
+    }
+}
+
+/// Every model of the other vendors prints on a simulator of its language, and the
+/// pages arrive as prepared for the head.
+#[test]
+fn every_stream_model_prints_on_the_simulator() {
+    let registry = Registry::builtin();
+    let models: Vec<_> = registry
+        .models()
+        .iter()
+        .filter(|m| m.driver != "niimbot")
+        .collect();
+    assert!(models.len() >= 15);
+    for model in models {
+        let (sim, mut drv) = connect_stream(&model.id);
+        // Taller than one raster block, and wider than the narrowest head.
+        let (w, h) = (120, 600);
+        let mut label = Bitmap1::new(w, h);
+        for y in 0..h {
+            label.set(y % w, y, true);
+            label.set(0, y, true);
+        }
+        let control = JobControl::new();
+        let report = drv
+            .print(&stream_job(&label, 2, model.density.default), &control)
+            .unwrap_or_else(|e| panic!("{}: {e}", model.id));
+        assert_eq!(report.pages_printed, 2, "{}", model.id);
+        assert_eq!(control.progress(), (2, 2), "{}", model.id);
+
+        let pages = sim.pages().unwrap_or_else(|e| panic!("{}: {e}", model.id));
+        let expected = prepare_for_head(&label, model);
+        assert!(expected.width() <= model.head_dots, "{}", model.id);
+        assert_eq!(pages.iter().map(|p| p.1).sum::<u32>(), 2, "{}", model.id);
+        for (page, _) in &pages {
+            assert_eq!(page, &expected, "{}", model.id);
+        }
+        // TSPL and ZPL carry the copy count; the others get the page once per copy.
+        let counted = matches!(model.driver.as_str(), "tspl" | "zpl");
+        assert_eq!(pages.len(), if counted { 1 } else { 2 }, "{}", model.id);
+    }
+}
+
+#[test]
+fn stream_status_and_refusal_to_print() {
+    for id in [
+        "generic.escpos_58",
+        "phomemo.m110",
+        "generic.tspl_203",
+        "generic.zpl_203",
+    ] {
+        let (sim, mut drv) = connect_stream(id);
+        let st = drv.status().unwrap();
+        assert_eq!(
+            (st.lid_closed, st.paper_present),
+            (Some(true), Some(true)),
+            "{id}"
+        );
+        assert_eq!(st.battery_percent, None);
+
+        sim.set_state(StreamSimState {
+            paper_out: true,
+            lid_open: false,
+            silent: false,
+        });
+        let st = drv.status().unwrap();
+        assert_eq!(
+            (st.lid_closed, st.paper_present),
+            (Some(true), Some(false)),
+            "{id}"
+        );
+        let err = drv
+            .print(&stream_job(&Bitmap1::new(64, 8), 1, 8), &JobControl::new())
+            .unwrap_err();
+        assert!(
+            matches!(&err, DeviceError::Printer { message, .. } if message.contains("paper")),
+            "{id}: {err}"
+        );
+
+        sim.set_state(StreamSimState {
+            paper_out: false,
+            lid_open: true,
+            silent: false,
+        });
+        let err = drv
+            .print(&stream_job(&Bitmap1::new(64, 8), 1, 8), &JobControl::new())
+            .unwrap_err();
+        assert!(
+            matches!(&err, DeviceError::Printer { message, .. } if message.contains("cover")),
+            "{id}: {err}"
+        );
+        assert!(sim.bytes().is_empty(), "{id}: nothing was sent to print");
+    }
+}
+
+/// A printer that never answers still prints; its status is unknown.
+#[test]
+fn silent_stream_printer_prints() {
+    for id in ["generic.escpos_80", "phomemo.d30", "marklife.p12"] {
+        let (sim, mut drv) = connect_stream(id);
+        sim.set_state(StreamSimState {
+            paper_out: true,
+            lid_open: true,
+            silent: true,
+        });
+        let st = drv.status().unwrap();
+        assert_eq!((st.lid_closed, st.paper_present), (None, None), "{id}");
+        if id == "marklife.p12" {
+            // The end-of-job wait is long; one silent Marklife job is covered by the
+            // status check above.
+            continue;
+        }
+        let report = drv
+            .print(&stream_job(&Bitmap1::new(64, 8), 1, 1), &JobControl::new())
+            .unwrap();
+        assert_eq!(report.pages_printed, 1, "{id}");
+        assert_eq!(sim.pages().unwrap().len(), 1, "{id}");
+    }
+}
+
+#[test]
+fn stream_job_bytes_follow_the_request() {
+    // ESC/POS 80 mm cuts after each page.
+    let (sim, mut drv) = connect_stream("generic.escpos_80");
+    drv.print(&stream_job(&Bitmap1::new(64, 8), 2, 1), &JobControl::new())
+        .unwrap();
+    assert_eq!(
+        labely_protocol::escpos::decode(&sim.bytes()).unwrap().cuts,
+        2
+    );
+
+    // TSPL: size in mm at the model's dpi, the density clamped, the media of the job.
+    let (sim, mut drv) = connect_stream("generic.tspl_203");
+    let mut job = stream_job(&Bitmap1::new(320, 240), 3, 99);
+    job.media = MediaType::Continuous;
+    drv.print(&job, &JobControl::new()).unwrap();
+    let labels = labely_protocol::tspl::decode(&sim.bytes()).unwrap();
+    assert_eq!(labels.len(), 1);
+    assert_eq!(labels[0].size_mm, (40.04, 30.03));
+    assert_eq!(labels[0].density, Some(15));
+    assert_eq!(
+        labels[0].media,
+        Some(labely_protocol::tspl::Media::Continuous)
+    );
+    assert_eq!(labels[0].copies, 3);
+
+    // ZPL: darkness, mark sensing.
+    let (sim, mut drv) = connect_stream("generic.zpl_300");
+    let mut job = stream_job(&Bitmap1::new(320, 240), 1, 22);
+    job.media = MediaType::BlackMark;
+    drv.print(&job, &JobControl::new()).unwrap();
+    let labels = labely_protocol::zpl::decode(&sim.bytes()).unwrap();
+    assert_eq!(labels[0].darkness, Some(22));
+    assert_eq!(
+        labels[0].media,
+        Some(labely_protocol::zpl::Media::BlackMark)
+    );
+    assert_eq!(labels[0].size, (320, 240));
+
+    // The D30 prints along the tape: the label is turned.
+    let (sim, mut drv) = connect_stream("phomemo.d30");
+    drv.print(
+        &stream_job(&Bitmap1::new(320, 96), 1, 1),
+        &JobControl::new(),
+    )
+    .unwrap();
+    let pages = sim.pages().unwrap();
+    assert_eq!((pages[0].0.width(), pages[0].0.height()), (96, 320));
+}
+
+#[test]
+fn stream_printer_prints_red_dots_black_and_stops_when_cancelled() {
+    let (sim, mut drv) = connect_stream("phomemo.m02");
+    let mut black = Bitmap1::new(64, 8);
+    black.set(1, 1, true);
+    let mut red = Bitmap1::new(64, 8);
+    red.set(5, 5, true);
+    let mut job = stream_job(&black, 1, 1);
+    job.pages.push(black.clone());
+    job.planes = PagePlanes::Red(vec![red.clone(), Bitmap1::new(64, 8)]);
+    drv.print(&job, &JobControl::new()).unwrap();
+    let pages = sim.pages().unwrap();
+    assert_eq!(pages.len(), 2);
+    assert!(pages[0].0.get(1, 1) && pages[0].0.get(5, 5));
+    assert!(pages[1].0.get(1, 1) && !pages[1].0.get(5, 5));
+
+    let (sim, mut drv) = connect_stream("phomemo.m02");
+    let control = JobControl::new();
+    control.cancel();
+    assert_eq!(
+        drv.print(&job, &control).unwrap_err(),
+        DeviceError::Cancelled
+    );
+    assert!(sim.bytes().is_empty());
+}
+
+#[test]
+fn hub_opens_stream_printers_by_address() {
+    let hub = Hub::new();
+    // sim: picks the simulator of the model's language.
+    for id in ["phomemo.m110", "marklife.p15", "generic.zpl_203"] {
+        let address = format!("sim:{id}");
+        let info = hub.connect(&address).unwrap();
+        assert_eq!(info.model.unwrap().id, id);
+        let report = hub
+            .print(
+                &address,
+                stream_job(&Bitmap1::new(64, 16), 2, 2),
+                &JobControl::new(),
+            )
+            .unwrap();
+        assert_eq!(report.pages_printed, 2, "{id}");
+        hub.disconnect(&address).unwrap();
+    }
+
+    // tcp: with ?model= sends the model's language to the socket.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        use std::io::Read;
+        let (mut s, _) = listener.accept().unwrap();
+        let mut all = Vec::new();
+        s.read_to_end(&mut all).unwrap();
+        all
+    });
+    let address = format!("tcp:127.0.0.1:{port}?model=generic.tspl_203");
+    let info = hub.connect(&address).unwrap();
+    assert_eq!(info.model.unwrap().id, "generic.tspl_203");
+    hub.print(
+        &address,
+        stream_job(&Bitmap1::new(64, 16), 1, 8),
+        &JobControl::new(),
+    )
+    .unwrap();
+    hub.disconnect(&address).unwrap();
+    let received = server.join().unwrap();
+    let job = received
+        .strip_prefix(&labely_protocol::tspl::STATUS_REQUEST)
+        .expect("the status request comes first");
+    assert_eq!(labely_protocol::tspl::decode(job).unwrap().len(), 1);
+
+    let err = hub.connect("tcp:127.0.0.1:1?model=nope.none").unwrap_err();
+    assert!(matches!(err, DeviceError::NotFound(_)), "{err}");
+    let err = hub.connect("tcp:127.0.0.1:1?speed=3").unwrap_err();
+    assert!(matches!(err, DeviceError::NotFound(_)), "{err}");
+}
