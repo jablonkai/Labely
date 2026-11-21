@@ -105,6 +105,9 @@ pub struct Prefs {
     /// Print offset `[right, down]` in mm per printer address, kept from the last print.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub print_offsets: std::collections::BTreeMap<String, [f32; 2]>,
+    /// Apply a recognised RFID paper to the label without asking (ADR-0041).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub auto_apply_paper: bool,
 }
 
 impl Prefs {

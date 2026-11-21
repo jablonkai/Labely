@@ -354,11 +354,15 @@ impl Command for PaperUnlink {
         let file = paper_file(ctx.session())?;
         let mut lib = UserPapers::load(&file)?;
         let Some(previous) = lib.links.remove(&barcode) else {
-            return Err(
-                CommandError::not_found(format!("barcode `{barcode}` is not linked"))
-                    .with_param("barcode")
-                    .with_accepted(lib.links.keys().cloned()),
-            );
+            let e = CommandError::not_found(format!("barcode `{barcode}` is not linked"))
+                .with_param("barcode")
+                .with_accepted(lib.links.keys().cloned());
+            // A bundled link (ADR-0041) cannot be removed, only overridden.
+            return Err(if crate::paper::builtin_links().contains_key(&barcode) {
+                e.with_hint("this barcode is in the bundled table; use paper.link to point it at another paper")
+            } else {
+                e
+            });
         };
         lib.save(&file)?;
         Ok(LinkOutput {

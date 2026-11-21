@@ -170,9 +170,9 @@ Ideas parked until everything above is done.
 - **Mobile parity.** Android and iOS get these from one design pass (ADR-0029): data merge,
   the barcode screen, export, printer settings, pinch zoom, resize handles and images.
 
-- **Smarter RFID paper detection.** The tag has no size (protocol.md §10), so today an unknown
-  roll is linked to a paper once by hand (ADR-0020).
-  - Optional setting to apply a recognised paper automatically instead of offering "Use".
-  - Bundled RFID barcode → paper table built from rolls we own (not from vendor data), so
-    common rolls are known on first load.
+- **Smarter RFID paper detection.** The tag has no size (protocol.md §10), so an unknown roll
+  is linked to a paper once by hand (ADR-0020).
+  - Done (ADR-0041): an optional setting applies a recognised paper instead of offering "Use",
+    and `builtin.json` has an RFID barcode → paper table. The table is empty until rolls we
+    own are read.
   - Measuring the label with the printer (0x59/0x5A). UNCERTAIN; needs testing on the B21 Pro.
