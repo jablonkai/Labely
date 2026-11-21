@@ -47,8 +47,12 @@ jobs:
       - name: Install toolchain from rust-toolchain.toml
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-packager and dist
-        run: cargo install --locked cargo-packager@0.11.8 cargo-dist@0.34.0
+      - name: Install cargo-packager
+        run: cargo install --locked cargo-packager@0.11.8
+      # The release builds the CLI archives in the dist jobs, so it needs no dist here.
+      - name: Install dist
+        if: ${{ !inputs.plan }}
+        run: cargo install --locked cargo-dist@0.34.0
       # An unset secret is an empty string, and cargo-packager takes an empty variable as a
       # value. So the variables are only set when the secrets are there.
       - name: macOS signing and notarisation
@@ -83,7 +87,6 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Studio packages
         run: cargo xtask package
-      # The release builds the CLI archives in the dist jobs.
       - name: CLI archive
         if: ${{ !inputs.plan }}
         run: dist build --artifacts=local --target ${{ matrix.target }}

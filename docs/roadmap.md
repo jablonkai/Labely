@@ -154,11 +154,18 @@ Phase 6 lands in slices, one pull request each (ADR-0035, ADR-0036, ADR-0037, AD
 | 6.3 Other vendors | Phomemo, Marklife, generic ESC/POS, TSPL and ZPL drivers; TCP transport; on the simulator | done (ADR-0037); nothing ran on hardware; the mobile BLE link for Phomemo and Marklife, a model picker for `usb:` and `tcp:`, USB printer class and the Marklife P50 are open |
 | 6.4 Desktop packaging | cargo-dist for the CLI; signed and notarised macOS app, Windows MSI, Linux AppImage and deb | done (ADR-0038); only the macOS packages were built, unsigned; the MSI, AppImage, deb and a Developer ID signature with notarisation are open until CI and the certificates are there |
 | 6.5 Store builds and releases | Play and App Store builds; tag-driven release workflow with SHA256SUMS | done (ADR-0039); no workflow has run and nothing is signed or in a store; the certificates, the store listings, the store uploads and a public repository are open |
-| 6.6 Close-out | exit audit; the open hardware checks | |
+| 6.6 Close-out | exit audit; the open hardware checks | exit audit done (ADR-0040); no hardware check ran: the three iPhone checks and a B21 Pro print after the Phase 6 driver changes are open |
 
 ## Later (after Phase 6)
 
 Ideas parked until everything above is done.
+
+- **Printer follow-ups from Phase 6** (ADR-0040). Each needs hardware that is not here yet.
+  - Editor colour for two-colour printers, and the gray render path.
+  - Cut options in the print request and the print dialog.
+  - Mobile BLE link for Phomemo and Marklife, a model picker for `usb:` and `tcp:`, the USB
+    printer class and the Marklife P50.
+  - C1 tube printing, speed and print mode.
 
 - **Mobile parity.** Android and iOS get these from one design pass (ADR-0029): data merge,
   the barcode screen, export, printer settings, pinch zoom, resize handles and images.

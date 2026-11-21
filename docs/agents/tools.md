@@ -142,7 +142,8 @@ Settings a printer does not report are left out of `device.settings`.
 Printer addresses:
 - `ble:<id>`
 - `usb:<port>`
-- `tcp:<host>[:<port>]`: a network printer, port 9100 by default.
+- `tcp:<host>[:<port>]`: a network printer, port 9100 by default. An IPv6 address goes in
+  brackets when a port follows it: `tcp:[fe80::1]:9100`.
 - `ble:`, `usb:` and `tcp:` take `?model=<id>` for a printer that is not a NIIMBOT and cannot
   say what it is, for example `tcp:192.168.1.50?model=generic.zpl_203`. `device.models` lists
   the ids.

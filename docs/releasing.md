@@ -10,14 +10,24 @@ it from there.
    `cargo xtask ci` fails when they differ.
 2. Merge that to `main`.
 3. Tag the commit and push the tag: `git tag v0.2.0 && git push origin v0.2.0`. A version with
-   a suffix, such as `v0.2.0-rc.1`, becomes a pre-release.
+   a suffix, such as `v0.2.0-rc.1`, becomes a pre-release. The tag must be the `Cargo.toml`
+   version: the mobile builds read the file, not the tag. No release workflow has run yet, so
+   make the first tag a pre-release.
 4. The Release workflow builds everything and publishes the GitHub release:
    - the `labely` CLI archives for five targets with the shell and PowerShell installers,
    - the studio as dmg, MSI, AppImage and deb,
    - the Android APK, when the upload key is set,
    - `SHA256SUMS` over every file.
 5. Download the `store-android` and `store-ios` artefacts of the run and upload the AAB to the
-   Play Console and the IPA to App Store Connect (Transporter).
+   Play Console and the IPA to App Store Connect (Transporter). Without the Android secrets
+   the AAB is not signed, and without the Apple secrets there is no IPA.
+
+The release is green without any secret: the packages are then unsigned, and the run says so
+in a notice. Check the notices before you announce a release. The shell and PowerShell
+installers download from the release, so they fail while the repository is private.
+
+The Android version code is the version with two more digits: `1.2.3` is `100200399` and
+`1.2.3-rc.4` is `100200304` (ADR-0040).
 
 Check a download with `sha256sum --check --ignore-missing SHA256SUMS`.
 

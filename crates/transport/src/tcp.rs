@@ -2,7 +2,7 @@
 //! (docs/protocol-languages.md §7).
 
 use std::io::{ErrorKind, Read, Write};
-use std::net::{Shutdown, TcpStream, ToSocketAddrs};
+use std::net::{Ipv6Addr, Shutdown, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use crate::{Transport, TransportError, TransportInfo, TransportKind};
@@ -21,26 +21,46 @@ pub struct TcpTransport {
     open: bool,
 }
 
-/// `host` or `host:port` (also `[v6]:port`) with the default port filled in.
-fn with_port(address: &str) -> String {
-    let has_port = match address.rsplit_once(':') {
+/// `host`, `host:port`, `[v6]` or `[v6]:port` with the default port filled in. A bare IPv6
+/// address gets its brackets. A port that is not a number from 1 to 65535 is an error, and so
+/// is a missing host.
+fn with_port(address: &str) -> Result<String, TransportError> {
+    let bad = |what: &str| TransportError::NotFound(format!("{address}: {what}"));
+    let (host, port) = if let Some(rest) = address.strip_prefix('[') {
+        let (v6, tail) = rest.split_once(']').ok_or_else(|| bad("missing ']'"))?;
+        let port = match tail.strip_prefix(':') {
+            Some(port) => Some(port),
+            None if tail.is_empty() => None,
+            None => return Err(bad("expected ':port' after ']'")),
+        };
+        (format!("[{v6}]"), port)
+    } else if address.parse::<Ipv6Addr>().is_ok() {
         // A bare IPv6 address has colons but no port.
-        Some((host, port)) => {
-            port.parse::<u16>().is_ok() && (!host.contains(':') || host.ends_with(']'))
-        }
-        None => false,
-    };
-    if has_port {
-        address.to_owned()
+        (format!("[{address}]"), None)
     } else {
-        format!("{address}:{DEFAULT_PORT}")
+        match address.rsplit_once(':') {
+            Some((host, port)) => (host.to_owned(), Some(port)),
+            None => (address.to_owned(), None),
+        }
+    };
+    if host.is_empty() || host == "[]" {
+        return Err(bad("no host"));
     }
+    let port = match port {
+        Some(port) => port
+            .parse::<u16>()
+            .ok()
+            .filter(|port| *port != 0)
+            .ok_or_else(|| bad("the port must be a number from 1 to 65535"))?,
+        None => DEFAULT_PORT,
+    };
+    Ok(format!("{host}:{port}"))
 }
 
 /// Connect to `address` (`host[:port]`, port 9100 by default), trying each resolved address
 /// for up to `timeout`.
 pub fn open(address: &str, timeout: Duration) -> Result<TcpTransport, TransportError> {
-    let target = with_port(address);
+    let target = with_port(address)?;
     let addrs = target
         .to_socket_addrs()
         .map_err(|e| TransportError::NotFound(format!("{target}: {e}")))?;
@@ -122,10 +142,49 @@ mod tests {
 
     #[test]
     fn default_port() {
-        assert_eq!(with_port("printer.local"), "printer.local:9100");
-        assert_eq!(with_port("10.0.0.5:6101"), "10.0.0.5:6101");
-        assert_eq!(with_port("[::1]:6101"), "[::1]:6101");
-        assert_eq!(with_port("fe80::1"), "fe80::1:9100");
+        let ok = |address: &str| with_port(address).unwrap();
+        assert_eq!(ok("printer.local"), "printer.local:9100");
+        assert_eq!(ok("10.0.0.5:6101"), "10.0.0.5:6101");
+        assert_eq!(ok("[::1]:6101"), "[::1]:6101");
+        assert_eq!(ok("[::1]"), "[::1]:9100");
+        // A bare IPv6 address is bracketed, not given a ninth group.
+        assert_eq!(ok("fe80::1"), "[fe80::1]:9100");
+        assert_eq!(ok("::1"), "[::1]:9100");
+    }
+
+    #[test]
+    fn bad_addresses_are_named() {
+        for address in [
+            "",
+            ":9100",
+            "[]:9100",
+            "printer:port",
+            "printer:99999",
+            "printer:0",
+            "printer:",
+            "[::1",
+            "[::1]9100",
+        ] {
+            let err = with_port(address).unwrap_err();
+            assert!(
+                matches!(&err, TransportError::NotFound(m) if m.starts_with(address)),
+                "{address}: {err}"
+            );
+            assert!(matches!(
+                open(address, Duration::from_millis(50)),
+                Err(TransportError::NotFound(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn talks_over_ipv6_without_brackets_in_the_host() {
+        let Ok(listener) = TcpListener::bind("[::1]:0") else {
+            return; // no IPv6 loopback on this machine
+        };
+        let port = listener.local_addr().unwrap().port();
+        let t = open(&format!("[::1]:{port}"), Duration::from_secs(5)).unwrap();
+        assert_eq!(t.info().uri(), format!("tcp:[::1]:{port}"));
     }
 
     #[test]

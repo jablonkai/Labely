@@ -239,6 +239,22 @@ reason and a new target. Device rows were checked on a B21 Pro (firmware 3.12).
 | 8 | Language | English and Hungarian, saved | More languages need translators; the i18n check keeps keys in step → later |
 | 8 | Label paper defaults | RFID detection and mismatch banner | Saved "always use detected paper" and "prompt on mismatch" settings → later |
 
+## Phase 6 exit status
+
+The Phase 6 exit audit (slice 6.6, ADR-0040) checked the Ph6 rows. Phase 6 built drivers, and
+none of them ran on hardware, so no Ph6 row is done in the studio. Each row has a reason and
+moves to "later"; the plan cells above keep the phase they were planned for.
+
+| Section | Row | Done | Not done: reason → target |
+|---|---|---|---|
+| 3 | Two-colour printing, text colour | The driver sends a black and a red plane to models that take them (ADR-0036) | Elements have no colour. The editor colour needs a two-colour printer to check the output → later |
+| 6 | Cutter options, cut mode in the print dialog | The job has the cut fields and the half-cut command (ADR-0036) | The print request has no cut setting and the dialog has no option. No cutter model is here to test → later |
+| 1, 5, 6, 7 | C1 tube editor, tube print config, tube jam handling, C1 template set | — | Needs a C1 and heat-shrink media → later |
+| 6 | Speed / quality mode, print mode | — | Needs a model that answers PrinterInfo 2 and 14 → later |
+| 3 | Curved text | — | Not started; Phase 6 was drivers and packaging → later |
+| 8 | App settings dialog | Language, label colour, print offsets and sound in their own places | Software update: the packages have no updater (ADR-0038) → later. Network diagnostics and proxy belong to the cloud parts → won't |
+| 1 | Help menu | About | Docs links wait for a public repository (ADR-0039) → later |
+
 ## Summary
 
 **Row counts by section**
@@ -256,7 +272,7 @@ reason and a new target. Device rows were checked on a B21 Pro (firmware 3.12).
 | 9. Account/cloud/VIP | 6 |
 | **Total** | **134** |
 
-**Rows by plan.** Each row is counted under the first phase in its plan cell. Some rows split across phases.
+**Rows by plan.** Each row is counted under the first phase in its plan cell. Some rows split across phases. The Ph6 rows are open; see the Phase 6 exit status.
 
 | Plan | Rows |
 |---|---|

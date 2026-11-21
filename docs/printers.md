@@ -6,6 +6,9 @@ restated as data. Evidence keys are the same as in `protocol.md`:
 - `V:dev` = NIIMBOT 4.2.7 `App.framework/Resources/flutter_assets/assets/devices.json`. It is one JSON line, so it is cited by key.
 - `nbl:<line>` = niimbluelib `src/printer_models.ts` @ `35110a71` (MIT).
 
+Printers of other vendors (Phomemo, Marklife, generic ESC/POS, TSPL and ZPL) and the TCP
+transport are in `protocol-languages.md` (ADR-0037). This file covers NIIMBOT only.
+
 ## How models are identified
 
 1. **Model id (authoritative).** Send PrinterInfo (0x40) with type 8. The u16 reply is the model code. Match it against `codes` (V:dev) / `id` (nbl). Several codes can map to one model (B3S 256/260/262, S6 257–261, B21-C2B 771/775). Some codes are shared by two names: 256 is listed for B3S, A8 and JCB3S; 512 for D11 and Hi-NB-D11; 2305 for D110 and HI_D110. Break such ties with the BLE name. **Confirmed** [E: V:dev key `codes`; nbl:957-959 `getPrinterMetaById`; protocol.md section 4].
