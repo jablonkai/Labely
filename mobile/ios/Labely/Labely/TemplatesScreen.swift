@@ -1,7 +1,9 @@
 import LabelyKit
 import SwiftUI
 
-/// M7 · Sablonkönyvtár: starter templates and the user's library, by folder.
+/// M7 · Sablonkönyvtár: starter templates and the user's library, by folder. Folders are made,
+/// renamed and deleted from the chips; templates are duplicated, renamed, moved and deleted
+/// from their menu.
 struct TemplatesScreen: View {
     private enum Filter: Hashable {
         case all, starters, mine
@@ -12,9 +14,14 @@ struct TemplatesScreen: View {
     let onNewLabel: () -> Void
     @State private var query = ""
     @State private var filter = Filter.all
+    @State private var naming = false
+    @State private var folderName = ""
+    /// The folder being renamed; none while a new one is named.
+    @State private var renaming: String?
+    @State private var deleting: String?
 
     var body: some View {
-        let folders = Set(state.templates.filter { !$0.starter && !$0.folder.isEmpty }.map(\.folder)).sorted()
+        let folders = state.templateFolders
         let shown = state.templates.filter { t in
             let inFilter: Bool =
                 switch filter {
@@ -38,25 +45,90 @@ struct TemplatesScreen: View {
                         Chip(text: L("filter_mine"), selected: filter == .mine) { filter = .mine }
                         ForEach(folders, id: \.self) { f in
                             Chip(text: f, selected: filter == .folder(f)) { filter = .folder(f) }
+                                .contextMenu {
+                                    Button {
+                                        renaming = f
+                                        folderName = f
+                                        naming = true
+                                    } label: { Label(L("rename"), systemImage: "pencil") }
+                                    Button(role: .destructive) { deleting = f } label: { Label(L("delete"), systemImage: "trash") }
+                                }
+                        }
+                        Chip(text: "+ " + L("folder_new"), selected: false) {
+                            renaming = nil
+                            folderName = ""
+                            naming = true
                         }
                     }
                 }
-                Text(L("templates_count", shown.count)).style(.bodyStrong.with(color: Palette.muted))
-                TemplateGrid(templates: shown, state: state, deletable: true)
+                HStack {
+                    Text(L("templates_count", shown.count)).style(.bodyStrong.with(color: Palette.muted))
+                    Spacer()
+                    if case .folder(let f) = filter {
+                        Menu {
+                            Button {
+                                renaming = f
+                                folderName = f
+                                naming = true
+                            } label: { Label(L("folder_rename"), systemImage: "pencil") }
+                            Button(role: .destructive) { deleting = f } label: { Label(L("folder_delete"), systemImage: "trash") }
+                        } label: {
+                            HStack(spacing: 4) {
+                                LIcon(.folder, Palette.primary, size: 16)
+                                Text(f).style(.bodyStrong.with(color: Palette.primary)).lineLimit(1)
+                                LIcon(.chevDown, Palette.primary, size: 14)
+                            }
+                        }
+                    }
+                }
+                TemplateGrid(templates: shown, state: state, editable: true)
             }
             .padding(16)
         }
         .scrollDismissesKeyboard(.immediately)
+        .alert(L(renaming == nil ? "folder_new" : "folder_rename"), isPresented: $naming) {
+            TextField(L("folder_name"), text: $folderName)
+            Button(L("save")) {
+                let name = folderName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty else { return }
+                if let old = renaming {
+                    if name != old {
+                        state.renameFolder(old, to: name)
+                        if filter == .folder(old) { filter = .folder(name) }
+                    }
+                } else {
+                    state.createFolder(name)
+                    filter = .folder(name)
+                }
+            }
+            Button(L("cancel"), role: .cancel) {}
+        }
+        .alert(
+            L("folder_delete"),
+            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+            presenting: deleting
+        ) { f in
+            Button(L("delete"), role: .destructive) {
+                state.deleteFolder(f)
+                if filter == .folder(f) { filter = .mine }
+            }
+            Button(L("cancel"), role: .cancel) {}
+        } message: { f in
+            Text(L("folder_delete_body", f, state.templates.filter { !$0.starter && $0.folder == f }.count))
+        }
     }
 }
 
-/// Two-column grid of template cards. A tap opens a copy; library templates can be deleted from
-/// the context menu.
+/// Two-column grid of template cards. A tap opens a copy. With `editable`, a template's menu
+/// duplicates it (a starter too, into the library), and renames, moves or deletes a library
+/// one.
 struct TemplateGrid: View {
     let templates: [Template]
     let state: AppState
-    var deletable = false
+    var editable = false
     @State private var deleting: Template?
+    @State private var renaming: Template?
+    @State private var name = ""
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -66,21 +138,27 @@ struct TemplateGrid: View {
                         VStack(alignment: .leading, spacing: 8) {
                             ThumbTile(image: state.thumbs[t.ref], widthMm: t.widthMm, heightMm: t.heightMm)
                                 .aspectRatio(1.7, contentMode: .fit)
-                            VStack(alignment: .leading) {
-                                Text(displayName(t)).style(.bodyStrong.with(size: 16)).lineLimit(1)
-                                Text(sizeText(t.widthMm, t.heightMm)).style(.caption)
+                            HStack(spacing: 4) {
+                                VStack(alignment: .leading) {
+                                    Text(displayName(t)).style(.bodyStrong.with(size: 16)).lineLimit(1)
+                                    Text(([sizeText(t.widthMm, t.heightMm)] + (t.folder.isEmpty ? [] : [t.folder])).joined(separator: " · "))
+                                        .style(.caption).lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                if editable {
+                                    Menu { menu(t) } label: {
+                                        LIcon(.more, Palette.muted, size: 20).frame(width: 30, height: 36).contentShape(Rectangle())
+                                    }
+                                    .accessibilityLabel(L("more"))
+                                }
                             }
-                            .padding(.horizontal, 4)
+                            .padding(.leading, 4)
                         }
                         .padding(10)
                     }
                 }
                 .buttonStyle(.plain)
-                .contextMenu {
-                    if deletable && !t.starter {
-                        Button(role: .destructive) { deleting = t } label: { Text(L("delete")) }
-                    }
-                }
+                .contextMenu { if editable { menu(t) } }
             }
         }
         .alert(
@@ -92,6 +170,41 @@ struct TemplateGrid: View {
             Button(L("cancel"), role: .cancel) {}
         } message: { t in
             Text(L("template_delete_body", displayName(t)))
+        }
+        .alert(
+            L("rename"),
+            isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
+            presenting: renaming
+        ) { t in
+            TextField(L("template_name"), text: $name)
+            Button(L("save")) {
+                let new = name.trimmingCharacters(in: .whitespaces)
+                if !new.isEmpty, new != t.name { state.moveTemplate(t, name: new) }
+            }
+            Button(L("cancel"), role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder private func menu(_ t: Template) -> some View {
+        Button { state.duplicateTemplate(t, name: t.starter ? displayName(t) : nil) } label: {
+            Label(L(t.starter ? "template_copy_to_library" : "duplicate"), systemImage: "doc.on.doc")
+        }
+        if !t.starter {
+            Button {
+                name = t.name
+                renaming = t
+            } label: { Label(L("rename"), systemImage: "pencil") }
+            Menu {
+                if !t.folder.isEmpty {
+                    Button(L("folder_default")) { state.moveTemplate(t, folder: "") }
+                }
+                ForEach(state.templateFolders.filter { $0 != t.folder }, id: \.self) { f in
+                    Button(f) { state.moveTemplate(t, folder: f) }
+                }
+            } label: {
+                Label(L("template_move"), systemImage: "folder")
+            }
+            Button(role: .destructive) { deleting = t } label: { Label(L("delete"), systemImage: "trash") }
         }
     }
 }

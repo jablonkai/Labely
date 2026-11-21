@@ -140,3 +140,24 @@ extension EditorState {
         }
     }
 }
+
+extension EditorState {
+    /// A copy of the document as `<name>.labely` in `<data dir>/exports`, for the system's
+    /// "save to" picker or the share sheet (Save a copy / Save As). `nil` after a failure.
+    public func exportCopy() async -> URL? {
+        guard let doc else { return nil }
+        var out: URL?
+        await app.report {
+            if !saved || doc.path == nil { try await save() }
+            guard let path = self.doc?.path else { return }
+            let fm = FileManager.default
+            let dir = engine.dataDir.appendingPathComponent("exports", isDirectory: true)
+            try? fm.removeItem(at: dir)
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let url = dir.appendingPathComponent(Export.baseName(doc.name) + ".labely")
+            try fm.copyItem(atPath: path, toPath: url.path)
+            out = url
+        }
+        return out
+    }
+}

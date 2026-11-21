@@ -6,7 +6,12 @@ struct HomeScreen: View {
     let state: AppState
     let onNewLabel: () -> Void
     let onOpenFile: () -> Void
+    /// Pick a data file: a new label with it attached.
+    let onFromData: () -> Void
     @State private var query = ""
+    @State private var renaming: Recent?
+    @State private var deleting: Recent?
+    @State private var name = ""
 
     var body: some View {
         let starters = state.templates.filter { $0.starter && matches(displayName($0)) }
@@ -26,6 +31,16 @@ struct HomeScreen: View {
                     }
                     ActionCard(icon: .open, title: L("home_open"), sub: L("home_open_sub"), action: onOpenFile)
                 }
+                Button(action: onFromData) {
+                    Card {
+                        ListRow(title: L("home_from_data"), subtitle: L("home_from_data_sub")) {
+                            IconTile(.data, tint: Palette.green, fill: Palette.greenTint)
+                        } trailing: {
+                            LIcon(.chevRight, Palette.muted, size: 18)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Array(AppState.presetSizes.enumerated()), id: \.offset) { i, size in
@@ -50,18 +65,53 @@ struct HomeScreen: View {
                                         Text(sizeText(r.widthMm, r.heightMm)).style(.caption)
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    LIcon(.chevRight, Palette.muted, size: 18)
+                                    Menu { recentMenu(r) } label: {
+                                        LIcon(.more, Palette.muted, size: 20).frame(width: 36, height: 44).contentShape(Rectangle())
+                                    }
+                                    .accessibilityLabel(L("more"))
                                 }
-                                .padding(12)
+                                .padding(.leading, 12)
+                                .padding(.trailing, 4)
+                                .padding(.vertical, 12)
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu { recentMenu(r) }
                     }
                 }
             }
             .padding(16)
         }
         .scrollDismissesKeyboard(.immediately)
+        .alert(
+            L("rename"),
+            isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
+            presenting: renaming
+        ) { r in
+            TextField(L("label_name"), text: $name)
+            Button(L("save")) { state.renameRecent(r, to: name) }
+            Button(L("cancel"), role: .cancel) {}
+        }
+        .alert(
+            L("recent_delete_title"),
+            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+            presenting: deleting
+        ) { r in
+            Button(L("delete"), role: .destructive) { state.deleteRecent(r) }
+            Button(L("cancel"), role: .cancel) {}
+        } message: { r in
+            Text(L("recent_delete_body", r.name))
+        }
+    }
+
+    @ViewBuilder private func recentMenu(_ r: Recent) -> some View {
+        Button { state.openRecent(r) } label: { Label(L("home_open"), systemImage: "doc") }
+        Button {
+            name = r.name
+            renaming = r
+        } label: { Label(L("rename"), systemImage: "pencil") }
+        Button { state.duplicateRecent(r, name: L("copy_of", r.name)) } label: { Label(L("duplicate"), systemImage: "doc.on.doc") }
+        Button(role: .destructive) { deleting = r } label: { Label(L("delete"), systemImage: "trash") }
     }
 
     private func matches(_ name: String) -> Bool {

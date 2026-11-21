@@ -23,6 +23,8 @@ func knownPrinters(_ state: AppState) -> [KnownPrinter] {
 /// M8 · Nyomtatók: the connected printer, known printers and a Bluetooth scan.
 struct PrintersScreen: View {
     let state: AppState
+    @State private var entering = false
+    @State private var address = ""
 
     var body: some View {
         let known = knownPrinters(state)
@@ -38,6 +40,7 @@ struct PrintersScreen: View {
                     }
                 }
                 ConnectedCard(state: state)
+                if let failure = state.connectFailure { ConnectTips(state: state, failure: failure) }
 
                 if !known.isEmpty {
                     SectionHeader(title: L("printers_known"), action: L("printers_search")) {
@@ -64,10 +67,68 @@ struct PrintersScreen: View {
                         }
                     }
                 }
+                SecondaryButton(text: L("printer_manual"), icon: .network, enabled: state.busy == nil, height: 52) {
+                    address = ""
+                    entering = true
+                }
+                Text(L("printer_manual_hint")).style(.caption)
             }
             .padding(16)
         }
-        .task(id: state.printer?.address) { await state.refreshStatus() }
+        .task(id: state.printer?.address) {
+            await state.refreshStatus()
+            await state.detectPaper()
+        }
+        .alert(L("printer_manual"), isPresented: $entering) {
+            TextField("192.168.1.50:9100", text: $address)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button(L("connect")) { state.connectManual(address) }
+            Button(L("cancel"), role: .cancel) {}
+        } message: {
+            Text(L("printer_manual_body"))
+        }
+    }
+}
+
+/// Why a connect may have failed and what to try, with Try again.
+private struct ConnectTips: View {
+    let state: AppState
+    let failure: ConnectFailure
+
+    var body: some View {
+        let ble = failure.address.hasPrefix("ble:")
+        let tcp = failure.address.hasPrefix("tcp:")
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    IconTile(.warn, tint: Palette.amber, fill: Palette.amberTint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L("connect_failed", failure.name.isEmpty ? failure.address : failure.name)).style(.bodyStrong.with(size: 16))
+                        Text(failure.message).style(.caption).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    IconButton(.close, size: 34, label: L("cancel")) { state.dismissConnectFailure() }
+                }
+                ForEach(tips(ble: ble, tcp: tcp), id: \.self) { tip in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("•").style(.body.with(color: Palette.muted))
+                        Text(tip).style(.body.with(color: Palette.text2)).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                PrimaryButton(text: L("try_again"), icon: .refresh, enabled: state.busy == nil) {
+                    if ble { withBluetooth(state) { state.retryConnect() } } else { state.retryConnect() }
+                }
+            }
+            .padding(14)
+        }
+    }
+
+    private func tips(ble: Bool, tcp: Bool) -> [String] {
+        if tcp { return [L("tip_tcp_network"), L("tip_tcp_address"), L("tip_power")] }
+        if ble { return [L("tip_power"), L("tip_ble_near"), L("tip_ble_other_app"), L("tip_ble_restart")] }
+        return [L("tip_power")]
     }
 }
 
@@ -82,7 +143,7 @@ struct PrinterRow: View {
             title: name.isEmpty ? address : name,
             subtitle: transportName(address) + " · " + (address.split(separator: ":", maxSplits: 1).last.map(String.init) ?? address)
         ) {
-            IconTile(ble ? .bluetooth : .printer)
+            IconTile(ble ? .bluetooth : address.hasPrefix("tcp:") ? .network : .printer)
         } trailing: {
             if state.busy == address {
                 ProgressView()
@@ -109,6 +170,7 @@ struct PrinterRow: View {
 func transportName(_ address: String) -> String {
     if address.hasPrefix("ble:") { return L("transport_ble") }
     if address.hasPrefix("usb:") { return "USB" }
+    if address.hasPrefix("tcp:") { return L("transport_tcp") }
     return L("transport_sim")
 }
 
@@ -135,11 +197,37 @@ private struct ConnectedCard: View {
                 .padding(16)
                 RowDivider()
                 let status = state.printerStatus
+                if status?.lidClosed == false {
+                    Banner(text: L("lid_open"), ok: false).padding([.horizontal, .top], 16)
+                } else if status?.paperPresent == false {
+                    Banner(text: L("no_labels"), ok: false).padding([.horizontal, .top], 16)
+                }
                 HStack {
                     Stat(label: L("battery"), value: status?.batteryPercent.map { "\($0)%" } ?? "–")
                     Stat(label: L("paper"), value: status?.paperPresent.map { L($0 ? "paper_loaded" : "paper_missing") } ?? "–")
                 }
+                .padding([.horizontal, .top], 16)
+                HStack {
+                    Stat(label: L("resolution"), value: p.model.map { "\($0.dpi) dpi" } ?? "–")
+                    Stat(label: L("printable_width"), value: p.model.flatMap { $0.headMm > 0 ? mmText($0.headMm) : nil } ?? "–")
+                }
+                .padding([.horizontal, .top], 16)
+                HStack {
+                    Stat(
+                        label: L("labels_remaining"),
+                        value: status?.paper.map { $0.total > 0 ? L("labels_of", $0.remaining, $0.total) : "–" } ?? "–"
+                    )
+                    Stat(label: L("lid"), value: status?.lidClosed.map { L($0 ? "lid_closed" : "lid_open_short") } ?? "–")
+                }
                 .padding(16)
+                if let d = state.detected, d.rfid {
+                    RowDivider()
+                    ListRow(title: d.paper.map(paperTitle) ?? L("paper_unknown_roll"), subtitle: L("paper_loaded_roll")) {
+                        IconTile(.label)
+                    } trailing: {
+                        EmptyView()
+                    }
+                }
                 HStack(spacing: 12) {
                     SecondaryButton(text: L("printer_settings"), icon: .settings, enabled: state.busy == nil) { settings = true }
                     SecondaryButton(text: L("disconnect"), icon: .close, enabled: state.busy == nil) { state.disconnect() }
@@ -231,7 +319,7 @@ private struct Stat: View {
     var body: some View {
         VStack(alignment: .leading) {
             Text(label).style(.caption)
-            Text(value).style(.title.with(size: 20))
+            Text(value).style(.title.with(size: 20)).lineLimit(1).minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

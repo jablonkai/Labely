@@ -71,33 +71,71 @@ public final class AppState {
     @ObservationIgnored private let defaults: UserDefaults
 
     public var tab: AppTab = .home
-    public private(set) var templates: [Template] = []
-    public private(set) var thumbs: [String: CGImage] = [:]
-    public private(set) var recents: [Recent] = []
-    public private(set) var known: [KnownPrinter] = []
-    public private(set) var history: [HistoryEntry] = []
+    public internal(set) var templates: [Template] = []
+    public internal(set) var thumbs: [String: CGImage] = [:]
+    public internal(set) var recents: [Recent] = []
+    public internal(set) var known: [KnownPrinter] = []
+    public internal(set) var history: [HistoryEntry] = []
 
     /// The connected printer and its last status.
-    public private(set) var printer: Device? {
-        didSet { if printer?.address != oldValue?.address { printerSettings = nil } }
+    public internal(set) var printer: Device? {
+        didSet {
+            if printer?.address != oldValue?.address { printerSettings = nil }
+            if let m = printer?.model { rememberModel(m) }
+        }
     }
-    public private(set) var printerStatus: DeviceStatus?
+    public internal(set) var printerStatus: DeviceStatus?
     /// The connected printer's own settings, once `loadPrinterSettings` has read them.
-    public private(set) var printerSettings: PrinterSettings?
+    public internal(set) var printerSettings: PrinterSettings?
 
     /// Address being connected, or `scanning` while scanning.
-    public private(set) var busy: String?
-    public private(set) var scanResults: [Device]?
+    public internal(set) var busy: String?
+    public internal(set) var scanResults: [Device]?
 
     public var message: Notice?
 
-    public private(set) var editor: EditorState?
+    public internal(set) var editor: EditorState?
 
     /// Whether App Intents may print (ADR-0033). Off until the user turns it on, like the
     /// studio's "Allow agents to print".
     public var allowAgentPrint = false {
         didSet { defaults.set(allowAgentPrint, forKey: "allow_agent_print") }
     }
+
+    /// Units, grid, snapping and the paper behaviour, kept across launches.
+    public var prefs = Prefs() {
+        didSet {
+            CurrentUnit.value = prefs.unit
+            if prefs != oldValue { save(prefs, "prefs") }
+        }
+    }
+
+    // MARK: Library state (`AppLibrary.swift`)
+
+    /// The printer models the engine knows (cached from earlier runs until they load), with their
+    /// resolution and head width.
+    public internal(set) var models: [Model] = []
+    /// Folders of the template library besides the default one.
+    public internal(set) var templateFolders: [String] = []
+    /// The paper library as last listed.
+    public internal(set) var papers: [Paper] = []
+    /// The roll in the connected printer, once read with `detectPaper`.
+    public internal(set) var detected: PaperDetect?
+    /// The print queue: queued, printing and recently finished jobs, oldest first.
+    public internal(set) var jobs: [PrintJob] = []
+    public internal(set) var queuePaused = false
+    /// The connect that failed last, for the tips and Try again.
+    public internal(set) var connectFailure: ConnectFailure?
+    /// Font families the engine has (`font.list`).
+    public internal(set) var fonts: [String] = []
+    /// The engine's pictograms (`icon.list`) and their thumbnails by name.
+    public internal(set) var icons: [IconInfo] = []
+    public internal(set) var iconThumbs: [String: CGImage] = [:]
+    /// The history entry being printed again: the editor opens its print sheet for it.
+    public var reprint: HistoryEntry?
+
+    /// The elements copied last (`EditorArrange.swift`).
+    @ObservationIgnored var clip: Clip?
 
     /// The model new documents and checks use.
     public var modelId: String { printer?.model?.id ?? Self.defaultModel }
@@ -111,6 +149,9 @@ public final class AppState {
         recents = loadRecents()
         known = load([KnownPrinter].self, "known") ?? []
         allowAgentPrint = defaults.bool(forKey: "allow_agent_print")
+        prefs = load(Prefs.self, "prefs") ?? Prefs()
+        CurrentUnit.value = prefs.unit
+        models = load([Model].self, "models") ?? []
     }
 
     /// Follow the engine's printer events and load the lists. Returns the loading task.
@@ -122,7 +163,15 @@ public final class AppState {
                 self?.onDeviceEvent(e)
             }
         }
+        let jobEvents = engine.jobEvents
+        Task { [weak self] in
+            for await _ in jobEvents {
+                await self?.refreshJobs()
+            }
+        }
         return Task {
+            await loadModels()
+            await loadFonts()
             await loadTemplates()
             await refreshHistory()
         }
@@ -144,7 +193,9 @@ public final class AppState {
 
     public func loadTemplates() async {
         await report {
-            templates = Template.list(try await engine.call("template.list"))
+            let r = try await engine.call("template.list")
+            templates = Template.list(r)
+            templateFolders = (r["folders"]?.array ?? []).compactMap(\.string)
             for t in templates where thumbs[t.ref] == nil {
                 await thumbnail(t.ref) { try await self.engine.call("template.new", ["ref": .string(t.ref)]) }
             }
@@ -155,7 +206,7 @@ public final class AppState {
     }
 
     /// Open a document with `open`, render it small, close it. Failures leave no thumbnail.
-    private func thumbnail(_ key: String, open: () async throws -> JSON) async {
+    func thumbnail(_ key: String, open: () async throws -> JSON) async {
         guard let docId = try? await open()["doc_id"]?.string else { return }
         if let image = try? await engine.render(dpi: Self.thumbDpi, docId: docId) {
             thumbs[key] = image
@@ -177,12 +228,13 @@ public final class AppState {
     // MARK: - Documents
 
     @discardableResult
-    public func newLabel(widthMm: Double, heightMm: Double, media: String = "gap") -> Task<Void, Never> {
+    public func newLabel(widthMm: Double, heightMm: Double, media: String = "gap", cornerRadiusMm: Double = 0) -> Task<Void, Never> {
         openWith {
             try await self.engine.call("doc.new", [
                 "width_mm": JSON(widthMm),
                 "height_mm": JSON(heightMm),
                 "media": JSON(media),
+                "corner_radius_mm": cornerRadiusMm > 0 ? JSON(cornerRadiusMm) : nil,
                 "printer_model": JSON(self.modelId),
                 "name": JSON(self.newLabelName),
             ])
@@ -218,7 +270,7 @@ public final class AppState {
         }
     }
 
-    private func openWith(_ open: @escaping () async throws -> JSON) -> Task<Void, Never> {
+    func openWith(_ open: @escaping () async throws -> JSON) -> Task<Void, Never> {
         Task {
             await report {
                 guard let docId = try await open()["doc_id"]?.string else { return }
@@ -234,8 +286,10 @@ public final class AppState {
     public func closeEditor() -> Task<Void, Never> {
         guard let ed = editor else { return Task {} }
         editor = nil
+        reprint = nil
         return Task {
             await report {
+                ed.cleanUp()
                 if !ed.saved { try await ed.save() }
                 try await engine.call("doc.close", ["doc_id": JSON(ed.docId)])
             }
@@ -260,7 +314,7 @@ public final class AppState {
     // MARK: - History
 
     public func refreshHistory() async {
-        await report { history = HistoryEntry.list(try await engine.call("job.history", ["limit": 50])) }
+        await report { history = HistoryEntry.list(try await engine.call("job.history", ["limit": 100])) }
     }
 
     // MARK: - Printers
@@ -281,9 +335,17 @@ public final class AppState {
     @discardableResult
     public func connect(_ address: String, name: String) -> Task<Void, Never> {
         busy = address
+        connectFailure = nil
         return Task {
             defer { busy = nil }
-            await report { _ = try await connectNow(address, name: name) }
+            await report {
+                do {
+                    _ = try await connectNow(address, name: name)
+                } catch {
+                    connectFailure = ConnectFailure(address: address, name: name, message: error.localizedDescription)
+                    throw error
+                }
+            }
         }
     }
 
@@ -313,7 +375,7 @@ public final class AppState {
         }
     }
 
-    private func disconnectQuietly(_ address: String) async {
+    func disconnectQuietly(_ address: String) async {
         _ = try? await engine.call("device.disconnect", ["address": JSON(address)])
         printer = nil
         printerStatus = nil
@@ -386,11 +448,11 @@ public final class AppState {
         }
     }
 
-    private func save<T: Encodable>(_ value: T, _ key: String) {
+    func save<T: Encodable>(_ value: T, _ key: String) {
         if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: key) }
     }
 
-    private func load<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
+    func load<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
         defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(type, from: $0) }
     }
 

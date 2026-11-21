@@ -116,6 +116,7 @@ private fun App(state: AppState) {
             confirm = stringResource(R.string.create),
             initial = Triple(PRESET_SIZES[0].first, PRESET_SIZES[0].second, "gap"),
             onDismiss = { newLabel = false },
+            detect = if (state.printer != null) ({ state.detectPaper() }) else null,
         ) { w, h, media ->
             newLabel = false
             state.newLabel(w, h, media)

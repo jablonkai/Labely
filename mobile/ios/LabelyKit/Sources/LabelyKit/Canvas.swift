@@ -144,9 +144,10 @@ public enum Handle: Sendable, Equatable, CaseIterable {
     public static let box: [Handle] = [.topLeft, .top, .topRight, .left, .right, .bottomLeft, .bottom, .bottomRight]
     public static let line: [Handle] = [.start, .end]
 
-    /// The handles `e` shows: none when it is locked, hidden or rotated.
+    /// The handles `e` shows: none when it is locked or hidden. A turned box keeps its eight
+    /// handles, turned with it.
     public static func of(_ e: Element) -> [Handle] {
-        if e.locked || e.hidden || abs(e.rotationDeg) > 0.01 { return [] }
+        if e.locked || e.hidden { return [] }
         return e.isLine ? line : box
     }
 

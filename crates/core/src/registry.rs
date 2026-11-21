@@ -363,6 +363,7 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<render::RenderPreview>().in_menu("view", None),
         Entry::of::<device::DeviceScan>().in_menu("print", None),
         Entry::of::<device::DeviceList>(),
+        Entry::of::<device::DeviceModels>(),
         Entry::of::<device::DeviceConnect>(),
         Entry::of::<device::DeviceDisconnect>(),
         Entry::of::<device::DeviceStatusCmd>(),

@@ -35,7 +35,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import org.labely.app.AppState
+import org.labely.app.Recent
+import org.labely.app.editor.ConfirmDialog
+import org.labely.app.editor.TextDialog
+import org.labely.app.ui.IconButton
+import org.labely.app.ui.ListRow
 import org.labely.app.PRESET_SIZES
 import org.labely.app.R
 import org.labely.app.Tab
@@ -60,6 +67,21 @@ fun HomeScreen(state: AppState, onNewLabel: () -> Unit, onOpenFile: () -> Unit) 
     val context = LocalContext.current
     val starters = state.templates.filter { it.starter && it.displayName(context).contains(query, ignoreCase = true) }
     val recents = state.recents.filter { it.name.contains(query, ignoreCase = true) }
+    var renaming by remember { mutableStateOf<Recent?>(null) }
+    var deleting by remember { mutableStateOf<Recent?>(null) }
+    val copyName = stringResource(R.string.copy_of)
+    renaming?.let { r ->
+        TextDialog(stringResource(R.string.rename), stringResource(R.string.label_name), r.name, stringResource(R.string.save), { renaming = null }) {
+            state.renameRecent(r, it)
+            renaming = null
+        }
+    }
+    deleting?.let { r ->
+        ConfirmDialog(stringResource(R.string.label_delete_title), stringResource(R.string.label_delete_body, r.name), stringResource(R.string.delete), danger = true, onDismiss = { deleting = null }) {
+            state.deleteRecent(r)
+            deleting = null
+        }
+    }
     LazyColumn(
         Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(16.dp),
@@ -83,6 +105,14 @@ fun HomeScreen(state: AppState, onNewLabel: () -> Unit, onOpenFile: () -> Unit) 
             }
         }
         item {
+            // "Labels from data": one label per row of a file, as the studio's home card.
+            Card(Modifier.fillMaxWidth(), onClick = { state.newLabelFromData() }) {
+                ListRow(stringResource(R.string.home_from_data), stringResource(R.string.home_from_data_sub), leading = { IconTile(Ic.Data) }) {
+                    LIcon(Ic.ChevRight, Palette.muted, 18.dp)
+                }
+            }
+        }
+        item {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PRESET_SIZES.forEachIndexed { i, (w, h) -> Chip(sizeText(w, h), i == 0) { state.newLabel(w, h) } }
             }
@@ -99,7 +129,15 @@ fun HomeScreen(state: AppState, onNewLabel: () -> Unit, onOpenFile: () -> Unit) 
                             Text(r.name, style = Type.bodyStrong, maxLines = 1)
                             Text(sizeText(r.widthMm, r.heightMm), style = Type.caption)
                         }
-                        LIcon(Ic.ChevRight, Palette.muted, 18.dp)
+                        Box {
+                            var menu by remember(r.path) { mutableStateOf(false) }
+                            IconButton(Ic.More, { menu = true }, size = 36.dp)
+                            DropdownMenu(menu, { menu = false }) {
+                                DropdownMenuItem({ Text(stringResource(R.string.duplicate)) }, { menu = false; state.duplicateRecent(r, copyName.format(r.name)) })
+                                DropdownMenuItem({ Text(stringResource(R.string.rename)) }, { menu = false; renaming = r })
+                                DropdownMenuItem({ Text(stringResource(R.string.delete), color = Palette.red) }, { menu = false; deleting = r })
+                            }
+                        }
                     }
                 }
             }

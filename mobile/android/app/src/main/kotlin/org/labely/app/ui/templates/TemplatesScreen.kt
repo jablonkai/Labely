@@ -33,7 +33,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.labely.app.AppState
 import org.labely.app.R
+import org.labely.app.editor.ConfirmDialog
+import org.labely.app.editor.Sheet
+import org.labely.app.editor.TextDialog
 import org.labely.app.engine.Template
+import org.labely.app.ui.Group
+import org.labely.app.ui.IconTile
+import org.labely.app.ui.ListRow
+import org.labely.app.ui.RowDivider
 import org.labely.app.ui.Card
 import org.labely.app.ui.Chip
 import org.labely.app.ui.IconButton
@@ -49,14 +56,25 @@ private const val ALL = ""
 private const val STARTERS = "\u0000starters"
 private const val MINE = "\u0000mine"
 
-/** M7 · Sablonkönyvtár: starter templates and the user's library, by folder. */
+/**
+ * M7 · Sablonkönyvtár: starter templates and the user's library, by folder. Folders are made,
+ * renamed and deleted here; a long press on a template duplicates, renames, moves or deletes it.
+ */
 @Composable
 fun TemplatesScreen(state: AppState, onNewLabel: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(ALL) }
     var deleting by remember { mutableStateOf<Template?>(null) }
+    var acting by remember { mutableStateOf<Template?>(null) }
+    var renaming by remember { mutableStateOf<Template?>(null) }
+    var moving by remember { mutableStateOf<Template?>(null) }
+    var newFolder by remember { mutableStateOf(false) }
+    var renameFolder by remember { mutableStateOf<String?>(null) }
+    var deleteFolder by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    val folders = state.templates.filter { !it.starter && it.folder.isNotEmpty() }.map { it.folder }.distinct().sorted()
+    val folders = (state.folders + state.templates.filter { !it.starter && it.folder.isNotEmpty() }.map { it.folder }).distinct().sorted()
+    // A folder that was renamed or deleted is no longer a filter.
+    androidx.compose.runtime.LaunchedEffect(folders) { if (filter !in listOf(ALL, STARTERS, MINE) && filter !in folders) filter = MINE }
     val shown = state.templates.filter { t ->
         val inFilter = when (filter) {
             ALL -> true
@@ -66,6 +84,7 @@ fun TemplatesScreen(state: AppState, onNewLabel: () -> Unit) {
         }
         inFilter && (query.isEmpty() || t.displayName(context).contains(query, ignoreCase = true))
     }
+    val isFolder = filter in folders
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             LargeTitle(stringResource(R.string.tab_templates), stringResource(R.string.templates_sub)) {
@@ -79,11 +98,86 @@ fun TemplatesScreen(state: AppState, onNewLabel: () -> Unit) {
                 Chip(stringResource(R.string.filter_starters), filter == STARTERS) { filter = STARTERS }
                 Chip(stringResource(R.string.filter_mine), filter == MINE) { filter = MINE }
                 folders.forEach { f -> Chip(f, filter == f) { filter = f } }
+                Chip("+ " + stringResource(R.string.folder), false) { newFolder = true }
             }
         }
-        item { Text(pluralStringResource(R.plurals.templates_count, shown.size, shown.size), style = Type.bodyStrong.copy(color = Palette.muted)) }
-        item { TemplateGrid(shown, state, onOpen = state::fromTemplate, onLongPress = { if (!it.starter) deleting = it }) }
+        item {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(pluralStringResource(R.plurals.templates_count, shown.size, shown.size), style = Type.bodyStrong.copy(color = Palette.muted), modifier = Modifier.weight(1f))
+                if (isFolder) {
+                    IconButton(Ic.Edit, { renameFolder = filter }, size = 36.dp)
+                    IconButton(Ic.Trash, { deleteFolder = filter }, Palette.red, size = 36.dp)
+                }
+            }
+        }
+        item { TemplateGrid(shown, state, onOpen = state::fromTemplate, onLongPress = { acting = it }) }
+        item { Text(stringResource(R.string.templates_hint), style = Type.caption) }
         item { Spacer(Modifier.padding(4.dp)) }
+    }
+
+    acting?.let { t ->
+        Sheet(templateName(t), { acting = null }) {
+            Group {
+                ListRow(stringResource(if (t.starter) R.string.template_copy_to_mine else R.string.duplicate), onClick = { state.duplicateTemplate(t); acting = null }, leading = { IconTile(Ic.Copy) })
+                if (!t.starter) {
+                    RowDivider()
+                    ListRow(stringResource(R.string.rename), onClick = { renaming = t; acting = null }, leading = { IconTile(Ic.Edit) })
+                    RowDivider()
+                    ListRow(stringResource(R.string.template_move), t.folder.ifEmpty { stringResource(R.string.folder_default) }, onClick = { moving = t; acting = null }, leading = { IconTile(Ic.Folder) })
+                    RowDivider()
+                    ListRow(stringResource(R.string.delete), onClick = { deleting = t; acting = null }, leading = { IconTile(Ic.Trash, Palette.red, Palette.amberTint) })
+                }
+            }
+        }
+    }
+    moving?.let { t ->
+        Sheet(stringResource(R.string.template_move), { moving = null }) {
+            Group {
+                (listOf("") + folders).forEachIndexed { i, f ->
+                    if (i > 0) RowDivider()
+                    ListRow(
+                        f.ifEmpty { stringResource(R.string.folder_default) },
+                        onClick = {
+                            if (f != t.folder) state.moveTemplate(t, folder = f)
+                            moving = null
+                        },
+                        leading = { IconTile(Ic.Folder, if (f == t.folder) Palette.primary else Palette.text2, if (f == t.folder) Palette.primaryTint else Palette.bg) },
+                    )
+                }
+            }
+        }
+    }
+    renaming?.let { t ->
+        TextDialog(stringResource(R.string.rename), stringResource(R.string.template_name), t.name, stringResource(R.string.save), { renaming = null }) {
+            if (it != t.name) state.moveTemplate(t, name = it)
+            renaming = null
+        }
+    }
+    if (newFolder) {
+        TextDialog(stringResource(R.string.folder_new), stringResource(R.string.folder_name), "", stringResource(R.string.create), { newFolder = false }) {
+            state.templateFolder("create", it)
+            newFolder = false
+        }
+    }
+    renameFolder?.let { f ->
+        TextDialog(stringResource(R.string.folder_rename), stringResource(R.string.folder_name), f, stringResource(R.string.save), { renameFolder = null }) {
+            if (it != f) state.templateFolder("rename", f, to = it)
+            if (filter == f) filter = it
+            renameFolder = null
+        }
+    }
+    deleteFolder?.let { f ->
+        val count = state.templates.count { !it.starter && it.folder == f }
+        ConfirmDialog(
+            stringResource(R.string.folder_delete_title),
+            if (count == 0) stringResource(R.string.folder_delete_empty, f) else pluralStringResource(R.plurals.folder_delete_body, count, f, count),
+            stringResource(R.string.delete),
+            danger = true,
+            onDismiss = { deleteFolder = null },
+        ) {
+            state.templateFolder("delete", f, withTemplates = count > 0)
+            deleteFolder = null
+        }
     }
     deleting?.let { t ->
         AlertDialog(

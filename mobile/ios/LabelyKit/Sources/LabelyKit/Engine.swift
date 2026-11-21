@@ -33,17 +33,22 @@ public final class Engine: Sendable {
     /// `device.connect`, `device.disconnect`, `device.status`, or when a link drops. One reader.
     public let devices: AsyncStream<JSON>
     private let deviceSink: AsyncStream<JSON>.Continuation
+    /// Every change of any print job, for the queue view. One reader.
+    public let jobEvents: AsyncStream<JSON>
+    private let jobSink: AsyncStream<JSON>.Continuation
 
     public init(dataDir: String, ble: NativeBle?) {
         self.dataDir = URL(fileURLWithPath: dataDir, isDirectory: true)
         raw = LabelyEngine(config: EngineConfig(dataDir: dataDir, fileRoots: [], allowPrint: true), ble: ble)
         (devices, deviceSink) = AsyncStream.makeStream(of: JSON.self, bufferingPolicy: .bufferingNewest(64))
-        raw.setEvents(listener: Listener(jobs: jobs, devices: deviceSink))
+        (jobEvents, jobSink) = AsyncStream.makeStream(of: JSON.self, bufferingPolicy: .bufferingNewest(64))
+        raw.setEvents(listener: Listener(jobs: jobs, devices: deviceSink, jobSink: jobSink))
     }
 
     deinit {
         raw.setEvents(listener: nil)
         deviceSink.finish()
+        jobSink.finish()
     }
 
     public var apiVersion: Int { Int(raw.apiVersion()) }
@@ -122,14 +127,19 @@ public final class Engine: Sendable {
 private final class Listener: DeviceEvents {
     let jobs: JobBoard
     let devices: AsyncStream<JSON>.Continuation
+    let jobSink: AsyncStream<JSON>.Continuation
 
-    init(jobs: JobBoard, devices: AsyncStream<JSON>.Continuation) {
+    init(jobs: JobBoard, devices: AsyncStream<JSON>.Continuation, jobSink: AsyncStream<JSON>.Continuation) {
         self.jobs = jobs
         self.devices = devices
+        self.jobSink = jobSink
     }
 
     func jobChanged(jobJson: String) {
-        if let j = try? JSON(parsing: jobJson) { jobs.update(j) }
+        if let j = try? JSON(parsing: jobJson) {
+            jobs.update(j)
+            jobSink.yield(j)
+        }
     }
 
     func deviceChanged(eventJson: String) {

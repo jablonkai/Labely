@@ -84,9 +84,9 @@ enum class Handle(val fx: Float, val fy: Float) {
     ;
 
     companion object {
-        /** Eight handles; a line gets its two ends; a locked or rotated element none. */
+        /** Eight handles; a line gets its two ends; a locked or hidden element none. */
         fun of(e: Element): List<Handle> = when {
-            e.locked || e.hidden || e.rotationDeg != 0.0 -> emptyList()
+            e.locked || e.hidden -> emptyList()
             e.type == "line" && e.heightMm == 0.0 -> listOf(Left, Right)
             e.type == "line" && e.widthMm == 0.0 -> listOf(Top, Bottom)
             e.type == "line" -> listOf(TopLeft, BottomRight)

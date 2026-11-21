@@ -92,7 +92,8 @@ struct CanvasTests {
         #expect(Handle.of(element()) == Handle.box && Handle.box.count == 8)
         #expect(Handle.of(element("line", h: 0)) == [.start, .end])
         #expect(Handle.of(element(extra: ["locked": true])).isEmpty)
-        #expect(Handle.of(element(extra: ["rotation_deg": 90])).isEmpty)
+        // A turned box keeps its handles (they turn with it).
+        #expect(Handle.of(element(extra: ["rotation_deg": 90])) == Handle.box)
     }
 
     @Test func handleTargetsAre32Points() {
@@ -338,8 +339,13 @@ struct ParityTests {
         #expect(app.message == nil)
         #expect(ed.data == DataInfo(origin: "products.xlsx", columns: ["Name", "Price"], rowCount: 2))
         #expect(ed.rows == [["Apple", "649"], ["Pear", "899"]])
-        // The copy is gone again: the data is in the document.
-        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("imports").path))
+        // The copy stays while the sheet and the header row may still be changed.
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("imports").path))
+        #expect(!ed.dataSheets.isEmpty && ed.dataSheet == ed.dataSheets.first && ed.dataHeader == true)
+        await ed.reattachData(header: false).value
+        #expect(ed.data?.rowCount == 3 && ed.data?.columns == ["A", "B"])
+        await ed.reattachData(header: true).value
+        #expect(ed.data?.rowCount == 2)
 
         // Semicolons and Windows-1250, as Excel writes CSV in Hungary.
         let csv = picked.appendingPathComponent("termekek.csv")
@@ -348,6 +354,8 @@ struct ParityTests {
         #expect(ed.data?.columns == ["Név", "Ár"] && ed.rows.last == ["Szőlő", "1299"])
         #expect(ed.dataSourceName == "termekek.csv")
         #expect(app.message == nil)
+        // The spreadsheet's copy is gone with it.
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("imports").path))
 
         // A file that is not a spreadsheet gives a message and keeps the data.
         let bad = picked.appendingPathComponent("bad.xlsx")

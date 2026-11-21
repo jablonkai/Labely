@@ -12,7 +12,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import org.labely.app.AppState
+import org.labely.app.editor.CanvasAids
+import org.labely.app.editor.Sheet
+import org.labely.app.editor.Units
+import org.labely.app.ui.SectionHeader
+import org.labely.app.ui.Segmented
 import org.labely.app.R
 import org.labely.app.ui.Group
 import org.labely.app.ui.IconTile
@@ -34,6 +43,20 @@ fun SettingsScreen(state: AppState) {
     val context = LocalContext.current
     val appSettings = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
     val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+    var about by remember { mutableStateOf(false) }
+    if (about) {
+        Sheet(stringResource(R.string.settings_about), { about = false }) {
+            Text(stringResource(R.string.app_name) + " " + version, style = Type.title)
+            Text(stringResource(R.string.about_body), style = Type.body)
+            Group {
+                ListRow(stringResource(R.string.settings_version)) { Text(version, style = Type.caption) }
+                RowDivider()
+                ListRow(stringResource(R.string.settings_engine)) { Text(stringResource(R.string.engine_version, state.engine.apiVersion), style = Type.caption) }
+                RowDivider()
+                ListRow(stringResource(R.string.about_licence), stringResource(R.string.about_licence_sub))
+            }
+        }
+    }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { LargeTitle(stringResource(R.string.tab_settings)) }
         item {
@@ -72,6 +95,23 @@ fun SettingsScreen(state: AppState) {
         }
         item {
             Group {
+                // Every size field and size shown follows the unit.
+                ListRow(stringResource(R.string.settings_units), stringResource(R.string.settings_units_sub), leading = { IconTile(Ic.Rect) }) {
+                    Segmented(listOf("mm", "inch"), state.units.ordinal) { state.units = Units.entries[it] }
+                }
+            }
+        }
+        item { SectionHeader(stringResource(R.string.settings_canvas)) }
+        item { CanvasAids(state) }
+        item {
+            Group {
+                ListRow(
+                    stringResource(R.string.settings_about),
+                    stringResource(R.string.settings_about_sub, version),
+                    onClick = { about = true },
+                    leading = { IconTile(Ic.Info) },
+                ) { LIcon(Ic.ChevRight, Palette.muted, 18.dp) }
+                RowDivider()
                 ListRow(stringResource(R.string.settings_version), leading = { IconTile(Ic.Label) }) { Text(version, style = Type.caption) }
                 RowDivider()
                 ListRow(stringResource(R.string.settings_engine), leading = { IconTile(Ic.Data) }) {

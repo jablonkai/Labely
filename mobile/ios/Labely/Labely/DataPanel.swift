@@ -7,6 +7,10 @@ struct DataPanel: View {
     let ed: EditorState
     /// Open the file picker.
     let onChoose: () -> Void
+    /// Pick images: one record per image.
+    let onImages: () -> Void
+    /// Open the data options: sheet, header row, columns and serial numbers.
+    let onOptions: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,12 +27,16 @@ struct DataPanel: View {
 
     private var empty: some View {
         VStack(spacing: 10) {
-            IconTile(.data, size: 48)
             Text(L("data_empty_title")).style(.bodyStrong.with(size: 17))
             Text(L("data_empty_hint")).style(.caption).multilineTextAlignment(.center)
             PrimaryButton(text: L("data_choose"), icon: .open, action: onChoose).padding(.top, 4)
+            HStack(spacing: 8) {
+                SecondaryButton(text: L("data_images"), icon: .image, action: onImages)
+                SecondaryButton(text: ed.serials.isEmpty ? L("data_serials") : L("data_serials_n", ed.serials.count), icon: .hash, action: onOptions)
+            }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -42,7 +50,9 @@ struct DataPanel: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Menu {
+                Button(L("data_options"), action: onOptions)
                 Button(L("data_replace"), action: onChoose)
+                Button(L("data_images"), action: onImages)
                 Button(L("data_remove"), role: .destructive) { ed.detachData() }
             } label: {
                 LIcon(.settings, Palette.text2, size: 20).frame(width: 36, height: 36).contentShape(Rectangle())
@@ -166,5 +176,156 @@ struct FieldRow<Content: View>: View {
         } else {
             row
         }
+    }
+}
+
+/// The data options: the sheet and header row of the attached file, an element for each
+/// column, and the serial numbers.
+struct DataOptionsSheet: View {
+    let ed: EditorState
+    let onDismiss: () -> Void
+    @State private var editing: Serial?
+
+    var body: some View {
+        SheetBody(title: L("data_options"), onClose: onDismiss) {
+            if let data = ed.data {
+                GroupTitle(ed.dataSourceName ?? L("data_unnamed"))
+                if ed.dataHeader != nil || !ed.dataSheets.isEmpty {
+                    ListGroup {
+                        if ed.dataSheets.count > 0, let sheet = ed.dataSheet {
+                            PickRow(title: L("data_sheet"), value: sheet, options: ed.dataSheets.map { ($0, $0) }) { ed.reattachData(sheet: $0) }
+                            RowDivider()
+                        }
+                        if let header = ed.dataHeader {
+                            SwitchRow(title: L("data_header"), subtitle: L("data_header_sub"), isOn: header) { ed.reattachData(header: $0) }
+                        }
+                    }
+                } else {
+                    Text(L("data_reopen_hint")).style(.caption)
+                }
+
+                GroupTitle(L("data_columns"))
+                Text(L("data_columns_hint")).style(.caption)
+                ListGroup {
+                    ForEach(Array(data.columns.enumerated()), id: \.offset) { i, column in
+                        if i > 0 { RowDivider() }
+                        ListRow(title: column, subtitle: ed.rows.first.flatMap { i < $0.count ? $0[i] : nil }) {
+                            addMenu(column)
+                        }
+                    }
+                }
+            }
+
+            GroupTitle(L("data_serials"))
+            Text(L("serial_hint")).style(.caption)
+            ListGroup {
+                if ed.serials.isEmpty { ListRow(title: L("serial_none")) }
+                ForEach(Array(ed.serials.enumerated()), id: \.element.id) { i, s in
+                    if i > 0 { RowDivider() }
+                    ListRow(title: "{{\(s.name)}}", subtitle: (0..<3).map(s.value).joined(separator: ", ") + " …", action: { editing = s }) {
+                        IconTile(.hash)
+                    } trailing: {
+                        addMenu(s.name)
+                    }
+                }
+            }
+            SecondaryButton(text: L("serial_add"), icon: .plus, height: 52) { editing = Serial(name: ed.freeSerialName) }
+        }
+        .presentationDetents([.large])
+        .sheet(item: $editing) { s in
+            SerialSheet(ed: ed, serial: s, isNew: !ed.serials.contains { $0.name == s.name }) { editing = nil }
+        }
+    }
+
+    /// "Add an element bound to this column": a text, a barcode or a 2D code.
+    private func addMenu(_ column: String) -> some View {
+        Menu {
+            Button { add(column, "text") } label: { Label(L("kind_text"), systemImage: "textformat") }
+            Button { add(column, "barcode") } label: { Label(L("kind_barcode"), systemImage: "barcode") }
+            Button { add(column, "code2d") } label: { Label(L("kind_code2d"), systemImage: "qrcode") }
+        } label: {
+            HStack(spacing: 4) {
+                LIcon(.plus, Palette.primary, size: 16)
+                Text(L("data_add_bound")).style(.bodyStrong.with(size: 14, color: Palette.primary))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Palette.primaryTint, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func add(_ column: String, _ type: String) {
+        ed.addBound(column: column, type: type)
+        onDismiss()
+    }
+}
+
+/// One serial counter: its name, first value, step, digits, prefix and suffix, with a sample.
+private struct SerialSheet: View {
+    let ed: EditorState
+    let isNew: Bool
+    let onDismiss: () -> Void
+    @State private var s: Serial
+
+    init(ed: EditorState, serial: Serial, isNew: Bool, onDismiss: @escaping () -> Void) {
+        self.ed = ed
+        self.isNew = isNew
+        self.onDismiss = onDismiss
+        _s = State(initialValue: serial)
+    }
+
+    var body: some View {
+        SheetBody(title: L("serial_title"), onClose: onDismiss) {
+            Banner(text: (0..<3).map(s.value).joined(separator: ", ") + " …", ok: true)
+            if isNew {
+                GroupTitle(L("serial_name"))
+                LabeledInput(text: $s.name, placeholder: "serial", plain: true)
+            } else {
+                GroupTitle("{{\(s.name)}}")
+            }
+            ListGroup {
+                ListRow(title: L("serial_start")) {
+                    NumberField(label: "", value: Double(s.start), suffix: "", length: false) { s.start = Int($0.rounded()) }.frame(width: 140)
+                }
+                RowDivider()
+                StepRow(title: L("serial_step"), value: Double(s.step), range: -1000...1000, text: String(s.step)) { s.step = Int($0) }
+                RowDivider()
+                StepRow(title: L("serial_digits"), subtitle: L("serial_digits_sub"), value: Double(s.digits), range: 0...18, text: String(s.digits)) {
+                    s.digits = Int($0)
+                }
+            }
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    GroupTitle(L("serial_prefix"))
+                    LabeledInput(text: $s.prefix, placeholder: "", plain: true)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    GroupTitle(L("serial_suffix"))
+                    LabeledInput(text: $s.suffix, placeholder: "", plain: true)
+                }
+            }
+            HStack(spacing: 12) {
+                if !isNew {
+                    SecondaryButton(text: L("delete"), icon: .trash, height: 52) {
+                        ed.removeSerial(s.name)
+                        onDismiss()
+                    }
+                }
+                PrimaryButton(text: L("save"), enabled: !s.name.trimmingCharacters(in: .whitespaces).isEmpty) {
+                    endEditing()
+                    s.name = s.name.trimmingCharacters(in: .whitespaces)
+                    ed.setSerial(s)
+                    onDismiss()
+                }
+            }
+            if !isNew {
+                SecondaryButton(text: L("serial_add_text"), icon: .text) {
+                    ed.addBound(column: s.name)
+                    onDismiss()
+                }
+            }
+        }
+        .presentationDetents([.large])
     }
 }

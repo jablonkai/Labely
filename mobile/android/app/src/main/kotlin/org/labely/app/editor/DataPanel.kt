@@ -44,12 +44,16 @@ import org.labely.app.ui.theme.Type
  * shows the chosen record. Without data it offers the file picker ([onPick]).
  */
 @Composable
-fun DataPanel(ed: EditorState, modifier: Modifier = Modifier, onPick: () -> Unit) {
+fun DataPanel(ed: EditorState, modifier: Modifier = Modifier, onImages: () -> Unit = {}, onOptions: () -> Unit = {}, onPick: () -> Unit) {
     val data = ed.data
     if (data == null) {
-        Column(modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
+        Column(modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
             Text(stringResource(R.string.data_empty_hint), style = Type.caption, textAlign = TextAlign.Center)
             PrimaryButton(stringResource(R.string.data_choose), onPick, icon = Ic.Open)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                org.labely.app.ui.SecondaryButton(stringResource(R.string.data_images), onImages, Modifier.weight(1f), Ic.Image)
+                org.labely.app.ui.SecondaryButton(stringResource(R.string.serials), onOptions, Modifier.weight(1f), Ic.Hash)
+            }
         }
         return
     }
@@ -70,6 +74,7 @@ fun DataPanel(ed: EditorState, modifier: Modifier = Modifier, onPick: () -> Unit
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            IconButton(Ic.More, onOptions, Palette.text2, size = 36.dp)
             IconButton(Ic.ChevLeft, { ed.showRecord(ed.record - 1) }, Palette.text, size = 36.dp, enabled = ed.record > 1)
             Text(
                 stringResource(R.string.record_of, if (count == 0) 0 else ed.record, count),
