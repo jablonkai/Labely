@@ -318,14 +318,18 @@ impl NiimbotDriver {
                         Retry::Once => (1, 0),
                         Retry::UntilTrue { max, delay_ms } => (u32::from(*max), *delay_ms),
                     };
+                    let attempts = max.max(1);
                     let mut ok = false;
-                    for _ in 0..max.max(1) {
+                    for attempt in 1..=attempts {
                         let reply = self.exchange(packet, *expect)?;
                         if response::ok(&reply, *expect).map_err(parse_err)? {
                             ok = true;
                             break;
                         }
-                        std::thread::sleep(Duration::from_millis(u64::from(delay)));
+                        // No wait after the last attempt: the job fails right away.
+                        if attempt < attempts {
+                            std::thread::sleep(Duration::from_millis(u64::from(delay)));
+                        }
                     }
                     if !ok {
                         return Err(DeviceError::Printer {
@@ -348,19 +352,32 @@ impl NiimbotDriver {
                 } => {
                     let stall = Duration::from_millis(u64::from(*stall_timeout_ms));
                     let mut page = self.page_index;
+                    // Only a higher index is progress: a printer that repeats the same
+                    // index still stalls.
+                    let mut last_progress = Instant::now();
                     while page < *total_pages {
                         if control.is_cancelled() {
                             return Err(DeviceError::Cancelled);
                         }
-                        let reply = self.wait_for(cmd::PAGE_INDEX, stall).map_err(|e| match e {
-                            DeviceError::Timeout(_) => DeviceError::Timeout(format!(
+                        let stalled = || {
+                            DeviceError::Timeout(format!(
                                 "printing stalled at page {page} of {total_pages}"
-                            )),
+                            ))
+                        };
+                        let left = stall
+                            .checked_sub(last_progress.elapsed())
+                            .filter(|left| !left.is_zero())
+                            .ok_or_else(stalled)?;
+                        let reply = self.wait_for(cmd::PAGE_INDEX, left).map_err(|e| match e {
+                            DeviceError::Timeout(_) => stalled(),
                             other => other,
                         })?;
                         response::check(&reply, cmd::PAGE_INDEX).map_err(parse_err)?;
-                        page = self.page_index;
-                        control.set_progress(u32::from(page), total);
+                        if self.page_index > page {
+                            page = self.page_index;
+                            last_progress = Instant::now();
+                            control.set_progress(u32::from(page), total);
+                        }
                     }
                     printed = u32::from(page);
                 }

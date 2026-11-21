@@ -245,7 +245,7 @@ Two-colour pages can be sent by the B1 and D110M_V4 tasks, and grayscale pages b
 
 - **0x84 empty rows:** `[row u16][count u8]` means "the next `count` rows are blank". Use it for blank runs (count ≤255).
 - **0x85 bitmap row:** `[row u16][c0][c1][c2][repeat u8][packed bytes]`. `repeat` (≥1) prints the same row again on the following rows, so identical neighbouring rows are merged. **Confirmed** [E: V:jc `packageOneColorData` @0x1bebc8-0x1bebe4 (row BE), then three counter bytes and one more byte; O:nbl packet_generator.ts:254-263, image_encoder.ts:202-221].
-- **Row check-line (0x86):** after every 200 rows (100 for grayscale), send `[row u16][01]` and wait for D3. Used by the B21_V1/B21_L2B tasks [E: O:nbl image_encoder.ts:225-238; V:jc `jcAskAfterPause` 86→D3].
+- **Row check-line (0x86):** after every 200 rows (100 for grayscale), send `[row u16][01]` and wait for D3. Used by the B21_V1/B21_L2B tasks; neither sends gray rows, so Labely never uses the interval of 100 [E: O:nbl image_encoder.ts:225-238; V:jc `jcAskAfterPause` 86→D3].
 
 ### 7.3 The three "count" bytes
 

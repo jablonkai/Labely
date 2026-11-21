@@ -338,7 +338,8 @@ fn every_registered_model_prints_on_the_simulator() {
         .iter()
         .filter(|m| m.driver == "niimbot")
         .collect();
-    assert!(models.len() > 40);
+    // 57 models of the vendor list and the nine OSS-only ones (ADR-0036).
+    assert_eq!(models.len(), 66);
     for model in models {
         assert!(!model.model_codes.is_empty(), "{} has no code", model.id);
         let (sim, transport) = Simulator::start(SimConfig::for_model(model));
@@ -390,6 +391,60 @@ fn every_registered_model_prints_on_the_simulator() {
             per_copy,
             "{}: check-lines",
             model.id
+        );
+    }
+}
+
+/// Two pages with two copies each: every task reports four printed labels, so the page
+/// counting (PageIndex on the old D11, PrintEnd polls on the B21) holds past one page.
+#[test]
+fn every_registered_model_counts_the_copies_of_two_pages() {
+    let registry = Registry::builtin();
+    for model in registry.models().iter().filter(|m| m.driver == "niimbot") {
+        let (sim, transport) = Simulator::start(SimConfig::for_model(model));
+        let by_name = registry.guess_by_name(&model.name).cloned();
+        let mut drv = NiimbotDriver::new(Box::new(transport)).with_fallback_model(by_name);
+        let id = drv.connect().unwrap();
+        let resolved = registry.by_id(&id.model.unwrap().id).unwrap();
+
+        let w = model.head_dots.min(96);
+        let mut first = Bitmap1::new(w, 24);
+        let mut second = Bitmap1::new(w, 24);
+        for y in 0..24 {
+            first.set(y, y, true);
+            second.set(w - 1 - y, y, true);
+        }
+        let job = PrintRequest {
+            pages: vec![first.clone(), second.clone()],
+            copies: 2,
+            density: model.density.default,
+            media: MediaType::Gap,
+            planes: PagePlanes::None,
+            half_cut: None,
+        };
+        let control = JobControl::new();
+        let report = drv
+            .print(&job, &control)
+            .unwrap_or_else(|e| panic!("{} ({}): {e}", model.id, model.task));
+        assert_eq!(report.pages_printed, 4, "{}", model.id);
+        assert_eq!(control.progress(), (4, 4), "{}", model.id);
+
+        let log = sim.log();
+        let copies: u32 = log.pages.iter().map(|p| u32::from(p.1)).sum();
+        assert_eq!(copies, 4, "{}", model.id);
+        let mut seen: Vec<_> = log.pages.iter().map(|p| p.0.clone()).collect();
+        seen.dedup();
+        // The simulator may report a page wider than it was sent, padded on the right.
+        let width = seen.first().map_or(0, Bitmap1::width);
+        assert_eq!(
+            seen,
+            vec![
+                prepare_for_head(&first, resolved).pad_to_width(width, 0),
+                prepare_for_head(&second, resolved).pad_to_width(width, 0)
+            ],
+            "{} ({})",
+            model.id,
+            model.task
         );
     }
 }

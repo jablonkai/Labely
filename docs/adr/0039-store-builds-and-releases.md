@@ -26,7 +26,8 @@ Connect key. GitHub Actions is stopped for the account, so no workflow can run y
   `SHA256SUMS` over all of them. dist's own `sha256.sum` only knows the CLI files, and no dist
   job runs after both the installers and the custom jobs but before the release.
 - **One version.** `Cargo.toml` holds the version. The Android build reads it. Its version code
-  is `major * 1000000 + minor * 1000 + patch`, and `-Plabely.versionCode` overrides it. The
+  is `major * 1000000 + minor * 1000 + patch`, and `-Plabely.versionCode` overrides it
+  (ADR-0040 adds two digits, so a pre-release has its own code). The
   release passes the version and the run number as build number to `xcodebuild`. The Xcode
   project still repeats the version, and an xtask test compares it with `Cargo.toml`.
 - **Android.** The release build signs with an upload key from four `LABELY_KEY*` variables and

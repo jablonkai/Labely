@@ -20,12 +20,18 @@ val labelyVersion: String =
         ?.get(1)
         ?: error("Cargo.toml has no workspace version")
 
-// Play wants a version code that grows: 1.2.3 is 1002003. `labely.versionCode` overrides it,
-// for a second upload of the same version.
+// Play wants a version code that grows: 1.2.3 is 100200399 and 1.2.3-rc.4 is 100200304, so a
+// pre-release sorts before its release and each one has its own code. `labely.versionCode`
+// overrides it, for a second upload of the same version.
 val labelyVersionCode: Int =
     providers.gradleProperty("labely.versionCode").orNull?.toInt()
-        ?: labelyVersion.substringBefore('-').split('.').map(String::toInt).let { (major, minor, patch) ->
-            major * 1_000_000 + minor * 1_000 + patch
+        ?: run {
+            val (major, minor, patch) = labelyVersion.substringBefore('-').split('.').map(String::toInt)
+            val suffix = labelyVersion.substringAfter('-', "")
+            // The trailing number of the suffix; 99 is the release itself.
+            val stage =
+                if (suffix.isEmpty()) 99 else (suffix.takeLastWhile(Char::isDigit).toIntOrNull() ?: 0).coerceAtMost(98)
+            (major * 1_000_000 + minor * 1_000 + patch) * 100 + stage
         }
 
 // The upload key of a release build. Without the four variables the release is not signed.
