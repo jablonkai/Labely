@@ -114,6 +114,7 @@ func transportName(_ address: String) -> String {
 
 private struct ConnectedCard: View {
     let state: AppState
+    @State private var settings = false
 
     var body: some View {
         Card {
@@ -140,10 +141,11 @@ private struct ConnectedCard: View {
                 }
                 .padding(16)
                 HStack(spacing: 12) {
-                    SecondaryButton(text: L("calibrate"), icon: .scan, enabled: state.busy == nil) { state.calibrate() }
+                    SecondaryButton(text: L("printer_settings"), icon: .settings, enabled: state.busy == nil) { settings = true }
                     SecondaryButton(text: L("disconnect"), icon: .close, enabled: state.busy == nil) { state.disconnect() }
                 }
                 .padding([.horizontal, .bottom], 16)
+                .sheet(isPresented: $settings) { PrinterSettingsSheet(state: state) { settings = false } }
             } else {
                 ListRow(title: L("no_printer"), subtitle: L("no_printer_hint")) {
                     IconTile(.printer, tint: Palette.muted, fill: Palette.bg, size: 56)
@@ -152,6 +154,60 @@ private struct ConnectedCard: View {
                 }
             }
         }
+    }
+}
+
+/// The connected printer's own settings (`device.settings`): auto power-off and the beeps, only
+/// those it reports, and the calibration.
+private struct PrinterSettingsSheet: View {
+    let state: AppState
+    let onDismiss: () -> Void
+
+    var body: some View {
+        SheetBody(title: L("printer_settings"), onClose: onDismiss) {
+            if let s = state.printerSettings {
+                ListGroup {
+                    if let level = s.autoOffLevel {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(L("auto_off")).style(.bodyStrong.with(size: 16))
+                            Picker(L("auto_off"), selection: Binding(get: { level }, set: { state.setPrinterSettings(autoOffLevel: $0) })) {
+                                ForEach(Array(PrinterSettings.autoOffLevels), id: \.self) { Text(autoOffName($0)).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                    }
+                    if let on = s.soundPower {
+                        if s.autoOffLevel != nil { RowDivider() }
+                        ListRow(title: L("sound_power"), subtitle: L("sound_power_sub")) {
+                            Toggle("", isOn: Binding(get: { on }, set: { state.setPrinterSettings(soundPower: $0) }))
+                                .labelsHidden().tint(Palette.primary)
+                        }
+                    }
+                    if let on = s.soundBluetooth {
+                        if s.autoOffLevel != nil || s.soundPower != nil { RowDivider() }
+                        ListRow(title: L("sound_bluetooth"), subtitle: L("sound_bluetooth_sub")) {
+                            Toggle("", isOn: Binding(get: { on }, set: { state.setPrinterSettings(soundBluetooth: $0) }))
+                                .labelsHidden().tint(Palette.primary)
+                        }
+                    }
+                    if s.isEmpty { ListRow(title: L("printer_settings_none")) }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
+            }
+            SecondaryButton(text: L("calibrate"), icon: .scan, enabled: state.busy == nil, height: 52) { state.calibrate() }
+        }
+        .presentationDetents([.medium, .large])
+        .task { await state.loadPrinterSettings().value }
+        // A printer that went away has no settings to show.
+        .onChange(of: state.printer == nil) { if state.printer == nil { onDismiss() } }
+    }
+
+    /// NIIMBOT printers switch off after 15, 30, 45 or 60 minutes; others only number the levels.
+    private func autoOffName(_ level: Int) -> String {
+        state.printer?.model?.id.hasPrefix("niimbot.") == true ? L("minutes", level * 15) : String(level)
     }
 }
 

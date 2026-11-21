@@ -38,6 +38,7 @@ import org.labely.app.ui.ListRow
 import org.labely.app.ui.PrimaryButton
 import org.labely.app.ui.RowDivider
 import org.labely.app.ui.SecondaryButton
+import org.labely.app.ui.Segmented
 import org.labely.app.ui.Stepper
 import org.labely.app.ui.printers.PrinterRow
 import org.labely.app.ui.printers.rememberBluetoothGate
@@ -57,6 +58,10 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
     var copies by remember { mutableIntStateOf(1) }
     var density by remember(model) { mutableIntStateOf(doc.label.density ?: model?.densityDefault ?: 3) }
     var picking by remember { mutableStateOf(false) }
+    // With data: the record on the canvas, or one label per record.
+    val records = ed.recordCount
+    var all by remember { mutableStateOf(false) }
+    val labels = copies * if (all && records > 0) records else 1
     LaunchedEffect(printer?.address) { ed.check() }
 
     Sheet(stringResource(R.string.print), { ed.clearProgress(); onDismiss() }) {
@@ -81,6 +86,12 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
         if (picking || printer == null) PrinterPicker(ed)
 
         Group {
+            if (records > 0) {
+                ListRow(stringResource(R.string.records)) {
+                    Segmented(listOf(stringResource(R.string.records_current), stringResource(R.string.records_all, records)), if (all) 1 else 0) { all = it == 1 }
+                }
+                RowDivider()
+            }
             ListRow(stringResource(R.string.copies)) {
                 Stepper(copies.toString(), { copies = (copies - 1).coerceAtLeast(1) }, { copies = (copies + 1).coerceAtMost(MAX_COPIES) })
             }
@@ -100,7 +111,7 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
             }
         }
 
-        CheckBanner(ed, copies)
+        CheckBanner(ed, labels)
 
         val progress = ed.progress
         if (progress != null && !progress.finished) {
@@ -114,8 +125,8 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
             }
         } else {
             PrimaryButton(
-                pluralStringResource(R.plurals.print_labels, copies, copies),
-                { ed.print(copies, density) },
+                pluralStringResource(R.plurals.print_labels, labels, labels),
+                { ed.print(copies, density, all && records > 0) },
                 Modifier.fillMaxWidth(),
                 Ic.Printer,
                 enabled = printer != null && app.busy == null && ed.issues?.none { it.severity == "error" } != false,

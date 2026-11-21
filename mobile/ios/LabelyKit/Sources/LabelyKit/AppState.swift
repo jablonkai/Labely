@@ -78,8 +78,12 @@ public final class AppState {
     public private(set) var history: [HistoryEntry] = []
 
     /// The connected printer and its last status.
-    public private(set) var printer: Device?
+    public private(set) var printer: Device? {
+        didSet { if printer?.address != oldValue?.address { printerSettings = nil } }
+    }
     public private(set) var printerStatus: DeviceStatus?
+    /// The connected printer's own settings, once `loadPrinterSettings` has read them.
+    public private(set) var printerSettings: PrinterSettings?
 
     /// Address being connected, or `scanning` while scanning.
     public private(set) var busy: String?
@@ -334,6 +338,33 @@ public final class AppState {
             await report {
                 try await engine.call("device.calibrate", ["address": JSON(p.address)])
                 message = .calibrated
+            }
+        }
+    }
+
+    /// Read the settings the connected printer reports (`device.settings`).
+    @discardableResult
+    public func loadPrinterSettings() -> Task<Void, Never> {
+        guard let p = printer else { return Task {} }
+        return Task {
+            await report {
+                let r = try await engine.call("device.settings", ["address": JSON(p.address)])
+                if printer?.address == p.address { printerSettings = PrinterSettings.from(r) }
+            }
+        }
+    }
+
+    /// Change the given settings on the connected printer (`device.set_settings`).
+    @discardableResult
+    public func setPrinterSettings(autoOffLevel: Int? = nil, soundPower: Bool? = nil, soundBluetooth: Bool? = nil) -> Task<Void, Never> {
+        guard let p = printer else { return Task {} }
+        return Task {
+            await report {
+                let r = try await engine.call("device.set_settings", [
+                    "address": JSON(p.address), "auto_off_level": JSON(autoOffLevel),
+                    "sound_power": soundPower.map { JSON($0) }, "sound_bluetooth": soundBluetooth.map { JSON($0) },
+                ])
+                if printer?.address == p.address { printerSettings = PrinterSettings.from(r) }
             }
         }
     }

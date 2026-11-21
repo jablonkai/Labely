@@ -34,6 +34,17 @@ func elementTitle(_ e: Element) -> String {
     return kindName(e.type)
 }
 
+/// Name of an image's 1-bit conversion; the algorithms keep their own names.
+func ditherName(_ dither: String) -> String {
+    switch dither {
+    case "floyd_steinberg": "Floyd–Steinberg"
+    case "atkinson": "Atkinson"
+    case "bayer": "Bayer"
+    case "threshold": L("dither_threshold")
+    default: dither
+    }
+}
+
 let mediaKinds = ["gap", "black_mark", "continuous", "transparent"]
 
 func mediaName(_ media: String) -> String {

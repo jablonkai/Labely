@@ -8,6 +8,7 @@ public enum Icon: String, CaseIterable, Sendable {
     case chevLeft, chevRight, chevDown, close, check, warn, undo, redo, trash, copy, layers
     case text, barcode, qr, rect, ellipse, line, image, table, border, bold
     case tLeft, tCenter, tRight, up, down, bluetooth, scan, data, open, label, folder, info
+    case link, share, download, file
 
     public var svg: String {
         switch self {
@@ -53,6 +54,10 @@ public enum Icon: String, CaseIterable, Sendable {
         case .label: "M3 6h18v12H3z M6 9h12v6H6z"
         case .folder: "M3 6h6l2 2h10v11H3z"
         case .info: "M12 3a9 9 0 1 0 0.01 0 M12 11v6 M12 7.5h.01"
+        case .link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"
+        case .share: "M12 15V4 M8 8l4-4 4 4 M5 13v7h14v-7"
+        case .download: "M12 4v11 M8 11l4 4 4-4 M5 17v3h14v-3"
+        case .file: "M6 3h8l4 4v14H6z M14 3v4h4"
         }
     }
 

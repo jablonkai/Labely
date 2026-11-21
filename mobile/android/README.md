@@ -15,7 +15,7 @@ cargo-ndk and generates its Kotlin bindings, and `:app` is the UI.
 ```sh
 ./gradlew :app:assembleDebug                        # debug APK, all three ABIs
 ./gradlew :app:assembleDebug -Plabely.abis=arm64-v8a  # one ABI, faster
-./gradlew :app:testDebugUnitTest                    # AppFunctions on Robolectric, with the engine built for the host
+./gradlew :app:testDebugUnitTest                    # AppFunctions and editor logic on Robolectric, with the engine built for the host
 ./gradlew :ffi:connectedDebugAndroidTest            # engine smoke tests on a device or emulator
 ./gradlew :app:bundleRelease :app:assembleRelease   # Play bundle and APK, see docs/releasing.md
 ```

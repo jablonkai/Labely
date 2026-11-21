@@ -56,7 +56,10 @@ public struct Element: Sendable, Equatable, Identifiable {
     public var align: String { raw["align"]?.string ?? "left" }
 
     public func contains(xMm x: Double, yMm y: Double, slop: Double = 0) -> Bool {
-        x >= xMm - slop && x <= xMm + widthMm + slop && y >= yMm - slop && y <= yMm + heightMm + slop
+        // A line's width and height may be negative.
+        let (x0, x1) = (min(xMm, xMm + widthMm), max(xMm, xMm + widthMm))
+        let (y0, y1) = (min(yMm, yMm + heightMm), max(yMm, yMm + heightMm))
+        return x >= x0 - slop && x <= x1 + slop && y >= y0 - slop && y <= y1 + slop
     }
 
     static func from(_ o: JSON) -> Element? {
@@ -166,15 +169,60 @@ public struct DeviceStatus: Sendable, Equatable {
     }
 }
 
+/// `device.settings`: only what the printer reports is set.
+public struct PrinterSettings: Sendable, Equatable {
+    /// Auto power-off level 1–4 (NIIMBOT: 15, 30, 45, 60 minutes).
+    public let autoOffLevel: Int?
+    public let soundPower: Bool?
+    public let soundBluetooth: Bool?
+
+    public static let autoOffLevels = 1...4
+
+    public var isEmpty: Bool { autoOffLevel == nil && soundPower == nil && soundBluetooth == nil }
+
+    static func from(_ r: JSON) -> PrinterSettings {
+        let s = r["settings"] ?? [:]
+        return PrinterSettings(
+            autoOffLevel: s["auto_off_level"]?.int, soundPower: s["sound_power"]?.bool, soundBluetooth: s["sound_bluetooth"]?.bool
+        )
+    }
+}
+
+/// `data.get` without its rows: the attached data source.
+public struct DataInfo: Sendable, Equatable {
+    /// File name the data came from; none for CSV attached as text.
+    public let origin: String?
+    public let columns: [String]
+    public let rowCount: Int
+
+    static func from(_ r: JSON) -> DataInfo? {
+        guard r["attached"]?.bool == true else { return nil }
+        let origin = r["origin"]?.string
+        return DataInfo(
+            origin: origin?.isEmpty == false ? origin : nil,
+            columns: (r["columns"]?.array ?? []).compactMap(\.string),
+            rowCount: r["row_count"]?.int ?? 0
+        )
+    }
+
+    static func rows(_ r: JSON) -> [[String]] {
+        (r["rows"]?.array ?? []).map { ($0.array ?? []).map { $0.string ?? "" } }
+    }
+}
+
 /// `doc.check` issue.
 public struct CheckIssue: Sendable, Equatable {
     public let rule: String
     public let severity: String
     public let message: String
+    public let elementId: Int64?
 
     static func list(_ r: JSON) -> [CheckIssue] {
         (r["issues"]?.objects ?? []).map {
-            CheckIssue(rule: $0["rule"]?.string ?? "", severity: $0["severity"]?.string ?? "", message: $0["message"]?.string ?? "")
+            CheckIssue(
+                rule: $0["rule"]?.string ?? "", severity: $0["severity"]?.string ?? "", message: $0["message"]?.string ?? "",
+                elementId: $0["element_id"]?.int64
+            )
         }
     }
 }

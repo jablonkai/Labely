@@ -3,6 +3,7 @@ package org.labely.app.engine
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import java.util.Base64
 import java.util.concurrent.Executors
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.BufferOverflow
@@ -92,6 +93,15 @@ class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
             val png = raw.renderPng(docId, dpi.toUInt(), 0u)
             BitmapFactory.decodeByteArray(png, 0, png.size).asImageBitmap()
         }
+
+    /** The print raster of the document with data record [record] (1-based) filled in. */
+    suspend fun preview(dpi: Int, docId: String, record: Int): ImageBitmap {
+        val b64 = call("render.preview", "doc_id" to docId, "dpi" to dpi, "record" to record).getString("png_base64")
+        return withContext(dispatcher) {
+            val png = Base64.getDecoder().decode(b64)
+            BitmapFactory.decodeByteArray(png, 0, png.size).asImageBitmap()
+        }
+    }
 
     override fun close() {
         raw.setEvents(null)
