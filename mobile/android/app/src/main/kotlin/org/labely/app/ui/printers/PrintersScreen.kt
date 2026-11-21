@@ -39,6 +39,7 @@ import org.labely.app.R
 import org.labely.app.SIM_ADDRESS
 import org.labely.app.ble.BlePermissions
 import org.labely.app.editor.Sheet
+import org.labely.app.ui.Banner
 import org.labely.app.ui.Card
 import org.labely.app.ui.Group
 import org.labely.app.ui.IconButton
@@ -82,7 +83,10 @@ fun rememberBluetoothGate(state: AppState, action: () -> Unit): () -> Unit {
 @Composable
 fun PrintersScreen(state: AppState) {
     val scan = rememberBluetoothGate(state) { state.scan() }
-    LaunchedEffect(state.printer?.address) { state.refreshStatus() }
+    LaunchedEffect(state.printer?.address) {
+        state.refreshStatus()
+        state.detectPaper()
+    }
     val known = state.known.filter { it.address != state.printer?.address }
     val extra = if (state.debug && known.none { it.address == SIM_ADDRESS } && state.printer?.address != SIM_ADDRESS) {
         listOf(KnownPrinter(SIM_ADDRESS, stringResource(R.string.simulator)))
@@ -100,6 +104,9 @@ fun PrintersScreen(state: AppState) {
             }
         }
         item { ConnectedCard(state) }
+        state.connectError?.let { (address, name, message) ->
+            item { ConnectTips(state, address, name, message) }
+        }
 
         if (known.isNotEmpty() || extra.isNotEmpty()) {
             item { SectionHeader(stringResource(R.string.printers_known), stringResource(R.string.printers_search), scan) }
@@ -107,11 +114,14 @@ fun PrintersScreen(state: AppState) {
                 Group {
                     (known + extra).forEachIndexed { i, k ->
                         if (i > 0) RowDivider()
-                        PrinterRow(state, k.address, k.name)
+                        // A remembered printer can be forgotten; the simulator is not remembered.
+                        PrinterRow(state, k.address, k.name, onForget = if (k in known) ({ state.forget(k) }) else null)
                     }
                 }
             }
         }
+
+        item { ManualAddress(state) }
 
         state.scanResults?.let { all ->
             val found = all.filter { d -> d.address != state.printer?.address && known.none { it.address == d.address } }
@@ -131,8 +141,65 @@ fun PrintersScreen(state: AppState) {
     }
 }
 
+/** Why a connection can fail, with "Try again", as the studio's connection help. */
 @Composable
-fun PrinterRow(state: AppState, address: String, name: String) {
+private fun ConnectTips(state: AppState, address: String, name: String, message: String) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconTile(Ic.Warn, Palette.amber, Palette.amberTint)
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.connect_failed, name.ifEmpty { address }), style = Type.bodyStrong)
+                    if (message.isNotEmpty()) Text(message, style = Type.caption)
+                }
+                IconButton(Ic.Close, { state.connectError = null }, size = 36.dp)
+            }
+            val tips = if (address.startsWith("tcp:")) {
+                listOf(R.string.connect_tip_power, R.string.connect_tip_network, R.string.connect_tip_address)
+            } else {
+                listOf(R.string.connect_tip_power, R.string.connect_tip_other_app, R.string.connect_tip_permission, R.string.connect_tip_distance, R.string.connect_tip_rescan)
+            }
+            tips.forEach { Text("• " + stringResource(it), style = Type.caption.copy(color = Palette.text2)) }
+            val retry = rememberBluetoothGate(state) { state.connect(address, name) }
+            SecondaryButton(
+                stringResource(R.string.retry),
+                { if (address.startsWith("ble:")) retry() else state.connect(address, name) },
+                Modifier.fillMaxWidth(),
+                Ic.Rotate,
+                enabled = state.busy == null,
+            )
+        }
+    }
+}
+
+/**
+ * Connect by address: `tcp:<host>[:<port>]` for a network printer (a bare host is taken as
+ * one), or any address the engine reads, with `?model=<id>` for a printer that cannot say what
+ * it is.
+ */
+@Composable
+private fun ManualAddress(state: AppState) {
+    var address by remember { mutableStateOf("") }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.manual_address), style = Type.bodyStrong)
+            Text(stringResource(R.string.manual_address_sub), style = Type.caption)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                    org.labely.app.editor.ContentField(address, "tcp:192.168.1.50", live = true) { address = it }
+                }
+                SecondaryButton(
+                    stringResource(R.string.connect),
+                    { state.connect(org.labely.app.editor.manualAddress(address), "") },
+                    enabled = state.busy == null && address.isNotBlank(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PrinterRow(state: AppState, address: String, name: String, onForget: (() -> Unit)? = null) {
     val connecting = state.busy == address
     ListRow(
         title = name.ifEmpty { address },
@@ -150,6 +217,7 @@ fun PrinterRow(state: AppState, address: String, name: String) {
                     if (address.startsWith("ble:")) connect() else state.connect(address, name)
                 },
             )
+            if (onForget != null) IconButton(Ic.Trash, onForget, Palette.muted, size = 36.dp)
         }
     }
 }
@@ -158,6 +226,7 @@ fun PrinterRow(state: AppState, address: String, name: String) {
 private fun transportName(address: String): String = when {
     address.startsWith("ble:") -> stringResource(R.string.transport_ble)
     address.startsWith("usb:") -> "USB"
+    address.startsWith("tcp:") -> stringResource(R.string.transport_network)
     else -> stringResource(R.string.transport_sim)
 }
 
@@ -198,6 +267,21 @@ private fun ConnectedCard(state: AppState) {
                 },
                 Modifier.weight(1f),
             )
+        }
+        // Lid open and no labels stop a print, so they are called out.
+        if (status?.lidClosed == false) Banner(stringResource(R.string.lid_open), ok = false)
+        if (status?.paperPresent == false) Banner(stringResource(R.string.no_labels), ok = false)
+        p.model?.let { m ->
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                Stat(stringResource(R.string.resolution), stringResource(R.string.export_dpi, m.dpi), Modifier.weight(1f))
+                Stat(stringResource(R.string.printable_width), if (m.headMm > 0) org.labely.app.ui.lengthText(Math.rint(m.headMm * 10) / 10) else "–", Modifier.weight(1f))
+            }
+        }
+        (status?.roll)?.let { roll ->
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                Stat(stringResource(R.string.labels_left), stringResource(R.string.labels_left_of, roll.remaining, roll.total), Modifier.weight(1f))
+                state.detected?.paper?.let { Stat(stringResource(R.string.paper_loaded_roll), it.name, Modifier.weight(1f)) }
+            }
         }
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SecondaryButton(stringResource(R.string.calibrate), { state.calibrate() }, Modifier.weight(1f), Ic.Scan, enabled = state.busy == null)

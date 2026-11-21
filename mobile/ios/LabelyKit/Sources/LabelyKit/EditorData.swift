@@ -161,7 +161,11 @@ extension EditorState {
         let first = DataInfo.rows(r)
         // Loaded pages stay while the data is the same.
         if info != data || Array(rows.prefix(first.count)) != first { rows = first }
-        if info == nil { dataName = nil }
+        if info == nil {
+            dataName = nil
+            dataFile = nil
+        }
+        serials = Serial.list(r)
         // Other data starts at its first record.
         if info != data { record = 1 }
         data = info
@@ -206,15 +210,14 @@ extension EditorState {
     /// Attach CSV text (`data.attach_csv {text}`); `name` is shown as the source.
     @discardableResult
     public func attachCsv(_ text: String, name: String? = nil) -> Task<Void, Never> {
-        Task {
-            await exec("data.attach_csv", ["text": JSON(text)]).value
-            if data != nil, data?.origin == nil { dataName = name }
-        }
+        cleanUp()
+        return attach(DataFile(kind: .csv(text), name: name))
     }
 
     /// Attach the file the user picked: CSV, TSV and TXT as text; a spreadsheet is copied into
     /// `<data dir>/imports`, the only place the engine may read, and attached by path. The data
-    /// is embedded in the document, so the copy is removed again. `url` may be security-scoped.
+    /// is embedded in the document; the copy is removed when the editor closes. `url` may be
+    /// security-scoped.
     @discardableResult
     public func attachFile(_ url: URL) -> Task<Void, Never> {
         Task {
@@ -231,10 +234,10 @@ extension EditorState {
                     try FileManager.default.copyItem(at: url, to: copy)
                     copied = true
                 }
-                if copied {
-                    await exec("data.attach_xlsx", ["path": JSON(copy.path)]).value
-                }
-                try? FileManager.default.removeItem(at: dir)
+                // The copy stays for the session, so the sheet and the header row can be changed.
+                if copied { await attach(DataFile(kind: .sheet(copy), name: name)).value }
+                // A file the engine could not read is not kept.
+                if dataFile?.kind != .sheet(copy) { try? FileManager.default.removeItem(at: dir) }
             } else {
                 var text: String?
                 await app.report { text = try Self.readText(url) }
@@ -255,7 +258,8 @@ extension EditorState {
 
     @discardableResult
     public func detachData() -> Task<Void, Never> {
-        exec("data.detach")
+        cleanUp()
+        return exec("data.detach")
     }
 
     /// Bind `e` to `column` (`data.bind`). `nil` removes the binding: the binding is
@@ -343,5 +347,38 @@ extension EditorState {
             try await save()
         }
         return problem
+    }
+}
+
+/// The roll in the printer and the label paper library, for the open document.
+extension EditorState {
+    /// Read the roll in the connected printer and compare it with this label (`paper.detect`).
+    /// With "use the loaded paper by itself" on, a known roll of another size is applied once.
+    public func refreshLoadedPaper() async {
+        guard let p = app.printer else {
+            loadedPaper = nil
+            return
+        }
+        guard let r = try? await engine.call("paper.detect", ["address": JSON(p.address), "doc_id": JSON(docId)]) else {
+            loadedPaper = nil
+            return
+        }
+        let d = PaperDetect.from(r)
+        loadedPaper = d
+        if app.prefs.autoApplyPaper, d.matchesLabel == false, let paper = d.paper, let barcode = d.barcode, autoApplied != barcode {
+            autoApplied = barcode
+            await applyPaper(paper.id).value
+        }
+    }
+
+    /// Give the label the size, corners and media of paper `id` (`paper.apply`).
+    @discardableResult
+    public func applyPaper(_ id: String) -> Task<Void, Never> {
+        Task {
+            await exec("paper.apply", ["id": JSON(id)]).value
+            if app.printer != nil, let r = try? await engine.call("paper.detect", ["address": JSON(app.printer?.address), "doc_id": JSON(docId)]) {
+                loadedPaper = PaperDetect.from(r)
+            }
+        }
     }
 }

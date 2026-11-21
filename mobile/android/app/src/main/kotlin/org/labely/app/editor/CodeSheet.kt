@@ -130,5 +130,7 @@ fun CodeSheet(ed: EditorState, id: Long, onBinding: () -> Unit, onDismiss: () ->
                 }
             }
         }
+        // The readable text's size (barcode) and the error correction (QR).
+        CodeExtras(ed, e)
     }
 }

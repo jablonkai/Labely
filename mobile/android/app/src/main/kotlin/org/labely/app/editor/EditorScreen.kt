@@ -59,7 +59,13 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.labely.app.R
 import org.labely.app.engine.Element
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.pluralStringResource
 import org.labely.app.ui.IconButton
+import org.labely.app.ui.LengthField
+import org.labely.app.ui.jobs.JobsSheet
+import org.labely.app.ui.mm
 import org.labely.app.ui.IconTile
 import org.labely.app.ui.NumberField
 import org.labely.app.ui.Stepper
@@ -69,9 +75,9 @@ import org.labely.app.ui.theme.LIcon
 import org.labely.app.ui.theme.Palette
 import org.labely.app.ui.theme.Type
 
-private enum class Sheet { Insert, Layers, Label, SaveTemplate, Print, Export, Binding }
+private enum class Sheet { Insert, Layers, Label, Paper, Check, SaveTemplate, Print, Export, Binding, Element, Icons, ChangeIcon, Border, NewTable, Data, Jobs }
 
-/** M2 · Szerkesztő: canvas, inspector of the selected element and the editing toolbar. */
+/** M2 · Szerkesztő: canvas, inspector of the selection and the editing toolbar. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
@@ -87,11 +93,11 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
     }
     // M4: the data panel takes the inspector's place; selecting an element brings the inspector back.
     var dataPanel by remember { mutableStateOf(false) }
-    LaunchedEffect(ed.selectedId) { if (ed.selectedId != null) dataPanel = false }
+    LaunchedEffect(ed.selection) { if (ed.selection.isNotEmpty()) dataPanel = false }
     BackHandler {
         when {
             dataPanel -> dataPanel = false
-            ed.selectedId != null -> ed.selectedId = null
+            ed.selection.isNotEmpty() || ed.multiSelect -> ed.select(emptyList())
             else -> onClose()
         }
     }
@@ -99,6 +105,26 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
 
     val context = LocalContext.current.applicationContext
     val app = ed.app
+    // "Print again" from the history opens the document with the print sheet.
+    LaunchedEffect(Unit) {
+        if (app.printOnOpen) {
+            app.printOnOpen = false
+            sheet = Sheet.Print
+        }
+        if (app.dataOnOpen) {
+            app.dataOnOpen = false
+            dataPanel = true
+        }
+    }
+    // The loaded roll is compared with the label when a printer is there and when the label changes.
+    LaunchedEffect(app.printer?.address, doc.label.widthMm, doc.label.heightMm, doc.label.media) {
+        if (app.printer != null) ed.detectPaper()
+    }
+    var found by remember { mutableStateOf<List<FoundCode>?>(null) }
+    val noCode = stringResource(R.string.found_codes_none)
+    val notFont = stringResource(R.string.font_not_added)
+    val copySaved = stringResource(R.string.save_copy_done)
+
     val pickData = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             app.scope.launch {
@@ -119,20 +145,85 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
             }
         }
     }
+    // "Code from image": the barcodes and 2D codes of a photo become elements.
+    val pickCode = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            app.scope.launch {
+                app.report {
+                    val codes = ed.decode(loadImage(context, uri).bytes)
+                    when (codes.size) {
+                        0 -> app.message = noCode
+                        1 -> ed.addCode(codes[0])
+                        else -> found = codes
+                    }
+                }
+            }
+        }
+    }
+    // One record per picture.
+    val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_DATA_IMAGES)) { uris ->
+        if (uris.isNotEmpty()) {
+            app.scope.launch {
+                app.report {
+                    val pictures = uris.mapIndexed { i, uri ->
+                        val image = loadImage(context, uri)
+                        "image-${i + 1}.${if (image.mime == "image/png") "png" else "jpg"}" to image.bytes
+                    }
+                    ed.attachImages(pictures).join()
+                }
+            }
+        }
+    }
+    val pickFont = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            app.scope.launch {
+                app.report {
+                    val (name, bytes) = readPicked(context, uri)
+                    val added = app.addFont(name, bytes)
+                    val e = ed.selected
+                    if (added.isEmpty()) app.message = notFont else if (e != null && (e.type == "text" || e.type == "table")) ed.setProps(e.id, "font_family" to added[0])
+                }
+            }
+        }
+    }
+    // "Save a copy": the .labely file goes where the user chooses.
+    val saveCopy = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) {
+            app.scope.launch {
+                app.report {
+                    val bytes = ed.fileBytes()
+                    writeTo(context, bytes, uri)
+                    app.message = copySaved
+                }
+            }
+        }
+    }
+    val visual = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
 
     Column(Modifier.fillMaxSize().background(Palette.surface).statusBarsPadding().navigationBarsPadding()) {
-        TopBar(ed, onClose, onPrint = { open(Sheet.Print) }, onExport = { open(Sheet.Export) })
+        TopBar(
+            ed, onClose,
+            onPrint = { open(Sheet.Print) },
+            onExport = { open(Sheet.Export) },
+            onCheck = { open(Sheet.Check) },
+            onSaveCopy = { saveCopy.launch(exportBaseName(doc.name) + ".labely") },
+            onJobs = { open(Sheet.Jobs) },
+        )
         Box(Modifier.weight(1f).fillMaxWidth().background(Palette.canvas)) {
             LabelCanvas(ed, Modifier.fillMaxSize().padding(bottom = 56.dp))
-            PaperBar(sizeText(doc.label.widthMm, doc.label.heightMm) + " · " + mediaName(doc.label.media), Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)) {
-                open(Sheet.Label)
+            Column(Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Loaded, mismatch or unknown roll, as the studio's paper banner.
+                if (app.detected?.let { it.rfid && (it.paper == null || it.matchesLabel == false) } == true) {
+                    PaperBanner(app.detected, onUse = { ed.applyPaper(it.id) }, onLink = { open(Sheet.Paper) })
+                }
+                PaperBar(sizeText(doc.label.widthMm, doc.label.heightMm) + " · " + mediaName(doc.label.media)) { open(Sheet.Paper) }
             }
         }
         HorizontalDivider(color = Palette.border)
         if (dataPanel) {
-            DataPanel(ed, Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT)) { pickData.launch(DATA_MIME_TYPES) }
+            DataPanel(ed, Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT), onImages = { pickImages.launch(visual) }, onOptions = { open(Sheet.Data) }) { pickData.launch(DATA_MIME_TYPES) }
         } else {
-            Inspector(ed, onBinding = { open(Sheet.Binding) })
+            Inspector(ed, onBinding = { open(Sheet.Binding) }, onMore = { open(Sheet.Element) }, onIcon = { open(Sheet.ChangeIcon) })
         }
         HorizontalDivider(color = Palette.border)
         Toolbar(
@@ -149,37 +240,49 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
     }
 
     val close = { sheet = null }
-    // The code sheet is under the binding picker it can open.
+    // The code and table sheets are under the pickers they can open.
     ed.codeSheet?.let { id -> CodeSheet(ed, id, onBinding = { sheet = Sheet.Binding }) { ed.codeSheet = null } }
+    ed.tableSheet?.let { id -> TableSheet(ed, id) { ed.tableSheet = null } }
+    found?.let { codes -> FoundCodesSheet(ed, codes) { found = null } }
     when (sheet) {
-        Sheet.Insert -> InsertSheet(ed, onImage = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, close)
-        Sheet.Layers -> LayersSheet(ed, close)
-        Sheet.Label -> LabelSheet(
-            title = stringResource(R.string.label_title),
-            confirm = stringResource(R.string.apply),
-            initial = doc.label.let { Triple(it.widthMm, it.heightMm, it.media) },
+        Sheet.Insert -> InsertSheet(
+            ed,
+            onImage = { pickImage.launch(visual) },
+            onTable = { sheet = Sheet.NewTable },
+            onIcon = { sheet = Sheet.Icons },
+            onBorder = { sheet = Sheet.Border },
+            onCodeImage = { pickCode.launch(visual) },
             onDismiss = close,
-        ) { w, h, media ->
-            ed.setLabel(w, h, media)
-            close()
-        }
-        Sheet.SaveTemplate -> SaveTemplateDialog(doc.name, close) {
-            ed.saveTemplate(it)
+        )
+        Sheet.Layers -> LayersSheet(ed, close)
+        Sheet.Label -> LabelSettingsSheet(ed, onPaper = { sheet = Sheet.Paper }, onCheck = { sheet = Sheet.Check }, onDismiss = close)
+        Sheet.Paper -> PaperSheet(ed, close)
+        Sheet.Check -> CheckSheet(ed, close)
+        Sheet.SaveTemplate -> SaveTemplateDialog(doc.name, app.folders, app::templateExists, close) { name, folder ->
+            ed.saveTemplate(name, folder)
             close()
         }
         Sheet.Print -> PrintSheet(ed, close)
         Sheet.Export -> ExportSheet(ed, close)
+        Sheet.Jobs -> JobsSheet(app, close)
         Sheet.Binding -> {
             val e = ed.doc?.elements?.firstOrNull { it.id == (ed.codeSheet ?: ed.selectedId) }
             if (e != null) BindingSheet(ed, e, close) else LaunchedEffect(Unit) { close() }
         }
+        Sheet.Element -> ElementSheet(ed, onBinding = { sheet = Sheet.Binding }, onPickIcon = { sheet = Sheet.ChangeIcon }, onAddFont = { pickFont.launch(arrayOf("*/*")) }, onDismiss = close)
+        Sheet.Icons -> IconSheet(ed, close) { ed.addIcon(it) }
+        Sheet.ChangeIcon -> IconSheet(ed, close) { name -> ed.selected?.takeIf { it.type == "icon" }?.let { ed.setProps(it.id, "icon" to name) } }
+        Sheet.Border -> BorderSheet(ed, close)
+        Sheet.NewTable -> NewTableSheet(ed, close)
+        Sheet.Data -> DataSheet(ed, onPick = { pickData.launch(DATA_MIME_TYPES) }, onImages = { pickImages.launch(visual) }, onDismiss = close)
         null -> Unit
     }
 }
 
 @Composable
-private fun TopBar(ed: EditorState, onClose: () -> Unit, onPrint: () -> Unit, onExport: () -> Unit) {
+private fun TopBar(ed: EditorState, onClose: () -> Unit, onPrint: () -> Unit, onExport: () -> Unit, onCheck: () -> Unit, onSaveCopy: () -> Unit, onJobs: () -> Unit) {
     val doc = ed.doc ?: return
+    val app = ed.app
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(Ic.ChevLeft, onClose, Palette.text)
@@ -196,14 +299,22 @@ private fun TopBar(ed: EditorState, onClose: () -> Unit, onPrint: () -> Unit, on
                 Text(stringResource(if (ed.saved) R.string.saved else R.string.not_saved), style = Type.small)
             }
             DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(
-                    { Text(stringResource(R.string.export)) },
+                @Composable
+                fun item(icon: Ic, text: Int, enabled: Boolean = true, action: () -> Unit) = DropdownMenuItem(
+                    { Text(stringResource(text)) },
                     {
                         menu = false
-                        onExport()
+                        action()
                     },
-                    leadingIcon = { LIcon(Ic.Download, Palette.text2, 20.dp) },
+                    enabled = enabled,
+                    leadingIcon = { LIcon(icon, if (enabled) Palette.text2 else Palette.border, 20.dp) },
                 )
+                item(Ic.Paste, R.string.paste, app.clip != null || app.systemClipboard() != null) { ed.pasteAny() }
+                item(Ic.Group, R.string.select_all, doc.elements.isNotEmpty()) { ed.selectAll() }
+                item(Ic.Check, R.string.check_label, action = onCheck)
+                item(Ic.Copy, R.string.save_copy, action = onSaveCopy)
+                item(Ic.Download, R.string.export, action = onExport)
+                item(Ic.Printer, R.string.jobs_title, action = onJobs)
             }
         }
         IconButton(Ic.Undo, ed::undo, Palette.text2, enabled = doc.canUndo)
@@ -213,7 +324,7 @@ private fun TopBar(ed: EditorState, onClose: () -> Unit, onPrint: () -> Unit, on
 }
 
 @Composable
-private fun PaperBar(text: String, modifier: Modifier, onClick: () -> Unit) {
+private fun PaperBar(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
         modifier.clip(RoundedCornerShape(50)).background(Palette.surface).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -226,13 +337,18 @@ private fun PaperBar(text: String, modifier: Modifier, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Inspector(ed: EditorState, onBinding: () -> Unit) {
+private fun Inspector(ed: EditorState, onBinding: () -> Unit, onMore: () -> Unit, onIcon: () -> Unit) {
     val e = ed.selected
-    Column(Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (e == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.inspector_hint), style = Type.caption, textAlign = TextAlign.Center)
+    val several = ed.selectedElements
+    Column(Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (e == null && several.isEmpty()) {
+            Box(Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT - 32.dp), contentAlignment = Alignment.Center) {
+                Text(stringResource(if (ed.multiSelect) R.string.inspector_hint_multi else R.string.inspector_hint), style = Type.caption, textAlign = TextAlign.Center)
             }
+            return@Column
+        }
+        if (e == null) {
+            MultiInspector(ed, several, onMore)
             return@Column
         }
         val bound = ed.boundColumn(e)
@@ -243,20 +359,26 @@ private fun Inspector(ed: EditorState, onBinding: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(elementTitle(e), style = Type.bodyStrong.copy(fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    if (bound != null) kindName(e.type) + " · " + stringResource(R.string.bound_subtitle, bound) else kindName(e.type),
+                    listOfNotNull(
+                        kindName(e.type),
+                        bound?.let { stringResource(R.string.bound_subtitle, it) },
+                        stringResource(R.string.locked).takeIf { e.locked },
+                        stringResource(R.string.degrees, mm(e.rotationDeg)).takeIf { e.rotationDeg != 0.0 },
+                    ).joinToString(" · "),
                     style = Type.caption,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(Ic.Copy, { ed.exec("element.duplicate", "id" to e.id, "dx_mm" to 1.0, "dy_mm" to 1.0, select = true) })
-            IconButton(Ic.Trash, { ed.exec("element.delete", "ids" to JSONArray(listOf(e.id))) }, Palette.red)
+            IconButton(Ic.Copy, { ed.duplicateSelection() })
+            IconButton(Ic.Trash, { ed.deleteSelection() }, Palette.red)
+            IconButton(Ic.More, onMore, Palette.primary, fill = Palette.primaryTint)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NumberField("X", e.xMm, { ed.exec("element.move", "id" to e.id, "x_mm" to it, "y_mm" to e.yMm) }, Modifier.weight(1f), "")
-            NumberField("Y", e.yMm, { ed.exec("element.move", "id" to e.id, "x_mm" to e.xMm, "y_mm" to it) }, Modifier.weight(1f), "")
-            NumberField(stringResource(R.string.width_short), e.widthMm, { ed.exec("element.resize", "id" to e.id, "width_mm" to it, "height_mm" to e.heightMm) }, Modifier.weight(1f), "")
-            NumberField(stringResource(R.string.height_short), e.heightMm, { ed.exec("element.resize", "id" to e.id, "width_mm" to e.widthMm, "height_mm" to it) }, Modifier.weight(1f), "")
+            LengthField("X", e.xMm, { ed.exec("element.move", "id" to e.id, "x_mm" to it, "y_mm" to e.yMm) }, Modifier.weight(1f), unit = false)
+            LengthField("Y", e.yMm, { ed.exec("element.move", "id" to e.id, "x_mm" to e.xMm, "y_mm" to it) }, Modifier.weight(1f), unit = false)
+            LengthField(stringResource(R.string.width_short), e.widthMm, { ed.exec("element.resize", "id" to e.id, "width_mm" to it, "height_mm" to e.heightMm) }, Modifier.weight(1f), unit = false)
+            LengthField(stringResource(R.string.height_short), e.heightMm, { ed.exec("element.resize", "id" to e.id, "width_mm" to e.widthMm, "height_mm" to it) }, Modifier.weight(1f), unit = false)
         }
         when (e.type) {
             "text" -> TextProps(ed, e, bound, onBinding.takeIf { bindable })
@@ -266,14 +388,58 @@ private fun Inspector(ed: EditorState, onBinding: () -> Unit) {
                 if (bindable) BindingRow(bound, onBinding)
             }
             "image" -> ImageProps(ed, e)
+            "table" -> PickerRow(Ic.Table, stringResource(R.string.table_edit), e.raw.optJSONArray("row_heights")?.length()?.let { r -> "$r × ${e.raw.optJSONArray("column_widths")?.length() ?: 0}" }) { ed.tableSheet = e.id }
+            "icon" -> PickerRow(Ic.Star, e.raw.optString("icon").replace('_', ' '), null, onClick = onIcon)
+            "rect", "ellipse", "line", "border" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LengthField(stringResource(R.string.prop_stroke), e.strokeMm, { ed.setProps(e.id, "stroke_mm" to it.coerceAtLeast(if (e.type == "line" || e.type == "border") 0.05 else 0.0)) }, Modifier.weight(1f))
+                if (e.type == "rect" || e.type == "ellipse") Toggle(Ic.Contrast, e.fill) { ed.setProps(e.id, "fill" to !e.fill) }
+                if (e.type == "border") PickerRow(Ic.Border, borderStyleName(e.raw.optString("style", "single")), null, Modifier.weight(1f), onClick = onMore)
+            }
             else -> Unit
         }
     }
 }
 
+/** Several elements: how many, and aligning, distributing, grouping, locking and hiding them. */
+@Composable
+private fun MultiInspector(ed: EditorState, selected: List<Element>, onMore: () -> Unit) {
+    val n = selected.size
+    val ids = selected.map { it.id }
+    val movable = selected.any { !it.locked }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        IconTile(Ic.Layers)
+        Column(Modifier.weight(1f)) {
+            Text(pluralStringResource(R.plurals.selected_count, n, n), style = Type.bodyStrong.copy(fontSize = 17.sp), maxLines = 1)
+            boundsOf(selected)?.let { Text(sizeText(round1(it.width), round1(it.height)), style = Type.caption, maxLines = 1) }
+        }
+        IconButton(Ic.Copy, { ed.duplicateSelection() })
+        IconButton(Ic.Trash, { ed.deleteSelection() }, Palette.red)
+        IconButton(Ic.More, onMore, Palette.primary, fill = Palette.primaryTint)
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Toggle(Ic.AlignLeft, false, movable) { ed.align("left") }
+        Toggle(Ic.AlignCenter, false, movable) { ed.align("center") }
+        Toggle(Ic.AlignRight, false, movable) { ed.align("right") }
+        Toggle(Ic.AlignTop, false, movable) { ed.align("top") }
+        Toggle(Ic.AlignMiddle, false, movable) { ed.align("middle") }
+        Toggle(Ic.AlignBottom, false, movable) { ed.align("bottom") }
+    }
+    val allLocked = selected.all { it.locked }
+    val allHidden = selected.all { it.hidden }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Toggle(Ic.DistH, false, n >= 3) { ed.distribute("horizontal") }
+        Toggle(Ic.DistV, false, n >= 3) { ed.distribute("vertical") }
+        Toggle(Ic.Group, false, n >= 2) { ed.group() }
+        Toggle(Ic.Ungroup, false, hasGroup(ids, selected)) { ed.ungroup() }
+        Toggle(if (allLocked) Ic.Lock else Ic.Unlock, allLocked) { ed.lock(ids, !allLocked) }
+        Toggle(if (allHidden) Ic.EyeOff else Ic.Eye, allHidden) { ed.setHidden(ids, !allHidden) }
+    }
+}
+
 @Composable
 private fun TextProps(ed: EditorState, e: Element, bound: String?, onBinding: (() -> Unit)?) {
-    ContentField(e.text.orEmpty(), stringResource(R.string.text_hint)) { ed.setProps(e.id, "text" to it) }
+    // Enter starts a new line; the text is committed when the keyboard closes.
+    ContentField(e.text.orEmpty(), stringResource(R.string.text_hint), lines = 2) { ed.setText(e, it) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val size = e.fontSizePt
         Stepper(
@@ -285,7 +451,8 @@ private fun TextProps(ed: EditorState, e: Element, bound: String?, onBinding: ((
         Toggle(Ic.Bold, e.bold) { ed.setProps(e.id, "bold" to !e.bold) }
         val (icon, next) = when (e.align) {
             "center" -> Ic.TCenter to "right"
-            "right" -> Ic.TRight to "left"
+            "right" -> Ic.TRight to "justify"
+            "justify" -> Ic.Justify to "left"
             else -> Ic.TLeft to "center"
         }
         Toggle(icon, false) { ed.setProps(e.id, "align" to next) }
@@ -296,34 +463,6 @@ private fun TextProps(ed: EditorState, e: Element, bound: String?, onBinding: ((
 @Composable
 private fun BindingRow(bound: String?, onClick: () -> Unit, modifier: Modifier = Modifier.fillMaxWidth(), compact: Boolean = false) {
     PickerRow(Ic.Link, bound ?: stringResource(R.string.binding), null, modifier, tint = if (bound != null) Palette.primary else Palette.text2, compact = compact, onClick = onClick)
-}
-
-/**
- * A bordered row that opens a picker or a sheet: icon, value, optional detail and a chevron.
- * [compact] leaves the chevron out, for the narrow slot in the text row.
- */
-@Composable
-private fun PickerRow(
-    icon: Ic,
-    text: String,
-    detail: String?,
-    modifier: Modifier = Modifier.fillMaxWidth(),
-    tint: Color = Palette.text2,
-    compact: Boolean = false,
-    onClick: () -> Unit,
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        modifier.height(44.dp).clip(shape).background(Palette.surface).border(1.dp, Palette.border, shape).clickable(onClick = onClick)
-            .padding(horizontal = if (compact) 8.dp else 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
-    ) {
-        LIcon(icon, tint, 18.dp)
-        Text(text, style = Type.body.copy(color = if (tint == Palette.primary) Palette.primaryDark else Palette.text), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (detail != null) Text(detail, style = Type.caption, maxLines = 1)
-        if (!compact) LIcon(Ic.ChevRight, Palette.muted, 16.dp)
-    }
 }
 
 /** What the engine has for the 1-bit conversion of an image: dither mode, threshold, invert. */
@@ -359,39 +498,6 @@ private fun ImageProps(ed: EditorState, e: Element) {
             modifier = Modifier.weight(1f).height(44.dp),
         )
         Text(threshold.roundToInt().toString(), style = Type.bodyStrong, textAlign = TextAlign.End, modifier = Modifier.width(32.dp))
-    }
-}
-
-@Composable
-private fun Toggle(icon: Ic, on: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (on) Palette.primaryTint else Palette.bg).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { LIcon(icon, if (on) Palette.primary else Palette.text2, 22.dp) }
-}
-
-/** Single-line content editor, committed on Done or when focus leaves; [trailing] sits at its end. */
-@Composable
-internal fun ContentField(value: String, placeholder: String, trailing: (@Composable () -> Unit)? = null, onCommit: (String) -> Unit) {
-    var text by remember(value) { mutableStateOf(value) }
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        Modifier.fillMaxWidth().height(44.dp).clip(shape).background(Palette.surface).border(1.dp, Palette.border, shape).padding(start = 12.dp, end = if (trailing != null) 2.dp else 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (text.isEmpty()) Text(placeholder, style = Type.body.copy(color = Palette.muted))
-            BasicTextField(
-                text,
-                { text = it },
-                singleLine = true,
-                textStyle = Type.body,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (text != value) onCommit(text) }),
-                modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused && text != value) onCommit(text) },
-            )
-        }
-        trailing?.invoke()
     }
 }
 

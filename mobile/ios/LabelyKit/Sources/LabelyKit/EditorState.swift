@@ -12,6 +12,26 @@ public struct PrintProgress: Sendable, Equatable {
     public var finished: Bool { Engine.finished.contains(state) }
 }
 
+/// What a print job prints and how (`print.submit`).
+public struct PrintOptions: Sendable, Equatable {
+    public var copies = 1
+    /// `nil` is the label's density, else the model's default.
+    public var density: Int?
+    /// With data: `all`, one record or a list like `1,3,5-7`.
+    public var records: String?
+    /// Without data: how many labels to print; serials advance on each.
+    public var count: Int?
+    /// A column holding each record's copy count; it replaces `copies`.
+    public var copiesColumn: String?
+    /// Move the print right and down, in millimetres (−10 … 10).
+    public var offsetXMm = 0.0
+    public var offsetYMm = 0.0
+    public var mirror = false
+    public var rotate180 = false
+
+    public init() {}
+}
+
 /// One open document, as `EditorState` on Android. Every change is an engine command with this
 /// document's `doc_id`; after it the document and its print raster are read back, so what the
 /// canvas shows is what prints.
@@ -36,9 +56,27 @@ public final class EditorState: Identifiable {
     public internal(set) var rows: [[String]] = []
     /// File name of CSV attached as text this session: the engine keeps no origin for it.
     var dataName: String?
+    /// The file the data was attached from this session (`EditorInsert.swift`).
+    var dataFile: DataFile?
+    /// The print job being followed, to cancel it.
+    public internal(set) var jobId: String?
+    /// The roll barcode the paper was applied for by itself, so it happens once per roll.
+    @ObservationIgnored var autoApplied: String?
     /// True while an export is being written.
     public internal(set) var exporting = false
-    public var selectedId: Int64?
+    /// The selected elements, in the order they were picked.
+    public var selection: [Int64] = []
+    /// The one selected element; `nil` with none or several. Setting it replaces the selection.
+    public var selectedId: Int64? {
+        get { selection.count == 1 ? selection[0] : nil }
+        set { selection = newValue.map { [$0] } ?? [] }
+    }
+    /// Taps on the canvas add to the selection instead of replacing it.
+    public var multiSelect = false
+    /// The serial counters of the document (`EditorInsert.swift`).
+    public internal(set) var serials: [Serial] = []
+    /// The roll in the printer compared with this label, once read (`EditorPaper.swift`).
+    public internal(set) var loadedPaper: PaperDetect?
     public private(set) var issues: [CheckIssue]?
     public private(set) var progress: PrintProgress?
     /// False while an edit is not yet on disk. Edits are saved as they happen.
@@ -58,12 +96,20 @@ public final class EditorState: Identifiable {
         return doc?.elements.first { $0.id == id }
     }
 
+    /// The selected elements, bottom-first.
+    public var selectedElements: [Element] {
+        guard let doc, !selection.isEmpty else { return [] }
+        return doc.elements.filter { selection.contains($0.id) }
+    }
+
     func refresh() async throws {
         let d = try Doc.from(try await engine.call("doc.get", ["doc_id": JSON(docId)]))
         try await refreshData()
         preview = try await render()
         doc = d
-        if let id = selectedId, !d.elements.contains(where: { $0.id == id }) { selectedId = nil }
+        let kept = selection.filter { id in d.elements.contains { $0.id == id } }
+        if kept != selection { selection = kept }
+        if selection.count < 2 && d.elements.count < 2 { multiSelect = false }
     }
 
     /// The print raster: of the previewed record when data is attached, else of the label.
@@ -75,12 +121,19 @@ public final class EditorState: Identifiable {
     }
 
     /// Run a document command; with `select`, the element it creates becomes the selection.
+    /// `command.batch` and library commands take no `doc_id`: pass `addDoc: false`.
     @discardableResult
-    public func exec(_ id: String, _ params: JSON = [:], select: Bool = false) -> Task<Void, Never> {
+    public func exec(_ id: String, _ params: JSON = [:], select: Bool = false, addDoc: Bool = true) -> Task<Void, Never> {
         Task {
             await app.report {
-                let r = try await engine.call(id, params.with("doc_id", JSON(docId)))
-                if select, let new = r["id"]?.int64 { selectedId = new }
+                let r = try await engine.call(id, addDoc ? params.with("doc_id", JSON(docId)) : params)
+                if select {
+                    if let new = r["id"]?.int64 ?? r["element_id"]?.int64 {
+                        selectedId = new
+                    } else if let ids = (r["ids"] ?? r["created"])?.array?.compactMap(\.int64), !ids.isEmpty {
+                        selection = ids
+                    }
+                }
                 saved = false
                 try await refresh()
                 try await save()
@@ -148,11 +201,23 @@ public final class EditorState: Identifiable {
         exec("doc.set_label", ["width_mm": JSON(widthMm), "height_mm": JSON(heightMm), "media": JSON(media)])
     }
 
+    /// Change label properties (`doc.set_label`): `name` renames the document,
+    /// `corner_radius_mm`, `printer_model` (empty clears it) and `density` (0 is the model's).
     @discardableResult
-    public func saveTemplate(_ name: String) -> Task<Void, Never> {
+    public func setLabelProps(_ props: JSON) -> Task<Void, Never> {
+        exec("doc.set_label", props)
+    }
+
+    /// Save the label as a library template in `folder` (`""` is the default folder). A
+    /// template of the same name there is replaced: ask first (`AppState.templateExists`).
+    @discardableResult
+    public func saveTemplate(_ name: String, folder: String = "") -> Task<Void, Never> {
         Task {
             await app.report {
-                try await engine.call("template.save", ["doc_id": JSON(docId), "name": JSON(name), "overwrite": true])
+                let r = try await engine.call("template.save", [
+                    "doc_id": JSON(docId), "name": JSON(name), "folder": folder.isEmpty ? nil : JSON(folder), "overwrite": true,
+                ])
+                if let ref = r["ref"]?.string { app.thumbs[ref] = nil }
                 await app.loadTemplates()
             }
         }
@@ -187,19 +252,46 @@ public final class EditorState: Identifiable {
     /// Without data the label prints as it is.
     @discardableResult
     public func print(copies: Int, density: Int?, allRecords: Bool = false) -> Task<Void, Never>? {
+        var o = PrintOptions()
+        o.copies = copies
+        o.density = density
+        o.records = recordsParam(all: allRecords)
+        return print(o)
+    }
+
+    /// Labels `o` prints, when that is known before the job starts: not with a copies column.
+    public func labelCount(_ o: PrintOptions) -> Int? {
+        if o.copiesColumn != nil { return nil }
+        if let data, data.rowCount > 0 {
+            return RecordRange.parse(o.records ?? "all", count: data.rowCount).map { $0.count * o.copies }
+        }
+        return max(o.count ?? 1, 1) * o.copies
+    }
+
+    /// Queue a print job on the connected printer and follow it.
+    @discardableResult
+    public func print(_ o: PrintOptions) -> Task<Void, Never>? {
         guard let printer = app.printer else { return nil }
         printTask?.cancel()
-        let records = recordsParam(all: allRecords)
-        let total = copies * (allRecords ? max(data?.rowCount ?? 1, 1) : 1)
+        let hasData = (data?.rowCount ?? 0) > 0
+        let total = labelCount(o) ?? 0
         progress = PrintProgress(done: 0, total: total, state: "queued", error: nil)
         let task = Task {
             await app.report {
                 do {
                     let r = try await engine.call("print.submit", [
-                        "doc_id": JSON(docId), "address": JSON(printer.address), "copies": JSON(copies),
-                        "density": JSON(density), "records": JSON(records), "wait": false,
+                        "doc_id": JSON(docId), "address": JSON(printer.address), "copies": JSON(o.copies),
+                        "density": JSON(o.density),
+                        "records": hasData ? JSON(o.records ?? "all") : nil,
+                        "count": hasData ? nil : JSON(o.count),
+                        "copies_column": hasData ? JSON(o.copiesColumn) : nil,
+                        "offset_x_mm": o.offsetXMm == 0 ? nil : JSON(o.offsetXMm),
+                        "offset_y_mm": o.offsetYMm == 0 ? nil : JSON(o.offsetYMm),
+                        "mirror": o.mirror ? true : nil, "rotate_180": o.rotate180 ? true : nil,
+                        "wait": false,
                     ])
                     guard let jobId = r["job_id"]?.idString else { return }
+                    self.jobId = jobId
                     // The engine pushes each change (ADR-0031); stop at the final state.
                     for await j in engine.job(jobId) {
                         let p = PrintProgress(
@@ -211,7 +303,9 @@ public final class EditorState: Identifiable {
                         progress = p
                         if p.finished { break }
                     }
+                    self.jobId = nil
                 } catch {
+                    jobId = nil
                     progress = PrintProgress(done: 0, total: total, state: "failed", error: error.localizedDescription)
                     throw error
                 }
@@ -221,6 +315,13 @@ public final class EditorState: Identifiable {
         }
         printTask = task
         return task
+    }
+
+    /// Stop the job being printed at the next label, or drop it while it is queued.
+    @discardableResult
+    public func cancelPrint() -> Task<Void, Never> {
+        guard let jobId else { return Task {} }
+        return app.cancelJob(jobId)
     }
 
     public func clearProgress() {

@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
@@ -24,7 +26,7 @@ import org.labely.ffi.LabelyEngine
 import org.labely.ffi.NativeBle
 
 /** A command that came back with `ok: false`. [code] is the stable error code. */
-class CommandFailure(val code: String, message: String, val hint: String?) : Exception(message)
+class CommandFailure(val code: String, message: String, val hint: String?, val accepted: List<String> = emptyList()) : Exception(message)
 
 /**
  * The Rust engine behind a single worker thread (ADR-0027). Every edit is a command, so the
@@ -71,6 +73,9 @@ class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
         })
     }
 
+    /** Every job of this session by id, oldest first; changes as the engine pushes them. */
+    val allJobs: StateFlow<Map<String, JSONObject>> = jobs.asStateFlow()
+
     /** Every change of job [id], starting with the latest one already seen. */
     fun job(id: String): Flow<JSONObject> = jobs.mapNotNull { it[id] }.distinctUntilChanged { a, b -> a.toString() == b.toString() }
 
@@ -103,6 +108,17 @@ class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
         }
     }
 
+    /** Several document commands as one undo step (`command.batch`, all or nothing). */
+    suspend fun batch(docId: String, steps: List<Pair<String, JSONObject>>, label: String? = null): JSONObject =
+        call(
+            "command.batch",
+            json(
+                "steps" to org.json.JSONArray(steps.map { (id, params) -> JSONObject().put("id", id).put("params", params.put("doc_id", docId)) }),
+                "label" to label,
+                "terse" to true,
+            ),
+        )
+
     override fun close() {
         raw.setEvents(null)
         worker.shutdown()
@@ -117,6 +133,7 @@ class Engine(dataDir: String, ble: NativeBle?) : AutoCloseable {
             err.optString("code", "internal"),
             err.optString("message"),
             err.optString("hint").ifEmpty { null },
+            err.optJSONArray("accepted").let { a -> if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) } },
         )
     }
 

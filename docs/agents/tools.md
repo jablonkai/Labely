@@ -96,6 +96,7 @@ Hints:
 | `render.preview` | query | dpi, page, record |
 | `device.scan` | device | timeout_ms |
 | `device.list` | device | |
+| `device.models` | device | |
 | `device.connect`, `.disconnect`, `.status` | device | address |
 | `paper.detect` | device | address, doc_id → rfid, barcode, media, remaining, paper, matches_label |
 | `device.calibrate` | device | address, media (default: the label's) |

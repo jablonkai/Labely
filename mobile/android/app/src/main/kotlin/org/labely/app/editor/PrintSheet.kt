@@ -1,6 +1,13 @@
 package org.labely.app.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.ui.platform.LocalFocusManager
+import org.labely.app.ui.IconButton
+import org.labely.app.ui.LengthField
+import org.labely.app.ui.jobs.JobsSheet
+import org.labely.app.ui.lengthText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,25 +55,58 @@ import org.labely.app.ui.theme.LIcon
 import org.labely.app.ui.theme.Palette
 import org.labely.app.ui.theme.Type
 
-/** M3 · Nyomtatás: preview, printer, copies, density, the check result and the print button. */
+/**
+ * M3 · Nyomtatás: preview (stepping through the records), printer, which records and how many
+ * copies, darkness, the advanced options (offset, mirror, turn 180°), the check result and the
+ * print button; a running job shows its progress and can be cancelled.
+ */
 @Composable
 fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
     val app = ed.app
     val doc = ed.doc ?: return
     val printer = app.printer
     val model = printer?.model
-    var copies by remember { mutableIntStateOf(1) }
+    // "Continue" from the history: the labels that were left, with the copies of that job.
+    val resume = remember { app.resume.also { app.resume = null } }
+    var copies by remember { mutableIntStateOf(resume?.third ?: 1) }
+    var count by remember { mutableIntStateOf(resume?.let { (it.second - it.first).coerceAtLeast(1) } ?: 1) }
+    // "Model default" sends no density: the label's own, else the model's.
+    var auto by remember { mutableStateOf(doc.label.density == null) }
     var density by remember(model) { mutableIntStateOf(doc.label.density ?: model?.densityDefault ?: 3) }
     var picking by remember { mutableStateOf(false) }
-    // With data: the record on the canvas, or one label per record.
+    var advanced by remember { mutableStateOf(false) }
+    var queue by remember { mutableStateOf(false) }
+    // With data: the record on the canvas, every record, or a range such as 1,3,5-7.
     val records = ed.recordCount
-    var all by remember { mutableStateOf(false) }
-    val labels = copies * if (all && records > 0) records else 1
+    var which by remember { mutableIntStateOf(if (resume != null && records > resume.first) 2 else 0) }
+    var range by remember { mutableStateOf(if (resume != null && records > resume.first) "${resume.first + 1}-$records" else "") }
+    var copiesColumn by remember { mutableStateOf<String?>(null) }
+    val saved = remember(printer?.address) { printer?.let { app.printOffset(it.address) } ?: (0.0 to 0.0) }
+    var offsetX by remember(printer?.address) { mutableDoubleStateOf(saved.first) }
+    var offsetY by remember(printer?.address) { mutableDoubleStateOf(saved.second) }
+    var mirror by remember { mutableStateOf(false) }
+    var rotate180 by remember { mutableStateOf(false) }
+    val picked = if (records > 0 && which == 2) parseRecords(range, records) else null
+    val rangeBad = records > 0 && which == 2 && picked == null
+    val perCopy = when {
+        records == 0 -> count
+        which == 1 -> records
+        which == 2 -> picked?.size ?: 0
+        else -> 1
+    }
+    val labels = copies * perCopy
     LaunchedEffect(printer?.address) { ed.check() }
 
     Sheet(stringResource(R.string.print), { ed.clearProgress(); onDismiss() }) {
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.canvas).padding(24.dp), contentAlignment = Alignment.Center) {
             LabelImage(ed.preview, doc.label.widthMm, doc.label.heightMm, Modifier.fillMaxWidth(0.75f))
+        }
+        if (records > 1) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                IconButton(Ic.ChevLeft, { ed.showRecord(ed.record - 1) }, Palette.text, size = 36.dp, enabled = ed.record > 1)
+                Text(stringResource(R.string.record_of, ed.record, records), style = Type.bodyStrong, modifier = Modifier.padding(horizontal = 12.dp))
+                IconButton(Ic.ChevRight, { ed.showRecord(ed.record + 1) }, Palette.text, size = 36.dp, enabled = ed.record < records)
+            }
         }
 
         Card(Modifier.fillMaxWidth(), selected = printer != null, onClick = { picking = !picking }) {
@@ -88,32 +128,75 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
         Group {
             if (records > 0) {
                 ListRow(stringResource(R.string.records)) {
-                    Segmented(listOf(stringResource(R.string.records_current), stringResource(R.string.records_all, records)), if (all) 1 else 0) { all = it == 1 }
+                    Segmented(listOf(stringResource(R.string.records_current), stringResource(R.string.records_all, records), stringResource(R.string.records_range)), which) { which = it }
+                }
+                if (which == 2) {
+                    Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ContentField(range, stringResource(R.string.records_range_hint), live = true) { range = it }
+                        if (rangeBad && range.isNotBlank()) Text(stringResource(R.string.records_range_bad, records), style = Type.caption.copy(color = Palette.red))
+                    }
+                }
+                RowDivider()
+            } else if (doc.serials.isNotEmpty()) {
+                // Without data each label advances the serial numbers.
+                ListRow(stringResource(R.string.print_count), stringResource(R.string.print_count_sub)) {
+                    Stepper(count.toString(), { count = (count - 1).coerceAtLeast(1) }, { count = (count + 1).coerceAtMost(MAX_COUNT) })
                 }
                 RowDivider()
             }
             ListRow(stringResource(R.string.copies)) {
                 Stepper(copies.toString(), { copies = (copies - 1).coerceAtLeast(1) }, { copies = (copies + 1).coerceAtMost(MAX_COPIES) })
             }
+            if (records > 0) {
+                RowDivider()
+                val none = stringResource(R.string.copies_column_none)
+                MenuRow(stringResource(R.string.copies_column), copiesColumn ?: none, listOf("" to none) + ed.data?.columns.orEmpty().map { it to it }) { copiesColumn = it.ifEmpty { null } }
+            }
             RowDivider()
             val min = model?.densityMin ?: 1
             val max = model?.densityMax ?: 5
-            ListRow(stringResource(R.string.density)) {
-                Slider(
-                    value = density.toFloat(),
-                    onValueChange = { density = it.toInt() },
-                    valueRange = min.toFloat()..max.toFloat(),
-                    steps = (max - min - 1).coerceAtLeast(0),
-                    colors = SliderDefaults.colors(thumbColor = Palette.primary, activeTrackColor = Palette.primary, inactiveTrackColor = Palette.primaryTint2),
-                    modifier = Modifier.width(140.dp),
-                )
-                Text("$density / $max", style = Type.bodyStrong)
+            SwitchRow(stringResource(R.string.density), stringResource(R.string.density_model_default), auto) { auto = it }
+            if (!auto) {
+                ListRow(stringResource(R.string.density_level)) {
+                    Slider(
+                        value = density.toFloat(),
+                        onValueChange = { density = it.toInt() },
+                        valueRange = min.toFloat()..max.toFloat(),
+                        steps = (max - min - 1).coerceAtLeast(0),
+                        colors = SliderDefaults.colors(thumbColor = Palette.primary, activeTrackColor = Palette.primary, inactiveTrackColor = Palette.primaryTint2),
+                        modifier = Modifier.width(140.dp),
+                    )
+                    Text("$density / $max", style = Type.bodyStrong)
+                }
+            }
+        }
+
+        Group {
+            ListRow(
+                stringResource(R.string.print_advanced),
+                listOfNotNull(
+                    stringResource(R.string.print_offset_value, lengthText(offsetX), lengthText(offsetY)).takeIf { offsetX != 0.0 || offsetY != 0.0 },
+                    stringResource(R.string.print_mirror).takeIf { mirror },
+                    stringResource(R.string.print_rotate_180).takeIf { rotate180 },
+                ).joinToString(" · ").ifEmpty { null },
+                onClick = { advanced = !advanced },
+            ) { LIcon(if (advanced) Ic.ChevDown else Ic.ChevRight, Palette.muted, 18.dp) }
+            if (advanced) {
+                Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LengthField(stringResource(R.string.print_offset_x), offsetX, { offsetX = it.coerceIn(-10.0, 10.0) }, Modifier.weight(1f))
+                    LengthField(stringResource(R.string.print_offset_y), offsetY, { offsetY = it.coerceIn(-10.0, 10.0) }, Modifier.weight(1f))
+                }
+                RowDivider()
+                SwitchRow(stringResource(R.string.print_mirror), stringResource(R.string.print_mirror_sub), mirror) { mirror = it }
+                RowDivider()
+                SwitchRow(stringResource(R.string.print_rotate_180), stringResource(R.string.print_rotate_180_sub), rotate180) { rotate180 = it }
             }
         }
 
         CheckBanner(ed, labels)
 
         val progress = ed.progress
+        val focus = LocalFocusManager.current
         if (progress != null && !progress.finished) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.printing_progress, progress.done, progress.total), style = Type.bodyStrong)
@@ -122,17 +205,47 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     color = Palette.primary,
                 )
+                SecondaryButton(stringResource(R.string.print_cancel), { ed.cancelPrint() }, Modifier.fillMaxWidth(), Ic.Close)
             }
         } else {
             PrimaryButton(
-                pluralStringResource(R.plurals.print_labels, labels, labels),
-                { ed.print(copies, density, all && records > 0) },
+                if (copiesColumn != null) stringResource(R.string.print) else pluralStringResource(R.plurals.print_labels, labels, labels),
+                {
+                    // An offset still being typed is committed when its field loses focus.
+                    focus.clearFocus()
+                    printer?.let { app.setPrintOffset(it.address, offsetX, offsetY) }
+                    ed.print(
+                        PrintOptions(
+                            copies = copies,
+                            density = if (auto) null else density,
+                            records = when {
+                                records == 0 -> null
+                                which == 1 -> "all"
+                                which == 2 -> recordsParam(range)
+                                else -> ed.record.toString()
+                            },
+                            count = count.takeIf { records == 0 && it > 1 },
+                            copiesColumn = copiesColumn,
+                            offsetXMm = offsetX,
+                            offsetYMm = offsetY,
+                            mirror = mirror,
+                            rotate180 = rotate180,
+                            total = labels,
+                        ),
+                    )
+                },
                 Modifier.fillMaxWidth(),
                 Ic.Printer,
-                enabled = printer != null && app.busy == null && ed.issues?.none { it.severity == "error" } != false,
+                enabled = printer != null && app.busy == null && !rangeBad && ed.issues?.none { it.severity == "error" } != false,
             )
         }
+        Text(
+            stringResource(R.string.jobs_title),
+            style = Type.bodyStrong.copy(color = Palette.primary),
+            modifier = Modifier.clickable { queue = true }.padding(vertical = 4.dp),
+        )
     }
+    if (queue) JobsSheet(app) { queue = false }
 }
 
 @Composable
@@ -184,3 +297,4 @@ private fun PrinterPicker(ed: EditorState) {
 }
 
 private const val MAX_COPIES = 999
+private const val MAX_COUNT = 5000

@@ -12,6 +12,8 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Network printers (tcp:<host>[:<port>]). -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".LabelyApplication"

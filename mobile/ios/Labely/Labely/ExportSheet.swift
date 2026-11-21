@@ -111,14 +111,3 @@ private struct ShareView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
-
-/// The system "save to" picker: copies the exported files to the place the user picks.
-private struct SaveView: UIViewControllerRepresentable {
-    let urls: [URL]
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        UIDocumentPickerViewController(forExporting: urls, asCopy: true)
-    }
-
-    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
-}

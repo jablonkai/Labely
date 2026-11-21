@@ -185,7 +185,8 @@ class EditorStateTest {
         onMain { ed.addRect().join() }
         assertEquals(8, Handle.of(ed.selected!!).size)
         onMain { ed.setProps(ed.selectedId!!, "rotation_deg" to 30).join() }
-        assertTrue(Handle.of(ed.selected!!).isEmpty())
+        // A rotated element is resized along its own axes.
+        assertEquals(8, Handle.of(ed.selected!!).size)
         onMain { ed.addLine().join() }
         assertEquals(listOf(Handle.Left, Handle.Right), Handle.of(ed.selected!!))
         onMain { ed.exec("element.lock", "ids" to org.json.JSONArray(listOf(ed.selectedId!!))).join() }

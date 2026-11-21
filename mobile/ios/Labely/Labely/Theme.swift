@@ -74,13 +74,24 @@ func L(_ key: String, _ args: any CVarArg...) -> String {
     String(format: NSLocalizedString(key, comment: ""), locale: .current, arguments: args)
 }
 
-/// `50 × 30 mm`, with a decimal only where needed.
+/// `50 × 30 mm` (or `1.969 × 1.181 in`), with decimals only where needed.
 func sizeText(_ w: Double, _ h: Double) -> String {
-    "\(mm(w)) × \(mm(h)) mm"
+    "\(mm(w)) × \(mm(h)) \(CurrentUnit.value.suffix)"
 }
 
+/// A length in the unit chosen in Settings, without the unit's name.
 func mm(_ v: Double) -> String {
-    v == v.rounded() ? String(Int64(v)) : v.formatted(.number.precision(.fractionLength(1)))
+    CurrentUnit.value.format(v)
+}
+
+/// A length with its unit: `2.5 mm`.
+func mmText(_ v: Double) -> String {
+    "\(mm(v)) \(CurrentUnit.value.suffix)"
+}
+
+/// A plain number with up to `decimals` decimals.
+func num(_ v: Double, decimals: Int = 1) -> String {
+    v == v.rounded() ? String(Int64(v)) : v.formatted(.number.precision(.fractionLength(0...decimals)).grouping(.never))
 }
 
 /// One of the design's stroke icons, tinted and sized.

@@ -48,6 +48,7 @@ struct RootView: View {
     @Bindable var state: AppState
     @State private var newLabel = false
     @State private var importing = false
+    @State private var importingData = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -58,7 +59,11 @@ struct RootView: View {
                 VStack(spacing: 0) {
                     ZStack {
                         switch state.tab {
-                        case .home: HomeScreen(state: state, onNewLabel: { newLabel = true }, onOpenFile: { importing = true })
+                        case .home:
+                            HomeScreen(
+                                state: state, onNewLabel: { newLabel = true }, onOpenFile: { importing = true },
+                                onFromData: { importingData = true }
+                            )
                         case .templates: TemplatesScreen(state: state, onNewLabel: { newLabel = true })
                         case .history: HistoryScreen(state: state)
                         case .printers: PrintersScreen(state: state)
@@ -74,24 +79,41 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: state.editor?.docId)
         .sheet(isPresented: $newLabel) {
-            LabelSheet(
-                title: L("new_label"),
-                confirm: L("create"),
-                initial: (AppState.presetSizes[0].0, AppState.presetSizes[0].1, "gap"),
-                onDismiss: { newLabel = false }
-            ) { w, h, media in
+            NewLabelSheet(state: state, onDismiss: { newLabel = false }) { w, h, media, radius in
                 newLabel = false
-                state.newLabel(widthMm: w, heightMm: h, media: media)
+                state.newLabel(widthMm: w, heightMm: h, media: media, cornerRadiusMm: radius)
             }
         }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.data]) { result in
+        .fileImporter(isPresented: $importing, allowedContentTypes: labelFileTypes) { result in
             switch result {
             case .success(let url): state.openFile(url)
             case .failure: state.message = .text(L("open_failed"))
             }
         }
+        // A separate importer: two on one view would replace each other.
+        .background {
+            Color.clear.fileImporter(isPresented: $importingData, allowedContentTypes: dataFileTypes) { result in
+                if case .success(let url) = result { state.newLabelFromData(url) }
+            }
+        }
+        // A .labely file opened from Files, Mail or another app.
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            Task {
+                await state.closeEditor().value
+                await state.openFile(url).value
+            }
+        }
     }
 }
+
+/// `.labely` documents, and any file for those saved without the extension's type.
+let labelFileTypes: [UTType] = [UTType("org.labely.document"), UTType(filenameExtension: "labely"), .data].compactMap { $0 }
+
+/// What a data file picker offers: CSV, TSV, TXT and spreadsheets.
+let dataFileTypes: [UTType] =
+    [.commaSeparatedText, .tabSeparatedText, .plainText, .spreadsheet]
+        + ["csv", "tsv", "txt", "xlsx", "xls", "ods"].compactMap { UTType(filenameExtension: $0) }
 
 private struct TabBar: View {
     @Binding var current: AppTab

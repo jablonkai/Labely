@@ -124,3 +124,11 @@ suspend fun saveInto(context: Context, files: List<File>, tree: Uri, mime: Strin
         saveTo(context, f, doc)
     }
 }
+
+/** Write [bytes] into the document the user created with the system picker. */
+suspend fun writeTo(context: Context, bytes: ByteArray, target: Uri) = withContext(Dispatchers.IO) {
+    context.contentResolver.openOutputStream(target)?.use { it.write(bytes) } ?: error("cannot write $target")
+}
+
+/** Most pictures one "labels from pictures" pick takes; the engine reads up to 500. */
+const val MAX_DATA_IMAGES = 100

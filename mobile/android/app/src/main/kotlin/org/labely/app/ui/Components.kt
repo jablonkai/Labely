@@ -53,13 +53,22 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import org.labely.app.editor.Units
 import org.labely.app.ui.theme.Ic
 import org.labely.app.ui.theme.LIcon
 import org.labely.app.ui.theme.Palette
 import org.labely.app.ui.theme.Type
 
-/** `50 × 30 mm`, with a decimal only where needed. */
-fun sizeText(w: Double, h: Double): String = "${mm(w)} × ${mm(h)} mm"
+/** The unit lengths are shown and typed in; the app's settings set it. */
+object Lengths {
+    var units by mutableStateOf(Units.Mm)
+}
+
+/** `50 × 30 mm` or `1.969 × 1.181 in`, in the chosen unit. */
+fun sizeText(w: Double, h: Double): String = Lengths.units.let { "${it.format(w)} × ${it.format(h)} ${it.id}" }
+
+/** A length with its unit: `12.5 mm`. */
+fun lengthText(mm: Double): String = Lengths.units.let { "${it.format(mm)} ${it.id}" }
 
 fun mm(v: Double): String =
     if (v == Math.rint(v)) v.toLong().toString() else String.format(Locale.getDefault(), "%.1f", v)
@@ -224,10 +233,11 @@ fun Stepper(value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
  * the keyboard's Done is pressed or the field loses focus.
  */
 @Composable
-fun NumberField(label: String, value: Double, onCommit: (Double) -> Unit, modifier: Modifier = Modifier, suffix: String = "mm") {
-    var text by remember(value) { mutableStateOf(mm(value)) }
+fun NumberField(label: String, value: Double, onCommit: (Double) -> Unit, modifier: Modifier = Modifier, suffix: String = "mm", shown: String = mm(value)) {
+    var text by remember(value, shown) { mutableStateOf(shown) }
     fun commit() {
-        text.replace(',', '.').toDoubleOrNull()?.let { if (it != value) onCommit(it) }
+        // Only what the user typed is committed, so a rounded display never changes the value.
+        if (text != shown) text.replace(',', '.').toDoubleOrNull()?.let { if (it != value) onCommit(it) }
     }
     val shape = RoundedCornerShape(12.dp)
     Row(
@@ -247,6 +257,13 @@ fun NumberField(label: String, value: Double, onCommit: (Double) -> Unit, modifi
         )
         Text(suffix, style = Type.caption)
     }
+}
+
+/** [NumberField] for a length: shown and typed in the chosen unit, committed in millimetres. */
+@Composable
+fun LengthField(label: String, valueMm: Double, onCommit: (Double) -> Unit, modifier: Modifier = Modifier, unit: Boolean = true) {
+    val u = Lengths.units
+    NumberField(label, u.fromMm(valueMm), { onCommit(u.toMm(it)) }, modifier, if (unit) u.id else "", u.format(valueMm))
 }
 
 /** A label raster on a white card, sized to its aspect ratio. */

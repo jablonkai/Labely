@@ -37,6 +37,14 @@ fn scan_connect_status_print() {
             .len(),
         1
     );
+    let models = ok(s, "device.models", json!({}));
+    assert!(
+        models["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "test.fake" && m["dpi"].as_u64().unwrap() > 0)
+    );
     let r = ok(s, "device.status", json!({}));
     assert_eq!(r["status"]["battery_percent"], 100);
 

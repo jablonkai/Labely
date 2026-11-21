@@ -12894,6 +12894,102 @@ expression: r
       "undoable": false
     },
     {
+      "description": "List the printer models Labely knows, with resolution, print width, density range and media. The ids go in a label's printer_model and in `?model=<id>` addresses.",
+      "id": "device.models",
+      "journal": false,
+      "kind": "device",
+      "label": "Printer models",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "models": {
+            "items": {
+              "description": "Printer model facts that commands need (subset of the registry entry).",
+              "properties": {
+                "density_default": {
+                  "format": "uint8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "density_max": {
+                  "format": "uint8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "density_min": {
+                  "format": "uint8",
+                  "maximum": 255,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "dpi": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "head_dots": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "max_width_mm": {
+                  "format": "double",
+                  "type": "number"
+                },
+                "media": {
+                  "items": {
+                    "description": "Media type of the label stock.",
+                    "enum": [
+                      "gap",
+                      "black_mark",
+                      "continuous",
+                      "transparent"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "dpi",
+                "head_dots",
+                "max_width_mm",
+                "density_min",
+                "density_max",
+                "density_default",
+                "media"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "ModelsOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Params for commands that take none.",
+        "title": "NoParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
       "description": "Connect to a printer by address (from device.scan). Returns the device with its model.",
       "id": "device.connect",
       "journal": false,

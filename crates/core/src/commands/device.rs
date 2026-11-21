@@ -7,7 +7,9 @@ use super::{DEFAULT_DPI, render_options_for};
 use crate::command::{Command, CommandError, CommandMeta, Ctx, ErrorCode};
 use crate::document::MediaType;
 use crate::jobs::{JobSpec, JobState};
-use crate::services::{DeviceInfo, DeviceSettings, DeviceStatus, PagePlanes, PrintRequest};
+use crate::services::{
+    DeviceInfo, DeviceSettings, DeviceStatus, ModelInfo, PagePlanes, PrintRequest,
+};
 
 /// Longest allowed scan.
 pub const MAX_SCAN_MS: u64 = 60_000;
@@ -100,6 +102,35 @@ impl Command for DeviceList {
     fn run(ctx: &mut Ctx<'_>, _: crate::command::NoParams) -> Result<DevicesOutput, CommandError> {
         Ok(DevicesOutput {
             devices: ctx.services().devices.connected(),
+        })
+    }
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ModelsOutput {
+    pub models: Vec<ModelInfo>,
+}
+
+/// `device.models`
+#[derive(Debug)]
+pub struct DeviceModels;
+
+impl Command for DeviceModels {
+    const ID: &'static str = "device.models";
+    type Params = crate::command::NoParams;
+    type Output = ModelsOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::device(
+            "Printer models",
+            "List the printer models Labely knows, with resolution, print width, density range \
+             and media. The ids go in a label's printer_model and in `?model=<id>` addresses.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, _: crate::command::NoParams) -> Result<ModelsOutput, CommandError> {
+        Ok(ModelsOutput {
+            models: ctx.services().devices.models(),
         })
     }
 }
