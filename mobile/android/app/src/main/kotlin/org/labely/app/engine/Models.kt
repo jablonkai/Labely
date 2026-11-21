@@ -54,6 +54,15 @@ data class Element(
     val fontSizePt: Double get() = raw.optDouble("font_size_pt", 10.0)
     val bold: Boolean get() = raw.optBoolean("bold")
     val align: String get() = raw.optString("align", "left")
+    val rotationDeg: Double get() = raw.optDouble("rotation_deg", 0.0)
+    val symbology: String get() = raw.optString("symbology", if (type == "code2d") "qr" else "code128")
+    val humanReadable: String get() = raw.optString("human_readable", "below")
+    val dither: String get() = raw.optString("dither", "floyd_steinberg")
+    val threshold: Int get() = raw.optInt("threshold", 128)
+    val invert: Boolean get() = raw.optBoolean("invert")
+
+    /** The string a binding lives in: a text's `text`, a barcode's or 2D code's `data`. */
+    val content: String? get() = if (type == "text") text else if (type == "barcode" || type == "code2d") data else null
 
     fun contains(xMm: Double, yMm: Double): Boolean =
         xMm in this.xMm..(this.xMm + widthMm) && yMm in this.yMm..(this.yMm + heightMm)
@@ -159,6 +168,43 @@ data class DeviceStatus(val batteryPercent: Int?, val paperPresent: Boolean?) {
     }
 }
 
+/** `device.settings`: only what the printer reports is set. */
+data class PrinterSettings(val autoOffLevel: Int?, val soundPower: Boolean?, val soundBluetooth: Boolean?) {
+    val empty: Boolean get() = autoOffLevel == null && soundPower == null && soundBluetooth == null
+
+    companion object {
+        fun from(r: JSONObject): PrinterSettings {
+            val s = r.optJSONObject("settings") ?: JSONObject()
+            return PrinterSettings(
+                autoOffLevel = if (s.isNull("auto_off_level")) null else s.optInt("auto_off_level"),
+                soundPower = if (s.isNull("sound_power")) null else s.optBoolean("sound_power"),
+                soundBluetooth = if (s.isNull("sound_bluetooth")) null else s.optBoolean("sound_bluetooth"),
+            )
+        }
+    }
+}
+
+/** `data.get` result: the data source and one page of its rows. */
+data class DataPage(
+    val attached: Boolean,
+    val origin: String?,
+    val columns: List<String>,
+    val rowCount: Int,
+    val from: Int,
+    val rows: List<List<String>>,
+) {
+    companion object {
+        fun from(r: JSONObject) = DataPage(
+            attached = r.optBoolean("attached"),
+            origin = r.optString("origin").ifEmpty { null },
+            columns = r.optJSONArray("columns").strings(),
+            rowCount = r.optInt("row_count"),
+            from = r.optInt("from", 1),
+            rows = r.optJSONArray("rows").let { a -> if (a == null) emptyList() else (0 until a.length()).map { a.optJSONArray(it).strings() } },
+        )
+    }
+}
+
 /** `doc.check` issue. */
 data class Issue(val rule: String, val severity: String, val message: String) {
     companion object {
@@ -189,6 +235,9 @@ data class HistoryEntry(
             }
     }
 }
+
+fun JSONArray?.strings(): List<String> =
+    if (this == null) emptyList() else (0 until length()).map { optString(it) }
 
 fun JSONArray?.objects(): List<JSONObject> =
     if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }

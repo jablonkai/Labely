@@ -147,6 +147,80 @@
         <item quantity="other">%1$d labels</item>
     </plurals>
 
+    <!-- Data merge -->
+    <string name="tool_data">Data</string>
+    <string name="data_empty_hint">Print one label for each row of a CSV or spreadsheet file</string>
+    <string name="data_choose">Choose a file</string>
+    <string name="data_choose_other">Choose another file</string>
+    <string name="data_remove">Remove data</string>
+    <string name="data_source">Data source</string>
+    <plurals name="data_records">
+        <item quantity="one">%1$d record</item>
+        <item quantity="other">%1$d records</item>
+    </plurals>
+    <plurals name="data_columns">
+        <item quantity="one">%1$d column</item>
+        <item quantity="other">%1$d columns</item>
+    </plurals>
+    <string name="data_bound">%1$d bound</string>
+    <string name="record_of">%1$d / %2$d</string>
+    <string name="loading">Loading…</string>
+    <string name="file_too_large">The file is larger than 32 MB</string>
+    <string name="binding">Binding</string>
+    <string name="binding_none">None</string>
+    <string name="binding_column">%1$s column</string>
+    <string name="binding_column_source">%1$s column · %2$s</string>
+    <string name="bound_subtitle">bound: %1$s column</string>
+    <string name="binding_no_data">Attach a data file first, under Data</string>
+    <string name="records">Records</string>
+    <string name="records_current">Current</string>
+    <string name="records_all">All (%1$d)</string>
+
+    <!-- Barcode -->
+    <string name="code_value">Value</string>
+    <string name="code_valid">Valid</string>
+    <string name="code_valid_check">Valid · check digit: %1$d</string>
+    <string name="code_bound">Filled from the %1$s column</string>
+    <string name="code_hr">Human-readable text</string>
+    <string name="code_hr_below_sub">Digits under the barcode</string>
+    <string name="code_hr_above_sub">Digits above the barcode</string>
+    <string name="code_hr_off">Bars only</string>
+    <string name="code_hr_position">Text position</string>
+    <string name="code_hr_below">Below</string>
+    <string name="code_hr_above">Above</string>
+
+    <!-- Image -->
+    <string name="image_dither">Dithering</string>
+    <string name="image_threshold">Threshold</string>
+    <string name="image_unreadable">This picture cannot be read</string>
+    <string name="dither_threshold">Threshold</string>
+    <string name="dither_floyd_steinberg">Floyd–Steinberg</string>
+    <string name="dither_atkinson">Atkinson</string>
+    <string name="dither_bayer">Bayer</string>
+
+    <!-- Export -->
+    <string name="export">Export</string>
+    <string name="export_share">Share</string>
+    <string name="export_resolution">Resolution</string>
+    <string name="export_dpi">%1$d dpi</string>
+    <string name="export_done">Exported</string>
+    <plurals name="export_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="zoom_percent">%1$d%%</string>
+
+    <!-- Printer settings -->
+    <string name="printer_settings">Printer settings</string>
+    <string name="printer_settings_none">This printer has no settings to change</string>
+    <string name="auto_off">Auto power-off</string>
+    <string name="auto_off_after">After %1$d minutes</string>
+    <string name="auto_off_level">Level %1$d</string>
+    <string name="sound_power">Power sound</string>
+    <string name="sound_power_sub">Beep when switched on and off</string>
+    <string name="sound_bluetooth">Bluetooth sound</string>
+    <string name="sound_bluetooth_sub">Beep when a phone connects</string>
+
     <!-- Settings -->
     <string name="settings_language">Language</string>
     <string name="settings_language_sub">English or Hungarian, set per app</string>

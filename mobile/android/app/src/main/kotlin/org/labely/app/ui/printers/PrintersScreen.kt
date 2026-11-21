@@ -20,6 +20,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,15 +38,18 @@ import org.labely.app.KnownPrinter
 import org.labely.app.R
 import org.labely.app.SIM_ADDRESS
 import org.labely.app.ble.BlePermissions
+import org.labely.app.editor.Sheet
 import org.labely.app.ui.Card
 import org.labely.app.ui.Group
 import org.labely.app.ui.IconButton
 import org.labely.app.ui.IconTile
+import org.labely.app.ui.LSwitch
 import org.labely.app.ui.LargeTitle
 import org.labely.app.ui.ListRow
 import org.labely.app.ui.RowDivider
 import org.labely.app.ui.SecondaryButton
 import org.labely.app.ui.SectionHeader
+import org.labely.app.ui.Segmented
 import org.labely.app.ui.theme.Ic
 import org.labely.app.ui.theme.Palette
 import org.labely.app.ui.theme.Type
@@ -192,10 +199,63 @@ private fun ConnectedCard(state: AppState) {
                 Modifier.weight(1f),
             )
         }
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SecondaryButton(stringResource(R.string.calibrate), { state.calibrate() }, Modifier.weight(1f), Ic.Scan, enabled = state.busy == null)
             SecondaryButton(stringResource(R.string.disconnect), { state.disconnect() }, Modifier.weight(1f), Ic.Close, enabled = state.busy == null)
         }
+        var settings by remember { mutableStateOf(false) }
+        SecondaryButton(
+            stringResource(R.string.printer_settings),
+            { settings = true },
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            Ic.Settings,
+        )
+        if (settings) PrinterSettingsSheet(state) { settings = false }
+    }
+}
+
+/**
+ * The connected printer's own settings: auto power-off, power sound and Bluetooth sound, as far
+ * as it reports them (`device.settings`), and calibration.
+ */
+@Composable
+private fun PrinterSettingsSheet(state: AppState, onDismiss: () -> Unit) {
+    val p = state.printer
+    if (p == null) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
+    LaunchedEffect(p.address) { state.loadSettings() }
+    Sheet(stringResource(R.string.printer_settings), onDismiss) {
+        val s = state.printerSettings
+        when {
+            s == null -> Text(stringResource(R.string.loading), style = Type.caption)
+            s.empty -> Text(stringResource(R.string.printer_settings_none), style = Type.caption)
+            else -> Group {
+                s.autoOffLevel?.let { level ->
+                    // NIIMBOT printers switch off after 15, 30, 45 or 60 minutes; others only name the level.
+                    val minutes = p.model?.id?.startsWith("niimbot.") == true
+                    ListRow(
+                        stringResource(R.string.auto_off),
+                        if (minutes) stringResource(R.string.auto_off_after, level * 15) else stringResource(R.string.auto_off_level, level),
+                    )
+                    Segmented(
+                        (1..4).map { if (minutes) (it * 15).toString() else it.toString() },
+                        level - 1,
+                        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                    ) { if (it + 1 != level) state.setSettings("auto_off_level" to it + 1) }
+                }
+                s.soundPower?.let { on ->
+                    if (s.autoOffLevel != null) RowDivider()
+                    ListRow(stringResource(R.string.sound_power), stringResource(R.string.sound_power_sub)) { LSwitch(on) { state.setSettings("sound_power" to it) } }
+                }
+                s.soundBluetooth?.let { on ->
+                    if (s.autoOffLevel != null || s.soundPower != null) RowDivider()
+                    ListRow(stringResource(R.string.sound_bluetooth), stringResource(R.string.sound_bluetooth_sub)) { LSwitch(on) { state.setSettings("sound_bluetooth" to it) } }
+                }
+            }
+        }
+        SecondaryButton(stringResource(R.string.calibrate), { state.calibrate() }, Modifier.fillMaxWidth(), Ic.Scan, enabled = state.busy == null)
     }
 }
 

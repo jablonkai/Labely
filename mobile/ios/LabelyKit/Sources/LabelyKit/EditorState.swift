@@ -26,16 +26,27 @@ public final class EditorState: Identifiable {
     public nonisolated var id: String { docId }
 
     public private(set) var doc: Doc?
-    public private(set) var preview: CGImage?
+    /// The print raster of the previewed record.
+    public internal(set) var preview: CGImage?
+    /// The attached data source, if any (`EditorData.swift`).
+    public internal(set) var data: DataInfo?
+    /// The previewed record, 1-based.
+    public internal(set) var record = 1
+    /// The rows loaded so far, from record 1; `loadMoreRows` pages the rest in.
+    public internal(set) var rows: [[String]] = []
+    /// File name of CSV attached as text this session: the engine keeps no origin for it.
+    var dataName: String?
+    /// True while an export is being written.
+    public internal(set) var exporting = false
     public var selectedId: Int64?
     public private(set) var issues: [CheckIssue]?
     public private(set) var progress: PrintProgress?
     /// False while an edit is not yet on disk. Edits are saved as they happen.
-    public private(set) var saved = true
+    public internal(set) var saved = true
 
     @ObservationIgnored private var printTask: Task<Void, Never>?
 
-    private var engine: Engine { app.engine }
+    var engine: Engine { app.engine }
 
     init(app: AppState, docId: String) {
         self.app = app
@@ -49,9 +60,18 @@ public final class EditorState: Identifiable {
 
     func refresh() async throws {
         let d = try Doc.from(try await engine.call("doc.get", ["doc_id": JSON(docId)]))
-        preview = try await engine.render(dpi: Self.previewDpi, docId: docId)
+        try await refreshData()
+        preview = try await render()
         doc = d
         if let id = selectedId, !d.elements.contains(where: { $0.id == id }) { selectedId = nil }
+    }
+
+    /// The print raster: of the previewed record when data is attached, else of the label.
+    func render() async throws -> CGImage {
+        if let data, data.rowCount > 0 {
+            return try await engine.preview(dpi: Self.previewDpi, docId: docId, record: record)
+        }
+        return try await engine.render(dpi: Self.previewDpi, docId: docId)
     }
 
     /// Run a document command; with `select`, the element it creates becomes the selection.
@@ -79,7 +99,7 @@ public final class EditorState: Identifiable {
     // MARK: - Adding elements
 
     /// A frame centred on the label, at most `w` × `h` mm.
-    private func frame(_ w: Double, _ h: Double) -> JSON {
+    func frame(_ w: Double, _ h: Double) -> JSON {
         guard let l = doc?.label else {
             return ["x_mm": 0, "y_mm": 0, "width_mm": JSON(w), "height_mm": JSON(h)]
         }
@@ -163,24 +183,28 @@ public final class EditorState: Identifiable {
         }
     }
 
+    /// Print the previewed record, or with `allRecords` every record of the attached data.
+    /// Without data the label prints as it is.
     @discardableResult
-    public func print(copies: Int, density: Int?) -> Task<Void, Never>? {
+    public func print(copies: Int, density: Int?, allRecords: Bool = false) -> Task<Void, Never>? {
         guard let printer = app.printer else { return nil }
         printTask?.cancel()
-        progress = PrintProgress(done: 0, total: copies, state: "queued", error: nil)
+        let records = recordsParam(all: allRecords)
+        let total = copies * (allRecords ? max(data?.rowCount ?? 1, 1) : 1)
+        progress = PrintProgress(done: 0, total: total, state: "queued", error: nil)
         let task = Task {
             await app.report {
                 do {
                     let r = try await engine.call("print.submit", [
                         "doc_id": JSON(docId), "address": JSON(printer.address), "copies": JSON(copies),
-                        "density": JSON(density), "wait": false,
+                        "density": JSON(density), "records": JSON(records), "wait": false,
                     ])
                     guard let jobId = r["job_id"]?.idString else { return }
                     // The engine pushes each change (ADR-0031); stop at the final state.
                     for await j in engine.job(jobId) {
                         let p = PrintProgress(
                             done: j["pages_done"]?.int ?? 0,
-                            total: j["pages_total"]?.int ?? copies,
+                            total: j["pages_total"]?.int ?? total,
                             state: j["state"]?.string ?? "",
                             error: j["error"]?["message"]?.string
                         )
@@ -188,7 +212,7 @@ public final class EditorState: Identifiable {
                         if p.finished { break }
                     }
                 } catch {
-                    progress = PrintProgress(done: 0, total: copies, state: "failed", error: error.localizedDescription)
+                    progress = PrintProgress(done: 0, total: total, state: "failed", error: error.localizedDescription)
                     throw error
                 }
                 await app.refreshHistory()

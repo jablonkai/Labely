@@ -10,6 +10,8 @@ struct PrintSheet: View {
     @State private var copies = 1
     @State private var density: Double?
     @State private var picking = false
+    /// With data attached: print every record, or only the previewed one.
+    @State private var all = false
 
     var body: some View {
         let app = ed.app
@@ -18,6 +20,8 @@ struct PrintSheet: View {
         let minD = model?.densityMin ?? 1
         let maxD = model?.densityMax ?? 5
         let current = Int(density ?? Double(ed.doc?.label.density ?? model?.densityDefault ?? 3))
+        let records = ed.data.map(\.rowCount) ?? 0
+        let labels = copies * (all && records > 0 ? records : 1)
         SheetBody(title: L("print"), onClose: close) {
             if let doc = ed.doc {
                 LabelImage(image: ed.preview, widthMm: doc.label.widthMm, heightMm: doc.label.heightMm)
@@ -45,6 +49,17 @@ struct PrintSheet: View {
                 if picking || printer == nil { PrinterPicker(state: app) }
 
                 ListGroup {
+                    if records > 0 {
+                        ListRow(title: L("records")) {
+                            Picker(L("records"), selection: $all) {
+                                Text(L("records_current")).tag(false)
+                                Text(L("records_all", records)).tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
+                        RowDivider()
+                    }
                     ListRow(title: L("copies")) {
                         CountStepper(
                             value: String(copies),
@@ -66,7 +81,7 @@ struct PrintSheet: View {
                     }
                 }
 
-                banner
+                banner(labels)
 
                 if let p = ed.progress, !p.finished {
                     VStack(alignment: .leading, spacing: 8) {
@@ -75,11 +90,11 @@ struct PrintSheet: View {
                     }
                 } else {
                     PrimaryButton(
-                        text: L("print_labels", copies),
+                        text: L("print_labels", labels),
                         icon: .printer,
                         enabled: printer != nil && app.busy == nil && ed.issues?.contains { $0.severity == "error" } != true
                     ) {
-                        ed.print(copies: copies, density: current)
+                        ed.print(copies: copies, density: current, allRecords: all)
                     }
                 }
             }
@@ -94,7 +109,7 @@ struct PrintSheet: View {
         onDismiss()
     }
 
-    @ViewBuilder private var banner: some View {
+    @ViewBuilder private func banner(_ labels: Int) -> some View {
         if let p = ed.progress, p.state == "done" {
             Banner(text: L("print_done"), ok: true, trailing: L("labels", p.done))
         } else if let p = ed.progress, p.finished {
@@ -103,7 +118,7 @@ struct PrintSheet: View {
             if let first = issues.first(where: { $0.severity == "error" }) ?? issues.first(where: { $0.severity == "warning" }) {
                 Banner(text: first.message, ok: false)
             } else {
-                Banner(text: L("check_ok"), ok: true, trailing: L("labels", copies))
+                Banner(text: L("check_ok"), ok: true, trailing: L("labels", labels))
             }
         }
     }

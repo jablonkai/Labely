@@ -167,8 +167,9 @@ Ideas parked until everything above is done.
     printer class and the Marklife P50.
   - C1 tube printing, speed and print mode.
 
-- **Mobile parity.** Android and iOS get these from one design pass (ADR-0029): data merge,
-  the barcode screen, export, printer settings, pinch zoom, resize handles and images.
+- **Mobile parity.** Done in code on Android and iOS (ADR-0042): data merge, the barcode
+  screen, export, printer settings, pinch zoom, resize handles and images. Nothing ran on a
+  phone or a simulator yet; the hand checks are open.
 
 - **Smarter RFID paper detection.** The tag has no size (protocol.md §10), so an unknown roll
   is linked to a paper once by hand (ADR-0020).

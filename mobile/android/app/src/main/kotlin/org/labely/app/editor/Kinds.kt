@@ -41,6 +41,20 @@ fun kindName(type: String): String = stringResource(
 @Composable
 fun elementTitle(e: Element): String = e.name ?: (e.text ?: e.data)?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() } ?: kindName(e.type)
 
+/** `EAN-13`, `QR`: the name of a code's symbology. */
+fun symbologyName(e: Element): String =
+    (if (e.type == "barcode") SYMBOLOGIES_1D else SYMBOLOGIES_2D).firstOrNull { it.first == e.symbology }?.second ?: e.symbology
+
+@Composable
+fun ditherName(dither: String): String = stringResource(
+    when (dither) {
+        "threshold" -> R.string.dither_threshold
+        "atkinson" -> R.string.dither_atkinson
+        "bayer" -> R.string.dither_bayer
+        else -> R.string.dither_floyd_steinberg
+    },
+)
+
 @Composable
 fun mediaName(media: String): String = stringResource(
     when (media) {

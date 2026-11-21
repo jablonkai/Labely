@@ -33,6 +33,22 @@
         }
       }
     },
+    "auto_off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto power-off"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatikus kikapcsolás"
+          }
+        }
+      }
+    },
     "battery": {
       "localizations": {
         "en": {
@@ -49,6 +65,54 @@
         }
       }
     },
+    "binding": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Binding"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kötés"
+          }
+        }
+      }
+    },
+    "binding_column": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ column"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ oszlop"
+          }
+        }
+      }
+    },
+    "binding_none": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nincs"
+          }
+        }
+      }
+    },
     "ble_denied": {
       "localizations": {
         "en": {
@@ -61,6 +125,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "A nyomtatók kereséséhez a Labelynek Bluetooth-engedély kell"
+          }
+        }
+      }
+    },
+    "bound_to": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bound: %1$@ column"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kötve: %1$@ oszlop"
           }
         }
       }
@@ -145,6 +225,70 @@
         }
       }
     },
+    "code_bound": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filled from the %1$@ column"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Értéke a(z) %1$@ oszlopból jön"
+          }
+        }
+      }
+    },
+    "code_valid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valid"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Érvényes"
+          }
+        }
+      }
+    },
+    "code_valid_check": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valid · check digit: %1$lld"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Érvényes · ellenőrző számjegy: %1$lld"
+          }
+        }
+      }
+    },
+    "code_value": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Value"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Érték"
+          }
+        }
+      }
+    },
     "connect": {
       "localizations": {
         "en": {
@@ -209,6 +353,54 @@
         }
       }
     },
+    "data_choose": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a file"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fájl kiválasztása"
+          }
+        }
+      }
+    },
+    "data_empty_hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach a CSV or spreadsheet file and print one label for each row."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Csatolj CSV- vagy táblázatfájlt, és minden sorából egy címke készül."
+          }
+        }
+      }
+    },
+    "data_empty_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data yet"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Még nincs adat"
+          }
+        }
+      }
+    },
     "data_hint": {
       "localizations": {
         "en": {
@@ -221,6 +413,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adat"
+          }
+        }
+      }
+    },
+    "data_remove": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove data"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adatok eltávolítása"
+          }
+        }
+      }
+    },
+    "data_replace": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace the file"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fájl cseréje"
+          }
+        }
+      }
+    },
+    "data_summary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld records · %2$lld columns · %3$lld bound"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld rekord · %2$lld oszlop · %3$lld kötve"
+          }
+        }
+      }
+    },
+    "data_unnamed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV data"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV-adatok"
           }
         }
       }
@@ -273,6 +529,22 @@
         }
       }
     },
+    "dither_threshold": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threshold"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Küszöb"
+          }
+        }
+      }
+    },
     "done": {
       "localizations": {
         "en": {
@@ -301,6 +573,118 @@
           "stringUnit": {
             "state": "translated",
             "value": "API %1$lld"
+          }
+        }
+      }
+    },
+    "export": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportálás"
+          }
+        }
+      }
+    },
+    "export_files": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld files"
+                }
+              }
+            }
+          }
+        },
+        "hu": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld fájl"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%1$lld fájl"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "export_pages": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 file · %1$lld page"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 file · %1$lld pages"
+                }
+              }
+            }
+          }
+        },
+        "hu": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 fájl · %1$lld oldal"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 fájl · %1$lld oldal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "export_resolution": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolution"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Felbontás"
           }
         }
       }
@@ -621,6 +1005,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "Milyen címkét készítünk ma?"
+          }
+        }
+      }
+    },
+    "human_readable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Human-readable text"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Olvasható szöveg"
+          }
+        }
+      }
+    },
+    "human_readable_sub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digits with the barcode"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Számok a vonalkód mellett"
+          }
+        }
+      }
+    },
+    "image_conversion": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversion"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Átalakítás"
+          }
+        }
+      }
+    },
+    "image_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The picture could not be loaded"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A képet nem sikerült betölteni"
+          }
+        }
+      }
+    },
+    "image_invert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invert"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invertálás"
           }
         }
       }
@@ -1769,6 +2233,22 @@
         }
       }
     },
+    "minutes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld min"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld perc"
+          }
+        }
+      }
+    },
     "new_label": {
       "localizations": {
         "en": {
@@ -1977,6 +2457,38 @@
         }
       }
     },
+    "position_above": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Above"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Felül"
+          }
+        }
+      }
+    },
+    "position_below": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Below"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alul"
+          }
+        }
+      }
+    },
     "print": {
       "localizations": {
         "en": {
@@ -2077,6 +2589,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "A nyomtató kapcsolata megszakadt"
+          }
+        }
+      }
+    },
+    "printer_settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beállítások"
+          }
+        }
+      }
+    },
+    "printer_settings_none": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This printer reports no settings"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ez a nyomtató nem jelez beállításokat"
           }
         }
       }
@@ -2189,6 +2733,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nyomtatás: %1$lld / %2$lld…"
+          }
+        }
+      }
+    },
+    "records": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Records"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekordok"
+          }
+        }
+      }
+    },
+    "records_all": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All (%1$lld)"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mind (%1$lld)"
+          }
+        }
+      }
+    },
+    "records_current": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktuális"
           }
         }
       }
@@ -2401,6 +2993,22 @@
         }
       }
     },
+    "share": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Megosztás"
+          }
+        }
+      }
+    },
     "simulator": {
       "localizations": {
         "en": {
@@ -2429,6 +3037,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "Méret"
+          }
+        }
+      }
+    },
+    "sound_bluetooth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth sound"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth-hang"
+          }
+        }
+      }
+    },
+    "sound_bluetooth_sub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beep when a device connects"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hangjelzés csatlakozáskor"
+          }
+        }
+      }
+    },
+    "sound_power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power sound"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekapcsolási hang"
+          }
+        }
+      }
+    },
+    "sound_power_sub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beep when switching on and off"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hangjelzés be- és kikapcsoláskor"
           }
         }
       }
@@ -2809,6 +3481,38 @@
         }
       }
     },
+    "text_position": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text position"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szöveg helye"
+          }
+        }
+      }
+    },
+    "tool_data": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adatok"
+          }
+        }
+      }
+    },
     "tool_insert": {
       "localizations": {
         "en": {
@@ -2933,6 +3637,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sz"
+          }
+        }
+      }
+    },
+    "zoom_fit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fit to screen"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Képernyőhöz igazítás"
           }
         }
       }

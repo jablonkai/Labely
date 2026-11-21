@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +52,7 @@ import org.labely.app.ui.NumberField
 import org.labely.app.ui.PrimaryButton
 import org.labely.app.ui.RowDivider
 import org.labely.app.ui.SecondaryButton
+import org.labely.app.ui.Segmented
 import org.labely.app.ui.SheetHeader
 import org.labely.app.ui.mm
 import org.labely.app.ui.sizeText
@@ -82,7 +82,7 @@ fun Sheet(title: String, onDismiss: () -> Unit, content: @Composable ColumnScope
 }
 
 @Composable
-fun InsertSheet(ed: EditorState, onDismiss: () -> Unit) {
+fun InsertSheet(ed: EditorState, onImage: () -> Unit, onDismiss: () -> Unit) {
     val text = stringResource(R.string.new_text)
     val items = listOf<Triple<Ic, String, () -> Unit>>(
         Triple(Ic.Text, stringResource(R.string.kind_text)) { ed.addText(text) },
@@ -91,6 +91,7 @@ fun InsertSheet(ed: EditorState, onDismiss: () -> Unit) {
         Triple(Ic.Rect, stringResource(R.string.kind_rect)) { ed.addRect() },
         Triple(Ic.Ellipse, stringResource(R.string.kind_ellipse)) { ed.addEllipse() },
         Triple(Ic.Line, stringResource(R.string.kind_line)) { ed.addLine() },
+        Triple(Ic.Image, stringResource(R.string.kind_image), onImage),
     )
     Sheet(stringResource(R.string.tool_insert), onDismiss) {
         items.chunked(3).forEach { row ->
@@ -208,21 +209,6 @@ fun LabelSheet(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SecondaryButton(stringResource(R.string.cancel), onDismiss, Modifier.weight(1f).height(52.dp))
             PrimaryButton(confirm, { onConfirm(w, h, media) }, Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.clip(RoundedCornerShape(10.dp)).background(Palette.bg).padding(3.dp)) {
-        options.forEachIndexed { i, o ->
-            val on = i == selected
-            Text(
-                o,
-                style = Type.bodyStrong.copy(fontSize = 14.sp, color = if (on) Palette.text else Palette.muted, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) Palette.surface else Palette.bg)
-                    .clickable { onSelect(i) }.padding(horizontal = 14.dp, vertical = 7.dp),
-            )
         }
     }
 }
