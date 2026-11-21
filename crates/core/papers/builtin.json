@@ -327,5 +327,6 @@
    "height_mm": 40,
    "media": "continuous"
   }
- ]
+ ],
+ "rfid": {}
 }

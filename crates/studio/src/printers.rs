@@ -252,7 +252,7 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
         && menu::connect(app, &a)
     {
         app.ui.printer = Some(a.clone());
-        crate::paper::detect(app, Some(&a));
+        crate::paper::detect_and_apply(app, Some(&a));
     }
     ui.add_space(6.0);
     // Manual address: a dashed row with a field and Connect.
@@ -538,6 +538,20 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
         },
     );
     app.ui.allow_agent_print = allow;
+    let mut auto = app.prefs.auto_apply_paper;
+    row(
+        ui,
+        &app.i18n.t("action-auto-apply-paper"),
+        &app.i18n.t("action-auto-apply-paper-hint"),
+        &mut |ui| {
+            crate::inspector::switch(ui, &mut auto)
+                .on_hover_text(app.i18n.t("action-auto-apply-paper"));
+        },
+    );
+    if auto != app.prefs.auto_apply_paper {
+        app.prefs.auto_apply_paper = auto;
+        app.save_prefs();
+    }
     let settings = app.i18n.t("action-printer-settings");
     let mut open = false;
     row(

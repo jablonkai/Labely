@@ -1062,7 +1062,7 @@ pub(crate) fn printers_panel(app: &mut LabelyApp, ui: &mut Ui) {
                     if ui.small_button(app.i18n.t("action-connect")).clicked()
                         && menu::connect(app, &address)
                     {
-                        crate::paper::detect(app, Some(&address));
+                        crate::paper::detect_and_apply(app, Some(&address));
                     }
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                         ui.add(

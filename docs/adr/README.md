@@ -42,3 +42,4 @@
 | [0038](0038-desktop-packaging.md) | Desktop packaging (Phase 6.4) | proposed |
 | [0039](0039-store-builds-and-releases.md) | Store builds and releases (Phase 6.5) | proposed |
 | [0040](0040-phase-6-close-out.md) | Phase 6 close-out | proposed |
+| [0041](0041-rfid-paper-auto-apply.md) | Automatic use of a recognised paper, bundled RFID table | proposed |

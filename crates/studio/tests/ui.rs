@@ -624,6 +624,58 @@ fn paper_library_and_printer_settings() {
     );
 }
 
+#[test]
+fn detected_paper_is_applied_only_when_the_setting_is_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            paper_file: Some(dir.path().join("papers.json")),
+            ..options()
+        },
+    );
+    assert!(
+        app.run("doc.new", json!({"width_mm": 40, "height_mm": 30}))
+            .ok
+    );
+    let env = app.run("device.connect", json!({"address": "sim:niimbot.b21_pro"}));
+    assert!(env.ok, "{:?}", env.error);
+    let env = app.run("paper.detect", json!({}));
+    let barcode = env.result.unwrap()["barcode"].as_str().unwrap().to_owned();
+    assert!(
+        app.run(
+            "paper.link",
+            json!({"barcode": barcode, "id": "std:25x25-round"})
+        )
+        .ok
+    );
+    let width = |app: &LabelyApp| app.session.doc(None).unwrap().label.width_mm;
+
+    // Off (the default): the paper is offered, the label stays.
+    labely_studio::paper::detect_and_apply(&mut app, None);
+    assert_eq!(app.ui.detected.as_ref().unwrap()["matches_label"], false);
+    assert_eq!(width(&app), 40.0);
+
+    // On: applied, as one undo step.
+    app.prefs.auto_apply_paper = true;
+    labely_studio::paper::detect_and_apply(&mut app, None);
+    assert_eq!(width(&app), 25.0);
+    assert_eq!(app.ui.detected.as_ref().unwrap()["matches_label"], true);
+    assert!(app.run("history.undo", json!({})).ok);
+    assert_eq!(width(&app), 40.0);
+
+    // The switch in the Print menu is saved with the preferences.
+    app.prefs.auto_apply_paper = false;
+    let mut h = harness(app);
+    h.run();
+    h.get_all_by_label("Print").next().unwrap().click();
+    h.run();
+    h.get_by_label("Use the detected paper automatically")
+        .click();
+    h.run();
+    assert!(h.state().prefs.auto_apply_paper);
+}
+
 fn new_doc(h: &mut Harness<'_, LabelyApp>, name: &str) {
     let env = h.state_mut().run(
         "doc.new",

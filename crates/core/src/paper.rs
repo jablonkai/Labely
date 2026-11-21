@@ -53,19 +53,40 @@ impl Paper {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 struct BuiltinFile {
     papers: Vec<Paper>,
+    /// RFID barcode → bundled paper id, read from rolls we own (ADR-0041).
+    #[serde(default)]
+    rfid: BTreeMap<String, String>,
+}
+
+fn builtin_file() -> &'static BuiltinFile {
+    static FILE: std::sync::OnceLock<BuiltinFile> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        serde_json::from_str(include_str!("../papers/builtin.json")).unwrap_or_default()
+    })
 }
 
 /// The bundled papers.
 pub fn builtin() -> &'static [Paper] {
-    static PAPERS: std::sync::OnceLock<Vec<Paper>> = std::sync::OnceLock::new();
-    PAPERS.get_or_init(|| {
-        serde_json::from_str::<BuiltinFile>(include_str!("../papers/builtin.json"))
-            .map(|f| f.papers)
-            .unwrap_or_default()
-    })
+    &builtin_file().papers
+}
+
+/// The bundled RFID barcode → paper id table. A user link for the same barcode wins.
+pub fn builtin_links() -> &'static BTreeMap<String, String> {
+    &builtin_file().rfid
+}
+
+/// The paper id of `barcode`: the user's link first, then the bundled table.
+fn linked_id<'a>(
+    user: &'a BTreeMap<String, String>,
+    bundled: &'a BTreeMap<String, String>,
+    barcode: &str,
+) -> Option<&'a str> {
+    user.get(barcode)
+        .or_else(|| bundled.get(barcode))
+        .map(String::as_str)
 }
 
 /// The user's papers and barcode links (the paper file).
@@ -127,18 +148,25 @@ impl UserPapers {
         self.all().find(|p| p.id == id)
     }
 
-    /// The paper linked to an RFID `barcode`, if any.
+    /// The paper linked to an RFID `barcode`, if any: the user's link, else the bundled table.
     pub fn by_barcode(&self, barcode: &str) -> Option<&Paper> {
-        self.links.get(barcode).and_then(|id| self.get(id))
+        linked_id(&self.links, builtin_links(), barcode).and_then(|id| self.get(id))
     }
 
-    /// Barcodes linked to paper `id`.
+    /// Barcodes linked to paper `id`, by the user or by the bundled table.
     pub fn barcodes_of(&self, id: &str) -> Vec<String> {
-        self.links
+        let bundled = builtin_links()
             .iter()
+            .filter(|(b, _)| !self.links.contains_key(*b));
+        let mut out: Vec<String> = self
+            .links
+            .iter()
+            .chain(bundled)
             .filter(|(_, p)| *p == id)
             .map(|(b, _)| b.clone())
-            .collect()
+            .collect();
+        out.sort_unstable();
+        out
     }
 
     /// A free `my:` id derived from `name`.
@@ -187,6 +215,24 @@ mod tests {
             assert!(p.id.starts_with(BUILTIN_PREFIX), "{}", p.id);
             assert!(p.width_mm > 0.0 && p.height_mm > 0.0, "{}", p.id);
         }
+    }
+
+    #[test]
+    fn bundled_links_point_at_bundled_papers() {
+        for (barcode, id) in builtin_links() {
+            assert!(!barcode.is_empty());
+            assert!(builtin().iter().any(|p| &p.id == id), "{barcode} -> {id}");
+        }
+    }
+
+    #[test]
+    fn user_link_wins_over_bundled() {
+        let bundled = BTreeMap::from([("111".to_owned(), "std:50x30".to_owned())]);
+        let mut user = BTreeMap::new();
+        assert_eq!(linked_id(&user, &bundled, "111"), Some("std:50x30"));
+        assert_eq!(linked_id(&user, &bundled, "222"), None);
+        user.insert("111".to_owned(), "std:40x30".to_owned());
+        assert_eq!(linked_id(&user, &bundled, "111"), Some("std:40x30"));
     }
 
     #[test]

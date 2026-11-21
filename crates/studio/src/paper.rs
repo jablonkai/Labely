@@ -278,6 +278,32 @@ pub fn detect(app: &mut LabelyApp, address: Option<&str>) {
     app.ui.detected = env.result.filter(|r| r["rfid"] == true);
 }
 
+/// [`detect`], then apply a recognised paper that differs from the label when the user turned
+/// "Use the detected paper automatically" on (ADR-0041). The edit is one undo step. Called
+/// where a roll is read on purpose: on connect and from Print → Detect paper.
+pub fn detect_and_apply(app: &mut LabelyApp, address: Option<&str>) {
+    detect(app, address);
+    if !app.prefs.auto_apply_paper {
+        return;
+    }
+    let Some(d) = app.ui.detected.clone() else {
+        return;
+    };
+    let (Some(id), false) = (d["paper"]["id"].as_str(), d["matches_label"] != false) else {
+        return;
+    };
+    if app.run_reporting("paper.apply", json!({"id": id})).ok {
+        app.ui.fit_pending = true;
+        detect(app, d["address"].as_str());
+        let name = d["paper"]["name"].as_str().unwrap_or(id);
+        app.set_status(
+            app.i18n
+                .t_args("status-paper-applied", &[("name", Arg::Str(name))]),
+            false,
+        );
+    }
+}
+
 /// Loaded-paper banner for the printers panel: offers to use a linked paper that differs
 /// from the label, or to link an unknown barcode.
 pub fn banner(app: &mut LabelyApp, ui: &mut Ui) {

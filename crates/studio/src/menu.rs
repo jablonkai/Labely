@@ -330,6 +330,16 @@ fn extra_items(app: &mut LabelyApp, ui: &mut Ui, menu: &str) {
                 &mut app.ui.allow_agent_print,
                 app.i18n.t("action-allow-agent-print"),
             );
+            if ui
+                .checkbox(
+                    &mut app.prefs.auto_apply_paper,
+                    app.i18n.t("action-auto-apply-paper"),
+                )
+                .on_hover_text(app.i18n.t("action-auto-apply-paper-hint"))
+                .changed()
+            {
+                app.save_prefs();
+            }
         }
         _ => {}
     }
@@ -616,7 +626,7 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
         "paper.list" => crate::paper::open_library(app, None),
         "paper.detect" => {
             app.ui.show_printers = true;
-            crate::paper::detect(app, None);
+            crate::paper::detect_and_apply(app, None);
             if app.ui.detected.is_none() {
                 app.set_status(app.i18n.t("status-no-rfid"), false);
             }
