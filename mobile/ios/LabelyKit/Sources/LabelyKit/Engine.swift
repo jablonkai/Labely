@@ -22,6 +22,9 @@ public struct CommandFailure: Error, LocalizedError, Equatable {
 public final class Engine: Sendable {
     public static let finished: Set<String> = ["done", "failed", "cancelled"]
 
+    /// The engine's data directory: with no file roots, the only place its commands may read
+    /// and write files.
+    public let dataDir: URL
     private let raw: LabelyEngine
     private let queue = DispatchQueue(label: "labely-engine", qos: .userInitiated)
     private let jobs = JobBoard()
@@ -32,6 +35,7 @@ public final class Engine: Sendable {
     private let deviceSink: AsyncStream<JSON>.Continuation
 
     public init(dataDir: String, ble: NativeBle?) {
+        self.dataDir = URL(fileURLWithPath: dataDir, isDirectory: true)
         raw = LabelyEngine(config: EngineConfig(dataDir: dataDir, fileRoots: [], allowPrint: true), ble: ble)
         (devices, deviceSink) = AsyncStream.makeStream(of: JSON.self, bufferingPolicy: .bufferingNewest(64))
         raw.setEvents(listener: Listener(jobs: jobs, devices: deviceSink))
@@ -60,6 +64,19 @@ public final class Engine: Sendable {
                 throw CommandFailure(code: code, message: detail, hint: nil)
             }
         }
+        return try Self.image(png)
+    }
+
+    /// The 1-bit print raster of page 0 with the bindings filled from `record` (1-based).
+    public func preview(dpi: Int, docId: String, record: Int) async throws -> CGImage {
+        let r = try await call("render.preview", ["doc_id": JSON(docId), "dpi": JSON(dpi), "record": JSON(record)])
+        guard let png = r["png_base64"]?.string.flatMap({ Data(base64Encoded: $0) }) else {
+            throw CommandFailure(code: "internal", message: "render.preview returned no image", hint: nil)
+        }
+        return try Self.image(png)
+    }
+
+    static func image(_ png: Data) throws -> CGImage {
         guard let src = CGImageSourceCreateWithData(png as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(src, 0, nil)
         else { throw CommandFailure(code: "internal", message: "cannot decode the label preview", hint: nil) }

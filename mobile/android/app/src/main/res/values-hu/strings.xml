@@ -147,6 +147,80 @@
         <item quantity="other">%1$d címke</item>
     </plurals>
 
+    <!-- Data merge -->
+    <string name="tool_data">Adatok</string>
+    <string name="data_empty_hint">Nyomtass egy címkét egy CSV- vagy táblázatfájl minden sorából</string>
+    <string name="data_choose">Fájl kiválasztása</string>
+    <string name="data_choose_other">Másik fájl</string>
+    <string name="data_remove">Adatok eltávolítása</string>
+    <string name="data_source">Adatforrás</string>
+    <plurals name="data_records">
+        <item quantity="one">%1$d rekord</item>
+        <item quantity="other">%1$d rekord</item>
+    </plurals>
+    <plurals name="data_columns">
+        <item quantity="one">%1$d oszlop</item>
+        <item quantity="other">%1$d oszlop</item>
+    </plurals>
+    <string name="data_bound">%1$d kötve</string>
+    <string name="record_of">%1$d / %2$d</string>
+    <string name="loading">Betöltés…</string>
+    <string name="file_too_large">A fájl nagyobb, mint 32 MB</string>
+    <string name="binding">Kötés</string>
+    <string name="binding_none">Nincs</string>
+    <string name="binding_column">%1$s oszlop</string>
+    <string name="binding_column_source">%1$s oszlop · %2$s</string>
+    <string name="bound_subtitle">kötve: %1$s oszlop</string>
+    <string name="binding_no_data">Előbb csatolj adatfájlt az Adatok alatt</string>
+    <string name="records">Rekordok</string>
+    <string name="records_current">Aktuális</string>
+    <string name="records_all">Mind (%1$d)</string>
+
+    <!-- Barcode -->
+    <string name="code_value">Érték</string>
+    <string name="code_valid">Érvényes</string>
+    <string name="code_valid_check">Érvényes · ellenőrző számjegy: %1$d</string>
+    <string name="code_bound">A(z) %1$s oszlopból töltődik</string>
+    <string name="code_hr">Olvasható szöveg</string>
+    <string name="code_hr_below_sub">Számok a vonalkód alatt</string>
+    <string name="code_hr_above_sub">Számok a vonalkód felett</string>
+    <string name="code_hr_off">Csak a vonalak</string>
+    <string name="code_hr_position">Szöveg helye</string>
+    <string name="code_hr_below">Alul</string>
+    <string name="code_hr_above">Felül</string>
+
+    <!-- Image -->
+    <string name="image_dither">Árnyalás</string>
+    <string name="image_threshold">Küszöb</string>
+    <string name="image_unreadable">A kép nem olvasható</string>
+    <string name="dither_threshold">Küszöb</string>
+    <string name="dither_floyd_steinberg">Floyd–Steinberg</string>
+    <string name="dither_atkinson">Atkinson</string>
+    <string name="dither_bayer">Bayer</string>
+
+    <!-- Export -->
+    <string name="export">Exportálás</string>
+    <string name="export_share">Megosztás</string>
+    <string name="export_resolution">Felbontás</string>
+    <string name="export_dpi">%1$d dpi</string>
+    <string name="export_done">Exportálva</string>
+    <plurals name="export_files">
+        <item quantity="one">%1$d fájl</item>
+        <item quantity="other">%1$d fájl</item>
+    </plurals>
+    <string name="zoom_percent">%1$d%%</string>
+
+    <!-- Printer settings -->
+    <string name="printer_settings">A nyomtató beállításai</string>
+    <string name="printer_settings_none">Ennek a nyomtatónak nincs állítható beállítása</string>
+    <string name="auto_off">Automatikus kikapcsolás</string>
+    <string name="auto_off_after">%1$d perc után</string>
+    <string name="auto_off_level">%1$d. szint</string>
+    <string name="sound_power">Bekapcsolási hang</string>
+    <string name="sound_power_sub">Hangjelzés be- és kikapcsoláskor</string>
+    <string name="sound_bluetooth">Bluetooth-hang</string>
+    <string name="sound_bluetooth_sub">Hangjelzés, amikor egy telefon csatlakozik</string>
+
     <!-- Settings -->
     <string name="settings_language">Nyelv</string>
     <string name="settings_language_sub">Magyar vagy angol, alkalmazásonként</string>

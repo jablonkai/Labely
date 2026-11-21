@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,6 +27,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -294,4 +298,41 @@ fun Banner(text: String, ok: Boolean, trailing: String? = null) {
 fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Column(modifier.fillMaxWidth().clip(shape).background(Palette.surface).border(BorderStroke(1.dp, Palette.border), shape), content = content)
+}
+
+/** Segmented control. With [scroll] it scrolls sideways when the options do not fit. */
+@Composable
+fun Segmented(options: List<String>, selected: Int, modifier: Modifier = Modifier, scroll: Boolean = false, onSelect: (Int) -> Unit) {
+    Row(
+        modifier.clip(RoundedCornerShape(10.dp)).background(Palette.bg)
+            .then(if (scroll) Modifier.horizontalScroll(rememberScrollState()) else Modifier).padding(3.dp),
+    ) {
+        options.forEachIndexed { i, o ->
+            val on = i == selected
+            Text(
+                o,
+                style = Type.bodyStrong.copy(fontSize = 14.sp, color = if (on) Palette.text else Palette.muted, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
+                maxLines = 1,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) Palette.surface else Palette.bg)
+                    .clickable { onSelect(i) }.padding(horizontal = 14.dp, vertical = 7.dp),
+            )
+        }
+    }
+}
+
+/** On/off switch in the design's colours. */
+@Composable
+fun LSwitch(on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    Switch(
+        on,
+        onChange,
+        enabled = enabled,
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = Palette.primary,
+            uncheckedThumbColor = Color.White,
+            uncheckedTrackColor = Palette.border,
+            uncheckedBorderColor = Palette.border,
+        ),
+    )
 }

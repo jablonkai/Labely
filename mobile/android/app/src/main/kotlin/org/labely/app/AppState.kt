@@ -24,6 +24,8 @@ import org.labely.app.engine.Device
 import org.labely.app.engine.DeviceStatus
 import org.labely.app.engine.Engine
 import org.labely.app.engine.HistoryEntry
+import org.labely.app.engine.PrinterSettings
+import org.labely.app.engine.json
 import org.labely.app.engine.Template
 import org.labely.app.engine.objects
 import org.labely.app.ui.templates.displayName
@@ -53,6 +55,10 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
     private val prefs = context.getSharedPreferences("labely", Context.MODE_PRIVATE)
     /** Where labels are saved; AppFunctions address labels by their file name here. */
     val labelsDir = File(context.filesDir, "labels").apply { mkdirs() }
+
+    /** Inside the engine's data dir, the only place it reads and writes: picked spreadsheets and exports. */
+    val importsDir = File(context.filesDir, "imports")
+    val exportsDir = File(context.filesDir, "exports")
     val debug = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     var tab by mutableStateOf(Tab.Home)
@@ -70,6 +76,10 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
     var printer by mutableStateOf<Device?>(null)
         private set
     var printerStatus by mutableStateOf<DeviceStatus?>(null)
+        private set
+
+    /** What the connected printer reports of its settings; null until read. */
+    var printerSettings by mutableStateOf<PrinterSettings?>(null)
         private set
 
     /** Address being connected, or [SCANNING] while scanning. */
@@ -284,6 +294,21 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
                 printerStatus = null
             }
         }
+    }
+
+    /** Read the connected printer's settings (`device.settings`). */
+    suspend fun loadSettings() {
+        printerSettings = null
+        val p = printer ?: return
+        report { printerSettings = PrinterSettings.from(engine.call("device.settings", "address" to p.address)) }
+    }
+
+    /** Change settings, e.g. `"auto_off_level" to 2`; the printer's answer becomes [printerSettings]. */
+    fun setSettings(vararg change: Pair<String, Any?>) = scope.launch { report { setSettingsNow(*change) } }
+
+    suspend fun setSettingsNow(vararg change: Pair<String, Any?>) {
+        val p = printer ?: return
+        printerSettings = PrinterSettings.from(engine.call("device.set_settings", json("address" to p.address, *change)))
     }
 
     fun calibrate() = scope.launch {

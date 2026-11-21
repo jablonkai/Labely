@@ -1,41 +1,59 @@
 import LabelyKit
+import PhotosUI
 import SwiftUI
 
 /// Insert an element; it is centred on the label and selected.
 struct InsertSheet: View {
     let ed: EditorState
     let onDismiss: () -> Void
+    /// A barcode or 2D code is being added: the editor opens its sheet when it is there.
+    let onCode: (Task<Void, Never>) -> Void
+    @State private var picking = false
+    @State private var photo: PhotosPickerItem?
 
     var body: some View {
         let items: [(Icon, String, () -> Void)] = [
-            (.text, L("kind_text"), { ed.addText(L("new_text")) }),
-            (.barcode, L("kind_barcode"), { ed.addBarcode() }),
-            (.qr, L("kind_code2d"), { ed.addQr() }),
-            (.rect, L("kind_rect"), { ed.addRect() }),
-            (.ellipse, L("kind_ellipse"), { ed.addEllipse() }),
-            (.line, L("kind_line"), { ed.addLine() }),
+            (.text, L("kind_text"), { ed.addText(L("new_text")); onDismiss() }),
+            (.barcode, L("kind_barcode"), { onCode(ed.addBarcode()) }),
+            (.qr, L("kind_code2d"), { onCode(ed.addQr()) }),
+            (.rect, L("kind_rect"), { ed.addRect(); onDismiss() }),
+            (.ellipse, L("kind_ellipse"), { ed.addEllipse(); onDismiss() }),
+            (.line, L("kind_line"), { ed.addLine(); onDismiss() }),
         ]
         SheetBody(title: L("tool_insert"), onClose: onDismiss) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
                 ForEach(items.indices, id: \.self) { i in
                     let (icon, label, add) = items[i]
-                    Button {
-                        add()
-                        onDismiss()
-                    } label: {
-                        VStack(spacing: 8) {
-                            LIcon(icon, Palette.primary, size: 28)
-                            Text(label).style(.bodyStrong.with(size: 14)).lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 96)
-                        .background(Palette.bg, in: RoundedRectangle(cornerRadius: 16))
-                        .contentShape(RoundedRectangle(cornerRadius: 16))
-                    }
-                    .buttonStyle(.plain)
+                    Button(action: add) { tile(icon, label) }.buttonStyle(.plain)
                 }
+                // The system photo picker; it needs no photo library permission.
+                Button { picking = true } label: { tile(.image, L("kind_image")) }.buttonStyle(.plain)
             }
         }
+        .photosPicker(isPresented: $picking, selection: $photo, matching: .images)
+        .onChange(of: photo) {
+            guard let item = photo else { return }
+            photo = nil
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    ed.addImage(data)
+                } else {
+                    ed.app.message = .text(L("image_failed"))
+                }
+                onDismiss()
+            }
+        }
+    }
+
+    private func tile(_ icon: Icon, _ label: String) -> some View {
+        VStack(spacing: 8) {
+            LIcon(icon, Palette.primary, size: 28)
+            Text(label).style(.bodyStrong.with(size: 14)).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 96)
+        .background(Palette.bg, in: RoundedRectangle(cornerRadius: 16))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 

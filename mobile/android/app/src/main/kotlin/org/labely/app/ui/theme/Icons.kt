@@ -58,6 +58,11 @@ enum class Ic(val path: String) {
     Open("M3 7V5h6l2 2h10v12H3z M3 11h18"),
     Label("M3 6h18v12H3z M6 9h12v6H6z"),
     Folder("M3 6h6l2 2h10v11H3z"),
+    Download("M12 4v12 M7 11l5 5 5-5 M4 20h16"),
+    Upload("M12 16V4 M7 9l5-5 5 5 M4 20h16"),
+    File("M6 3h8l4 4v14H6z M14 3v4h4"),
+    Link("M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1 M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"),
+    Contrast("M12 3a9 9 0 1 0 0.01 0 M12 3v18 M12 8h7.5 M12 12h9 M12 16h7.5"),
     Info("M12 3a9 9 0 1 0 0.01 0 M12 11v6 M12 7.5h.01"),
     ;
 
