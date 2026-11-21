@@ -108,7 +108,7 @@ pub fn queue_section(app: &mut LabelyApp, ui: &mut Ui) {
                 j.id, j.doc_name, j.pages_done, j.pages_total
             );
             let label = if j.state == JobState::Failed {
-                ui.colored_label(Color32::from_rgb(200, 60, 60), text)
+                ui.colored_label(theme::pal().red, text)
             } else {
                 ui.label(text)
             };
@@ -182,16 +182,19 @@ fn active_banner(app: &mut LabelyApp, ui: &mut Ui) {
     };
     let paused = app.session.jobs().is_paused();
     egui::Frame::new()
-        .fill(theme::PRIMARY_TINT)
-        .stroke(Stroke::new(1.0, theme::PRIMARY_TINT2))
+        .fill(theme::pal().primary_tint)
+        .stroke(Stroke::new(1.0, theme::pal().primary_tint2))
         .corner_radius(CornerRadius::same(theme::RADIUS_LG))
         .inner_margin(Margin::same(14))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), egui::Sense::hover());
-                ui.painter()
-                    .rect_filled(r, CornerRadius::same(theme::RADIUS), theme::PRIMARY);
+                ui.painter().rect_filled(
+                    r,
+                    CornerRadius::same(theme::RADIUS),
+                    theme::pal().primary,
+                );
                 icons::paint(ui.painter(), r.shrink(10.0), "printer", Color32::WHITE, 1.6);
                 ui.vertical(|ui| {
                     ui.set_width(ui.available_width() - 230.0);
@@ -199,7 +202,11 @@ fn active_banner(app: &mut LabelyApp, ui: &mut Ui) {
                         ui.label(
                             RichText::new(app.i18n.t(state_key(j.state))).font(theme::bold(14.0)),
                         );
-                        ui.label(RichText::new(&j.doc_name).size(12.5).color(theme::TEXT2));
+                        ui.label(
+                            RichText::new(&j.doc_name)
+                                .size(12.5)
+                                .color(theme::pal().text2),
+                        );
                         theme::trailing(ui, |ui| {
                             ui.label(
                                 RichText::new(app.i18n.t_args(
@@ -221,7 +228,7 @@ fn active_banner(app: &mut LabelyApp, ui: &mut Ui) {
                     ui.add(
                         egui::ProgressBar::new(f)
                             .desired_height(5.0)
-                            .fill(theme::PRIMARY)
+                            .fill(theme::pal().primary)
                             .corner_radius(CornerRadius::same(3)),
                     );
                 });
@@ -229,7 +236,8 @@ fn active_banner(app: &mut LabelyApp, ui: &mut Ui) {
                     if ui
                         .add(
                             egui::Button::new(
-                                RichText::new(app.i18n.t("action-cancel")).color(theme::PRIMARY),
+                                RichText::new(app.i18n.t("action-cancel"))
+                                    .color(theme::pal().primary),
                             )
                             .frame(false),
                         )
@@ -242,7 +250,7 @@ fn active_banner(app: &mut LabelyApp, ui: &mut Ui) {
                     } else {
                         ("action-pause", "job.pause", "pause")
                     };
-                    if icons::text_button(ui, icon, &app.i18n.t(key), None, theme::TEXT, None)
+                    if icons::text_button(ui, icon, &app.i18n.t(key), None, theme::pal().text, None)
                         .clicked()
                     {
                         app.run_reporting(cmd, json!({}));
@@ -266,9 +274,9 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t("history-title"))
                     .font(theme::bold(25.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
-            ui.label(RichText::new(app.i18n.t("history-subtitle")).color(theme::MUTED));
+            ui.label(RichText::new(app.i18n.t("history-subtitle")).color(theme::pal().muted));
         });
         theme::trailing(ui, |ui| {
             if !view.entries.is_empty()
@@ -318,7 +326,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                     ],
                 ))
                 .size(12.0)
-                .color(theme::MUTED),
+                .color(theme::pal().muted),
             );
         });
     });
@@ -329,7 +337,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
         if shown.is_empty() {
             ui.add_space(24.0);
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new(app.i18n.t("history-empty")).color(theme::MUTED));
+                ui.label(RichText::new(app.i18n.t("history-empty")).color(theme::pal().muted));
             });
             ui.add_space(24.0);
             return;
@@ -350,7 +358,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                 egui::Align2::LEFT_CENTER,
                 app.i18n.t(k),
                 theme::regular(11.5),
-                theme::MUTED,
+                theme::pal().muted,
             );
         }
         egui::ScrollArea::vertical()
@@ -363,7 +371,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                     let (rect, _) = ui.allocate_exact_size(vec2(w, 54.0), egui::Sense::hover());
                     ui.painter().line_segment(
                         [rect.left_top(), rect.right_top()],
-                        Stroke::new(1.0, theme::BORDER_SOFT),
+                        Stroke::new(1.0, theme::pal().border_soft),
                     );
                     let mut row = ui.new_child(
                         egui::UiBuilder::new()
@@ -376,9 +384,15 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                     row.painter().rect_filled(
                         ir,
                         CornerRadius::same(theme::RADIUS),
-                        theme::PRIMARY_TINT,
+                        theme::pal().primary_tint,
                     );
-                    icons::paint(row.painter(), ir.shrink(9.0), "file", theme::PRIMARY, 1.5);
+                    icons::paint(
+                        row.painter(),
+                        ir.shrink(9.0),
+                        "file",
+                        theme::pal().primary,
+                        1.5,
+                    );
                     row.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         ui.set_width(x(cols[1]) - ir.right() - 24.0);
@@ -390,7 +404,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                             .truncate(),
                         );
                         let model = e["model"].as_str().unwrap_or("");
-                        ui.label(RichText::new(model).size(11.5).color(theme::MUTED));
+                        ui.label(RichText::new(model).size(11.5).color(theme::pal().muted));
                     });
                     let p = row.painter().clone();
                     let text = |c: f32, t: String, bold: bool| {
@@ -403,7 +417,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                             } else {
                                 theme::regular(12.5)
                             },
-                            theme::TEXT,
+                            theme::pal().text,
                         );
                     };
                     text(
@@ -437,27 +451,27 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                             &mut badge_ui,
                             "warn",
                             &app.i18n.t("job-failed"),
-                            theme::RED,
-                            Color32::from_rgb(0xFF, 0xF0, 0xF0),
+                            theme::pal().red,
+                            theme::pal().red_tint,
                         ),
                         "cancelled" => badge(
                             &mut badge_ui,
                             "pause",
                             &app.i18n.t("job-cancelled"),
-                            theme::AMBER,
-                            theme::AMBER_TINT,
+                            theme::pal().amber,
+                            theme::pal().amber_tint,
                         ),
                         _ => badge(
                             &mut badge_ui,
                             "check",
                             &app.i18n.t("job-done"),
-                            theme::GREEN,
-                            theme::GREEN_TINT,
+                            theme::pal().green,
+                            theme::pal().green_tint,
                         ),
                     }
                     if let Some(err) = e["error"].as_str() {
                         badge_ui
-                            .label(RichText::new("ⓘ").color(theme::MUTED))
+                            .label(RichText::new("ⓘ").color(theme::pal().muted))
                             .on_hover_text(err);
                     }
                     let mut actions = ui.new_child(
@@ -466,7 +480,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                             .layout(egui::Layout::right_to_left(egui::Align::Center)),
                     );
                     let has_file = e["file"].is_string();
-                    actions.menu_button(RichText::new("···").color(theme::MUTED), |ui| {
+                    actions.menu_button(RichText::new("···").color(theme::pal().muted), |ui| {
                         if has_file
                             && ui.button(app.i18n.t("templates-open")).clicked()
                             && app.run_reporting("job.history_open", json!({"id": id})).ok
@@ -494,7 +508,7 @@ pub fn history_page(app: &mut LabelyApp, ui: &mut Ui) {
                             "printer",
                             &app.i18n.t(key),
                             None,
-                            theme::TEXT,
+                            theme::pal().text,
                             None,
                         )
                         .clicked()

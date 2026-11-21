@@ -39,7 +39,7 @@ pub fn bar_frame(fill: Color32, x: i8, y: i8) -> egui::Frame {
 /// Side panel frame with a right or left border drawn by the panel itself.
 pub fn pane_frame() -> egui::Frame {
     egui::Frame::new()
-        .fill(theme::SURFACE)
+        .fill(theme::pal().surface)
         .inner_margin(Margin::symmetric(12, 12))
 }
 
@@ -56,7 +56,7 @@ fn tab(
 ) -> (egui::Response, bool) {
     let mut closed = false;
     let fill = if active {
-        theme::SURFACE
+        theme::pal().surface
     } else {
         Color32::TRANSPARENT
     };
@@ -64,14 +64,18 @@ fn tab(
         .fill(fill)
         .corner_radius(CornerRadius::same(theme::RADIUS))
         .stroke(if active {
-            Stroke::new(1.0, theme::BORDER)
+            Stroke::new(1.0, theme::pal().border)
         } else {
             Stroke::NONE
         })
         .inner_margin(Margin::symmetric(10, 4))
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            let color = if active { theme::PRIMARY } else { theme::TEXT2 };
+            let color = if active {
+                theme::pal().primary
+            } else {
+                theme::pal().text2
+            };
             icons::show(ui, icon, 15.0, color);
             let font = if active {
                 theme::bold(13.0)
@@ -80,14 +84,14 @@ fn tab(
             };
             let r = ui
                 .add(
-                    egui::Button::new(RichText::new(text).font(font).color(theme::TEXT))
+                    egui::Button::new(RichText::new(text).font(font).color(theme::pal().text))
                         .frame(false),
                 )
                 .on_hover_text(hover);
             if let Some(tip) = close
                 && ui
                     .add(
-                        egui::Button::new(RichText::new("×").color(theme::MUTED).size(15.0))
+                        egui::Button::new(RichText::new("×").color(theme::pal().muted).size(15.0))
                             .frame(false),
                     )
                     .on_hover_text(tip)
@@ -241,25 +245,25 @@ fn device_pill(app: &mut LabelyApp, ui: &mut Ui) {
             let summary = panels::device_summary(app, d).join(" · ");
             pill(
                 ui,
-                theme::GREEN_TINT,
-                Some(theme::GREEN),
+                theme::pal().green_tint,
+                Some(theme::pal().green),
                 None,
                 &[
-                    (name, theme::bold(12.0), theme::TEXT),
-                    (rest, theme::regular(12.0), theme::MUTED),
+                    (name, theme::bold(12.0), theme::pal().text),
+                    (rest, theme::regular(12.0), theme::pal().muted),
                 ],
             )
             .on_hover_text(summary)
         }
         None => pill(
             ui,
-            theme::BG,
-            Some(theme::MUTED),
+            theme::pal().bg,
+            Some(theme::pal().muted),
             None,
             &[(
                 app.i18n.t("home-printer-none"),
                 theme::regular(12.0),
-                theme::TEXT2,
+                theme::pal().text2,
             )],
         ),
     };
@@ -276,9 +280,9 @@ fn mcp_pill(app: &mut LabelyApp, ui: &mut Ui) {
     let (hover, color) = match &app.mcp {
         Some(h) => (
             format!("{}\n{}", app.i18n.t("mcp-on-hint"), h.url),
-            theme::PRIMARY,
+            theme::pal().primary,
         ),
-        None => (app.i18n.t("mcp-off"), theme::MUTED),
+        None => (app.i18n.t("mcp-off"), theme::pal().muted),
     };
     pill(
         ui,
@@ -296,7 +300,7 @@ fn sep(ui: &mut Ui) {
     let (r, _) = ui.allocate_exact_size(vec2(9.0, 22.0), Sense::hover());
     ui.painter().line_segment(
         [r.center_top(), r.center_bottom()],
-        Stroke::new(1.0, theme::BORDER),
+        Stroke::new(1.0, theme::pal().border),
     );
 }
 
@@ -370,7 +374,7 @@ pub fn toolbar(app: &mut LabelyApp, ui: &mut Ui) {
                 ui,
                 "printer",
                 &print,
-                Some(theme::PRIMARY),
+                Some(theme::pal().primary),
                 Color32::WHITE,
                 None,
             )
@@ -465,15 +469,19 @@ fn rail_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Respons
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, enabled, active, &label));
     let tile = egui::Rect::from_center_size(rect.center_top() + vec2(0.0, 16.0), vec2(36.0, 30.0));
     let bg = if active {
-        theme::PRIMARY_TINT
+        theme::pal().primary_tint
     } else if resp.hovered() {
-        theme::BG
+        theme::pal().bg
     } else {
         Color32::TRANSPARENT
     };
     ui.painter()
         .rect_filled(tile, CornerRadius::same(theme::RADIUS), bg);
-    let color = if active { theme::PRIMARY } else { theme::TEXT2 };
+    let color = if active {
+        theme::pal().primary
+    } else {
+        theme::pal().text2
+    };
     icons::paint(
         ui.painter(),
         egui::Rect::from_center_size(tile.center(), vec2(19.0, 19.0)),
@@ -487,7 +495,11 @@ fn rail_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Respons
         egui::Align2::CENTER_BOTTOM,
         text,
         theme::regular(11.0),
-        if active { theme::PRIMARY } else { theme::MUTED },
+        if active {
+            theme::pal().primary
+        } else {
+            theme::pal().muted
+        },
         rect.width() - 4.0,
     );
     resp
@@ -507,7 +519,7 @@ fn pane_title(ui: &mut Ui, text: &str) {
     ui.label(
         RichText::new(text)
             .font(theme::bold(16.0))
-            .color(theme::TEXT),
+            .color(theme::pal().text),
     );
     ui.add_space(6.0);
 }
@@ -523,16 +535,16 @@ fn tile(ui: &mut Ui, icon: &str, text: &str, a11y: &str, hint: &str) -> egui::Re
         rect,
         CornerRadius::same(theme::RADIUS),
         if hovered {
-            theme::PRIMARY_TINT
+            theme::pal().primary_tint
         } else {
-            theme::SURFACE
+            theme::pal().surface
         },
         Stroke::new(
             1.0,
             if hovered {
-                theme::PRIMARY_TINT2
+                theme::pal().primary_tint2
             } else {
-                theme::BORDER
+                theme::pal().border
             },
         ),
         egui::StrokeKind::Inside,
@@ -541,7 +553,7 @@ fn tile(ui: &mut Ui, icon: &str, text: &str, a11y: &str, hint: &str) -> egui::Re
         ui.painter(),
         egui::Rect::from_center_size(rect.center_top() + vec2(0.0, 22.0), vec2(20.0, 20.0)),
         icon,
-        theme::TEXT,
+        theme::pal().text,
         1.5,
     );
     theme::fit_text(
@@ -550,7 +562,7 @@ fn tile(ui: &mut Ui, icon: &str, text: &str, a11y: &str, hint: &str) -> egui::Re
         egui::Align2::CENTER_CENTER,
         text,
         theme::regular(11.5),
-        theme::TEXT2,
+        theme::pal().text2,
         rect.width() - 8.0,
     );
     resp.on_hover_text(hint)
@@ -596,8 +608,8 @@ fn insert_pane(app: &mut LabelyApp, ui: &mut Ui) {
         ui,
         "scan",
         &scan,
-        Some(theme::PRIMARY_TINT),
-        theme::PRIMARY,
+        Some(theme::pal().primary_tint),
+        theme::pal().primary,
         Some(ui.available_width()),
     )
     .clicked();
@@ -623,7 +635,7 @@ fn insert_pane(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(count.to_string())
                     .size(11.0)
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
         });
     });
@@ -650,7 +662,7 @@ fn layers_pane(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t("layers-hint"))
                     .size(11.0)
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
@@ -737,19 +749,19 @@ fn layer_row(
         Sense::click(),
     );
     let bg = if selected {
-        theme::PRIMARY_TINT
+        theme::pal().primary_tint
     } else if row.hovered() {
-        theme::BG
+        theme::pal().bg
     } else {
         Color32::TRANSPARENT
     };
     ui.painter().rect_filled(rect, CornerRadius::same(6), bg);
     let fg = if selected {
-        theme::PRIMARY
+        theme::pal().primary
     } else if e.hidden {
-        theme::MUTED
+        theme::pal().muted
     } else {
-        theme::TEXT
+        theme::pal().text
     };
     let kind = e.kind.type_name();
     icons::paint(
@@ -757,9 +769,9 @@ fn layer_row(
         egui::Rect::from_center_size(rect.left_center() + vec2(16.0, 0.0), vec2(15.0, 15.0)),
         kind_icon(kind),
         if selected {
-            theme::PRIMARY
+            theme::pal().primary
         } else {
-            theme::MUTED
+            theme::pal().muted
         },
         1.4,
     );
@@ -815,7 +827,7 @@ fn layer_row(
         }
     }
     if warn {
-        icons::show(&mut right, "warn", 15.0, theme::AMBER);
+        icons::show(&mut right, "warn", 15.0, theme::pal().amber);
     }
     if toggle_hidden {
         app.run_reporting(
@@ -862,7 +874,7 @@ pub fn inspector(app: &mut LabelyApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         let w = (ui.available_width() - 8.0) / 2.0;
         egui::Frame::new()
-            .fill(theme::BG)
+            .fill(theme::pal().bg)
             .corner_radius(CornerRadius::same(theme::RADIUS))
             .inner_margin(Margin::same(3))
             .show(ui, |ui| {
@@ -877,12 +889,12 @@ pub fn inspector(app: &mut LabelyApp, ui: &mut Ui) {
                     let r = ui.add_sized(
                         [w - 4.0, 26.0],
                         egui::Button::new(text.color(if active {
-                            theme::TEXT
+                            theme::pal().text
                         } else {
-                            theme::MUTED
+                            theme::pal().muted
                         }))
                         .fill(if active {
-                            theme::SURFACE
+                            theme::pal().surface
                         } else {
                             Color32::TRANSPARENT
                         })
@@ -909,13 +921,16 @@ fn element_card(app: &LabelyApp, ui: &mut Ui, e: &Element) {
     let kind = e.kind.type_name();
     ui.horizontal(|ui| {
         let (r, _) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::hover());
-        ui.painter()
-            .rect_filled(r, CornerRadius::same(theme::RADIUS), theme::PRIMARY_TINT);
+        ui.painter().rect_filled(
+            r,
+            CornerRadius::same(theme::RADIUS),
+            theme::pal().primary_tint,
+        );
         icons::paint(
             ui.painter(),
             r.shrink(7.0),
             kind_icon(kind),
-            theme::PRIMARY,
+            theme::pal().primary,
             1.5,
         );
         ui.vertical(|ui| {
@@ -925,7 +940,7 @@ fn element_card(app: &LabelyApp, ui: &mut Ui, e: &Element) {
                 egui::Label::new(
                     RichText::new(title)
                         .font(theme::bold(14.0))
-                        .color(theme::TEXT),
+                        .color(theme::pal().text),
                 )
                 .truncate(),
             );
@@ -933,7 +948,7 @@ fn element_card(app: &LabelyApp, ui: &mut Ui, e: &Element) {
             if let Some(col) = bound_column(e) {
                 sub.push_str(&format!(" · {{{{{col}}}}}"));
             }
-            ui.label(RichText::new(sub).size(11.5).color(theme::MUTED));
+            ui.label(RichText::new(sub).size(11.5).color(theme::pal().muted));
         });
     });
     ui.add_space(4.0);
@@ -987,8 +1002,8 @@ pub fn canvas_overlays(app: &mut LabelyApp, ui: &mut Ui, area: egui::Rect) {
     let paper = format!("{} · {media}", app.i18n.t(color_key));
     let float = || {
         egui::Frame::new()
-            .fill(theme::SURFACE)
-            .stroke(Stroke::new(1.0, theme::BORDER))
+            .fill(theme::pal().surface)
+            .stroke(Stroke::new(1.0, theme::pal().border))
             .corner_radius(CornerRadius::same(16))
             .shadow(egui::Shadow {
                 offset: [0, 2],
@@ -1010,11 +1025,11 @@ pub fn canvas_overlays(app: &mut LabelyApp, ui: &mut Ui, area: egui::Rect) {
     let r = float()
         .show(&mut child, |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            icons::show(ui, "rect", 14.0, theme::TEXT2);
+            icons::show(ui, "rect", 14.0, theme::pal().text2);
             ui.label(
                 RichText::new(size)
                     .font(theme::bold(12.5))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
             let [r, g, b] = app.ui.label_color;
             let (d, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
@@ -1022,10 +1037,10 @@ pub fn canvas_overlays(app: &mut LabelyApp, ui: &mut Ui, area: egui::Rect) {
                 d.center(),
                 5.0,
                 Color32::from_rgb(r, g, b),
-                Stroke::new(1.0, theme::BORDER),
+                Stroke::new(1.0, theme::pal().border),
             );
-            ui.label(RichText::new(paper).size(12.5).color(theme::TEXT2));
-            icons::show(ui, "chev_down", 14.0, theme::MUTED);
+            ui.label(RichText::new(paper).size(12.5).color(theme::pal().text2));
+            icons::show(ui, "chev_down", 14.0, theme::pal().muted);
         })
         .response
         .interact(Sense::click())
@@ -1055,7 +1070,7 @@ pub fn canvas_overlays(app: &mut LabelyApp, ui: &mut Ui, area: egui::Rect) {
                 egui::Button::new(
                     RichText::new(pct)
                         .font(theme::bold(12.5))
-                        .color(theme::TEXT),
+                        .color(theme::pal().text),
                 )
                 .frame(false)
                 .min_size(vec2(44.0, 24.0)),
@@ -1081,7 +1096,7 @@ pub fn canvas_overlays(app: &mut LabelyApp, ui: &mut Ui, area: egui::Rect) {
 pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         ui.set_min_height(22.0);
-        let small = |t: String| RichText::new(t).size(11.5).color(theme::MUTED);
+        let small = |t: String| RichText::new(t).size(11.5).color(theme::pal().muted);
         if app.editing()
             && let Some(doc) = app.session.doc(None)
         {
@@ -1108,7 +1123,11 @@ pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
             && s.at.elapsed().as_secs() < 8
         {
             ui.label(small("·".into()));
-            let color = if s.error { theme::RED } else { theme::TEXT2 };
+            let color = if s.error {
+                theme::pal().red
+            } else {
+                theme::pal().text2
+            };
             ui.label(RichText::new(&s.text).size(11.5).color(color));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1118,7 +1137,7 @@ pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
                     egui::Button::new(
                         RichText::new(lang.code().to_uppercase())
                             .font(theme::bold(11.5))
-                            .color(theme::TEXT),
+                            .color(theme::pal().text),
                     )
                     .frame(false),
                 )
@@ -1146,7 +1165,7 @@ pub fn status_bar(app: &mut LabelyApp, ui: &mut Ui) {
                         app.i18n.t_args("status-agents", &[("url", Arg::Str(&url))]),
                     ))
                     .on_hover_text(app.i18n.t("mcp-on-hint"));
-                    icons::show(ui, "agent", 13.0, theme::MUTED);
+                    icons::show(ui, "agent", 13.0, theme::pal().muted);
                 }
                 None => {
                     ui.label(small(app.i18n.t("mcp-off")));

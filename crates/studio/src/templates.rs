@@ -159,15 +159,15 @@ pub fn library_page(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t("templates-title"))
                     .font(theme::bold(25.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
-            ui.label(RichText::new(app.i18n.t("templates-subtitle")).color(theme::MUTED));
+            ui.label(RichText::new(app.i18n.t("templates-subtitle")).color(theme::pal().muted));
         });
         theme::trailing(ui, |ui| {
             let has_doc = app.session.active_doc_id().is_some();
             ui.add_enabled_ui(has_doc, |ui| {
                 let text = crate::menu::command_label(&app.i18n, "template.save");
-                if icons::text_button(ui, "plus", &text, None, theme::TEXT, None).clicked() {
+                if icons::text_button(ui, "plus", &text, None, theme::pal().text, None).clicked() {
                     crate::menu::invoke(app, "template.save");
                 }
             });
@@ -228,11 +228,19 @@ fn shelf_row(ui: &mut Ui, icon: &str, text: &str, count: usize, active: bool) ->
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, active, &label));
     let p = ui.painter();
     if active {
-        p.rect_filled(rect, CornerRadius::same(theme::RADIUS), theme::PRIMARY_TINT);
+        p.rect_filled(
+            rect,
+            CornerRadius::same(theme::RADIUS),
+            theme::pal().primary_tint,
+        );
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(theme::RADIUS), theme::BG);
+        p.rect_filled(rect, CornerRadius::same(theme::RADIUS), theme::pal().bg);
     }
-    let fg = if active { theme::PRIMARY } else { theme::TEXT };
+    let fg = if active {
+        theme::pal().primary
+    } else {
+        theme::pal().text
+    };
     let ir = egui::Rect::from_center_size(rect.left_center() + vec2(18.0, 0.0), vec2(16.0, 16.0));
     icons::paint(p, ir, icon, fg, 1.5);
     let font = if active {
@@ -252,7 +260,7 @@ fn shelf_row(ui: &mut Ui, icon: &str, text: &str, count: usize, active: bool) ->
         egui::Align2::RIGHT_CENTER,
         count.to_string(),
         theme::regular(11.5),
-        theme::MUTED,
+        theme::pal().muted,
     );
     resp
 }
@@ -307,7 +315,7 @@ fn shelves(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
         if ui
             .add_enabled(
                 ok,
-                egui::Button::new(RichText::new("+").color(theme::PRIMARY)),
+                egui::Button::new(RichText::new("+").color(theme::pal().primary)),
             )
             .on_hover_text(app.i18n.t("templates-new-folder"))
             .clicked()
@@ -348,7 +356,9 @@ fn shelves(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
                 g.stale = true;
             }
             if ui
-                .button(RichText::new(app.i18n.t("templates-delete-folder")).color(theme::RED))
+                .button(
+                    RichText::new(app.i18n.t("templates-delete-folder")).color(theme::pal().red),
+                )
                 .clicked()
                 && app
                     .run_reporting("template.folder", json!({"op": "delete", "folder": f}))
@@ -386,7 +396,7 @@ fn cards(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery, height: f32) {
         ui.label(
             RichText::new(shelf)
                 .font(theme::bold(15.0))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         ui.label(
             RichText::new(app.i18n.t_args(
@@ -394,12 +404,12 @@ fn cards(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery, height: f32) {
                 &[("count", labely_i18n::Arg::Num(items.len() as f64))],
             ))
             .size(12.0)
-            .color(theme::MUTED),
+            .color(theme::pal().muted),
         );
     });
     ui.add_space(8.0);
     if items.is_empty() {
-        ui.label(RichText::new(app.i18n.t("templates-empty")).color(theme::MUTED));
+        ui.label(RichText::new(app.i18n.t("templates-empty")).color(theme::pal().muted));
         return;
     }
     let ctx = ui.ctx().clone();
@@ -453,16 +463,16 @@ fn card(
     }
     let p = ui.painter();
     let stroke = if selected {
-        Stroke::new(2.0, theme::PRIMARY)
+        Stroke::new(2.0, theme::pal().primary)
     } else if resp.hovered() {
-        Stroke::new(1.0, theme::PRIMARY_TINT2)
+        Stroke::new(1.0, theme::pal().primary_tint2)
     } else {
-        Stroke::new(1.0, theme::BORDER)
+        Stroke::new(1.0, theme::pal().border)
     };
     p.rect(
         rect,
         CornerRadius::same(theme::RADIUS_LG),
-        theme::SURFACE,
+        theme::pal().surface,
         stroke,
         egui::StrokeKind::Inside,
     );
@@ -470,7 +480,7 @@ fn card(
         rect.min + vec2(8.0, 8.0),
         vec2(width - 16.0, width * 0.55 - 8.0),
     );
-    p.rect_filled(well, CornerRadius::same(theme::RADIUS), theme::BG);
+    p.rect_filled(well, CornerRadius::same(theme::RADIUS), theme::pal().bg);
     if let Some(tex) = thumb {
         let s = tex.size_vec2();
         let k = ((well.width() - 24.0) / s.x)
@@ -494,14 +504,14 @@ fn card(
         egui::Align2::LEFT_CENTER,
         name,
         theme::bold(13.0),
-        theme::TEXT,
+        theme::pal().text,
     );
     p.text(
         egui::pos2(rect.left() + 12.0, well.bottom() + 36.0),
         egui::Align2::LEFT_CENTER,
         size,
         theme::regular(11.5),
-        theme::MUTED,
+        theme::pal().muted,
     );
     resp
 }
@@ -520,7 +530,7 @@ pub(crate) fn open_template(app: &mut LabelyApp, reference: &str) -> bool {
 /// The selected template: preview, facts and actions.
 fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
     let Some(sel) = g.selected.clone() else {
-        ui.label(RichText::new(app.i18n.t("templates-pick")).color(theme::MUTED));
+        ui.label(RichText::new(app.i18n.t("templates-pick")).color(theme::pal().muted));
         return;
     };
     let Some(t) = g.templates.iter().find(|t| t.reference == sel).cloned() else {
@@ -533,7 +543,7 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
     let w = ui.available_width();
     let (well, _) = ui.allocate_exact_size(vec2(w, w * 0.62), egui::Sense::hover());
     ui.painter()
-        .rect_filled(well, CornerRadius::same(theme::RADIUS), theme::BG);
+        .rect_filled(well, CornerRadius::same(theme::RADIUS), theme::pal().bg);
     if let Some(tex) = thumb {
         let s = tex.size_vec2();
         let k = ((well.width() - 40.0) / s.x).min((well.height() - 40.0) / s.y);
@@ -550,10 +560,11 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
     ui.label(
         RichText::new(&name)
             .font(theme::bold(18.0))
-            .color(theme::TEXT),
+            .color(theme::pal().text),
     );
     ui.label(
-        RichText::new(format!("{} × {} mm", mm(t.width_mm), mm(t.height_mm))).color(theme::MUTED),
+        RichText::new(format!("{} × {} mm", mm(t.width_mm), mm(t.height_mm)))
+            .color(theme::pal().muted),
     );
     ui.add_space(6.0);
     ui.separator();
@@ -566,7 +577,7 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
     };
     let fact = |ui: &mut Ui, k: String, v: String| {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(k).size(12.5).color(theme::MUTED));
+            ui.label(RichText::new(k).size(12.5).color(theme::pal().muted));
             theme::trailing(ui, |ui| ui.label(RichText::new(v).size(12.5)));
         });
     };
@@ -585,7 +596,7 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
         ui,
         "folder",
         &app.i18n.t("templates-open"),
-        Some(theme::PRIMARY),
+        Some(theme::pal().primary),
         egui::Color32::WHITE,
         Some(full),
     )
@@ -595,9 +606,23 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
     }
     ui.add_space(6.0);
     let link = |ui: &mut Ui, icon: &str, text: String, color: egui::Color32| {
-        icons::text_button(ui, icon, &text, Some(theme::SURFACE), color, Some(full))
+        icons::text_button(
+            ui,
+            icon,
+            &text,
+            Some(theme::pal().surface),
+            color,
+            Some(full),
+        )
     };
-    if link(ui, "copy", app.i18n.t("templates-duplicate"), theme::TEXT).clicked() {
+    if link(
+        ui,
+        "copy",
+        app.i18n.t("templates-duplicate"),
+        theme::pal().text,
+    )
+    .clicked()
+    {
         let folder = match &g.shelf {
             Shelf::Folder(f) => f.clone(),
             Shelf::Starters => String::new(),
@@ -654,7 +679,13 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery) {
             g.stale = true;
         }
     }
-    if link(ui, "trash", app.i18n.t("templates-delete"), theme::RED).clicked()
+    if link(
+        ui,
+        "trash",
+        app.i18n.t("templates-delete"),
+        theme::pal().red,
+    )
+    .clicked()
         && app.run_reporting("template.delete", json!({"ref": sel})).ok
     {
         g.selected = None;

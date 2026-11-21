@@ -568,7 +568,7 @@ struct TableSheet: View {
                                 col = c
                             } label: {
                                 Text(cell.text)
-                                    .style(.caption.with(size: 12, weight: cell.bold ? .bold : .regular, color: cell.invert ? .white : Palette.text))
+                                    .style(.caption.with(size: 12, weight: cell.bold ? .bold : .regular, color: cell.invert ? Palette.surface : Palette.text))
                                     .lineLimit(2)
                                     .minimumScaleFactor(0.6)
                                     .padding(2)

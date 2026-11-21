@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -143,6 +144,7 @@ internal fun ContentField(value: String, placeholder: String, trailing: (@Compos
                 singleLine = !multi,
                 maxLines = if (multi) lines else 1,
                 textStyle = Type.body,
+                cursorBrush = SolidColor(Palette.text),
                 keyboardOptions = KeyboardOptions(imeAction = if (multi) ImeAction.Default else ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (text != value) onCommit(text) }),
                 modifier = Modifier.fillMaxWidth().onFocusChanged { if (!it.isFocused && text != value) onCommit(text) },

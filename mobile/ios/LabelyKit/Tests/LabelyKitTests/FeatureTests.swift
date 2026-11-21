@@ -266,4 +266,16 @@ struct FeatureTests {
         #expect(b.prefs.unit == .inch && b.prefs.gridMm == 2 && b.prefs.showGrid)
         b.prefs.unit = .mm
     }
+
+    @Test func appearancePersists() throws {
+        let defaults = try #require(UserDefaults(suiteName: "labelykit-\(UUID().uuidString)"))
+        let a = AppState(engine: app.engine, labelsDir: dir.appendingPathComponent("labels"), defaults: defaults, debug: true)
+        #expect(a.prefs.appearance == .system)
+        a.prefs.appearance = .dark
+        let b = AppState(engine: app.engine, labelsDir: dir.appendingPathComponent("labels"), defaults: defaults, debug: true)
+        #expect(b.prefs.appearance == .dark)
+        // Prefs saved before the setting existed read as the system's scheme.
+        let old = try JSONDecoder().decode(Prefs.self, from: Data(#"{"unit":"inch"}"#.utf8))
+        #expect(old.appearance == .system && old.unit == .inch)
+    }
 }

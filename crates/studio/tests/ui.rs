@@ -37,6 +37,8 @@ fn fresh_prefs() -> std::path::PathBuf {
 fn harness(app: LabelyApp) -> Harness<'static, LabelyApp> {
     Harness::builder()
         .with_size(vec2(1280.0, 860.0))
+        // Deterministic look: no system theme, so `System` resolves to light.
+        .with_theme(egui::Theme::Light)
         .build_ui_state(|ui, app: &mut LabelyApp| app.show(ui), app)
 }
 
@@ -1237,6 +1239,38 @@ fn home_pages_settings_printers_history() {
     h.get_by_label("History").click();
     h.run();
     assert_eq!(h.state().ui.home_page, labely_studio::home::Page::History);
+}
+
+#[test]
+fn settings_theme_switches_palette_and_is_stored() {
+    use labely_studio::{prefs::ThemePref, theme};
+    let prefs = fresh_prefs();
+    let opts = || StudioOptions {
+        prefs_file: Some(prefs.clone()),
+        ..options()
+    };
+    let mut h = harness(LabelyApp::new(None, opts()));
+    h.run();
+    // Default: follow the system, which tests do not report, so light.
+    assert_eq!(h.ctx.theme(), egui::Theme::Light);
+    assert_eq!(theme::pal(), &theme::LIGHT);
+    h.get_by_label("Settings").click();
+    h.run();
+    h.get_by_label("Dark").click();
+    h.run();
+    assert_eq!(h.state().prefs.theme, ThemePref::Dark);
+    assert_eq!(h.ctx.theme(), egui::Theme::Dark);
+    assert!(h.ctx.global_style().visuals.dark_mode);
+    assert_eq!(h.ctx.global_style().visuals.panel_fill, theme::DARK.surface);
+    assert_eq!(theme::pal(), &theme::DARK);
+    // Stored: a new studio on the same prefs file starts dark.
+    let mut h2 = harness(LabelyApp::new(None, opts()));
+    h2.run();
+    assert_eq!(h2.ctx.theme(), egui::Theme::Dark);
+    h.get_by_label("Light").click();
+    h.run();
+    assert_eq!(h.ctx.theme(), egui::Theme::Light);
+    assert_eq!(theme::pal(), &theme::LIGHT);
 }
 
 #[test]

@@ -24,8 +24,8 @@ pub fn field(
     width: f32,
 ) -> egui::Response {
     let inner = egui::Frame::new()
-        .fill(theme::SURFACE)
-        .stroke(Stroke::new(1.0, theme::BORDER))
+        .fill(theme::pal().surface)
+        .stroke(Stroke::new(1.0, theme::pal().border))
         .corner_radius(CornerRadius::same(theme::RADIUS))
         .inner_margin(Margin::symmetric(10, 3))
         .show(ui, |ui| {
@@ -33,7 +33,7 @@ pub fn field(
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 let lbl = ui
-                    .label(RichText::new(prefix).size(11.5).color(theme::MUTED))
+                    .label(RichText::new(prefix).size(11.5).color(theme::pal().muted))
                     .id;
                 let v = ui.visuals_mut();
                 for w in [
@@ -72,7 +72,11 @@ pub fn switch(ui: &mut Ui, on: &mut bool) -> egui::Response {
         egui::WidgetInfo::selected(egui::Role::CheckBox, ui.is_enabled(), value, "")
     });
     let t = ui.ctx().animate_bool_responsive(resp.id, value);
-    let bg = if value { theme::PRIMARY } else { theme::BORDER };
+    let bg = if value {
+        theme::pal().primary
+    } else {
+        theme::pal().border
+    };
     ui.painter().rect_filled(rect, CornerRadius::same(9), bg);
     let x = egui::lerp(rect.left() + 9.0..=rect.right() - 9.0, t);
     ui.painter()
@@ -83,7 +87,7 @@ pub fn switch(ui: &mut Ui, on: &mut bool) -> egui::Response {
 /// A label on the left and a switch on the right; true when flipped.
 pub fn switch_row(ui: &mut Ui, label: &str, on: &mut bool) -> bool {
     ui.horizontal(|ui| {
-        let lbl = ui.label(RichText::new(label).color(theme::TEXT2)).id;
+        let lbl = ui.label(RichText::new(label).color(theme::pal().text2)).id;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             switch(ui, on).labelled_by(lbl).changed()
         })
@@ -96,7 +100,7 @@ pub fn switch_row(ui: &mut Ui, label: &str, on: &mut bool) -> bool {
 pub fn segmented(ui: &mut Ui, items: &[(String, Option<&str>)], selected: usize) -> Option<usize> {
     let mut picked = None;
     egui::Frame::new()
-        .fill(theme::BG)
+        .fill(theme::pal().bg)
         .corner_radius(CornerRadius::same(theme::RADIUS))
         .inner_margin(Margin::same(3))
         .show(ui, |ui| {
@@ -113,12 +117,19 @@ pub fn segmented(ui: &mut Ui, items: &[(String, Option<&str>)], selected: usize)
                     });
                     if active {
                         ui.painter()
-                            .rect_filled(rect, CornerRadius::same(6), theme::SURFACE);
+                            .rect_filled(rect, CornerRadius::same(6), theme::pal().surface);
                     } else if resp.hovered() {
-                        ui.painter()
-                            .rect_filled(rect, CornerRadius::same(6), theme::BORDER_SOFT);
+                        ui.painter().rect_filled(
+                            rect,
+                            CornerRadius::same(6),
+                            theme::pal().border_soft,
+                        );
                     }
-                    let fg = if active { theme::TEXT } else { theme::MUTED };
+                    let fg = if active {
+                        theme::pal().text
+                    } else {
+                        theme::pal().muted
+                    };
                     match icon {
                         Some(name) => {
                             icons::paint(
@@ -160,7 +171,7 @@ fn divider(ui: &mut Ui) {
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter().line_segment(
         [r.left_center(), r.right_center()],
-        Stroke::new(1.0, theme::BORDER_SOFT),
+        Stroke::new(1.0, theme::pal().border_soft),
     );
     ui.add_space(4.0);
 }
@@ -182,7 +193,7 @@ pub fn frame_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &mu
         .to_owned();
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-name")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-name")).color(theme::pal().text2))
             .id;
         if ui
             .add(egui::TextEdit::singleline(&mut name).desired_width(f32::INFINITY))
@@ -248,7 +259,7 @@ pub fn text_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &mut
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = gap;
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-font")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-font")).color(theme::pal().text2))
             .id;
         egui::ComboBox::from_id_salt("font")
             .selected_text(cur.clone())
@@ -277,7 +288,7 @@ pub fn text_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &mut
         let fit = whole.get("fit").and_then(Value::as_str).unwrap_or("none");
         let mut pick = fit.to_owned();
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-fit")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-fit")).color(theme::pal().text2))
             .id;
         egui::ComboBox::from_id_salt("text-fit")
             .selected_text(app.i18n.t(&format!("fit-{fit}")))
@@ -303,7 +314,7 @@ pub fn text_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &mut
                 .map(|k| whole.get(*k).and_then(Value::as_bool).unwrap_or(false))
                 .collect();
             egui::Frame::new()
-                .fill(theme::BG)
+                .fill(theme::pal().bg)
                 .corner_radius(CornerRadius::same(theme::RADIUS))
                 .inner_margin(Margin::same(3))
                 .show(ui, |ui| {
@@ -401,7 +412,7 @@ pub fn barcode_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &
     let mut pick = sym.clone();
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-symbology")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-symbology")).color(theme::pal().text2))
             .id;
         egui::ComboBox::from_id_salt("symbology")
             .selected_text(shown)
@@ -425,7 +436,7 @@ pub fn barcode_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &
     let mut text = data.clone();
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-value")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-value")).color(theme::pal().text2))
             .id;
         if ui
             .add(egui::TextEdit::singleline(&mut text).desired_width(f32::INFINITY))
@@ -439,25 +450,25 @@ pub fn barcode_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &
         Some(Ok(c)) => {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                icons::show(ui, "check", 13.0, theme::GREEN);
+                icons::show(ui, "check", 13.0, theme::pal().green);
                 ui.label(
                     RichText::new(
                         app.i18n
                             .t_args("barcode-valid", &[("digit", Arg::Num(f64::from(c)))]),
                     )
                     .size(11.5)
-                    .color(theme::GREEN),
+                    .color(theme::pal().green),
                 );
             });
         }
         Some(Err(())) => {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                icons::show(ui, "warn", 13.0, theme::AMBER);
+                icons::show(ui, "warn", 13.0, theme::pal().amber);
                 ui.label(
                     RichText::new(app.i18n.t("barcode-invalid"))
                         .size(11.5)
-                        .color(theme::AMBER),
+                        .color(theme::pal().amber),
                 );
             });
         }
@@ -477,7 +488,7 @@ pub fn barcode_section(app: &mut LabelyApp, ui: &mut Ui, whole: &Value, edits: &
     }
     if readable {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(app.i18n.t("prop-text-place")).color(theme::TEXT2));
+            ui.label(RichText::new(app.i18n.t("prop-text-place")).color(theme::pal().text2));
             ui.add_space((ui.available_width() - 150.0).max(0.0));
             let items = [
                 (app.i18n.t("place-below"), None),
@@ -501,7 +512,7 @@ pub fn insert_chips(app: &mut LabelyApp, ui: &mut Ui, text: &str, edits: &mut Ed
             ("serial", "action-insert-serial", "{{serial}}"),
         ] {
             let label = app.i18n.t(key);
-            if icons::text_button(ui, icon, &label, None, theme::TEXT2, None)
+            if icons::text_button(ui, icon, &label, None, theme::pal().text2, None)
                 .on_hover_text(value)
                 .clicked()
             {
@@ -548,18 +559,18 @@ pub fn arrange_section(app: &mut LabelyApp, ui: &mut Ui, e: &Element, edits: &mu
                 rect,
                 CornerRadius::same(theme::RADIUS),
                 if resp.hovered() {
-                    theme::BG
+                    theme::pal().bg
                 } else {
-                    theme::SURFACE
+                    theme::pal().surface
                 },
-                Stroke::new(1.0, theme::BORDER),
+                Stroke::new(1.0, theme::pal().border),
                 egui::StrokeKind::Inside,
             );
             icons::paint(
                 ui.painter(),
                 egui::Rect::from_center_size(rect.center_top() + vec2(0.0, 16.0), vec2(15.0, 15.0)),
                 icon,
-                theme::TEXT2,
+                theme::pal().text2,
                 1.5,
             );
             let short = app.i18n.t(&format!("{key}-short"));
@@ -569,7 +580,7 @@ pub fn arrange_section(app: &mut LabelyApp, ui: &mut Ui, e: &Element, edits: &mu
                 egui::Align2::CENTER_CENTER,
                 short,
                 theme::regular(10.5),
-                theme::TEXT2,
+                theme::pal().text2,
                 rect.width() - 6.0,
             );
             if resp.on_hover_text(&text).clicked() {
@@ -602,7 +613,7 @@ pub fn label_tab(app: &mut LabelyApp, ui: &mut Ui, doc: &Document) {
     let mut name = doc.name.clone();
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-name")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-name")).color(theme::pal().text2))
             .id;
         if ui
             .add(egui::TextEdit::singleline(&mut name).desired_width(f32::INFINITY))
@@ -657,7 +668,7 @@ pub fn label_tab(app: &mut LabelyApp, ui: &mut Ui, doc: &Document) {
     let mut pick = media.clone();
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-media")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-media")).color(theme::pal().text2))
             .id;
         let w = ui.available_width() - 28.0;
         media_combo(app, ui, "media", &mut pick, w).labelled_by(lbl);
@@ -678,7 +689,7 @@ pub fn label_tab(app: &mut LabelyApp, ui: &mut Ui, doc: &Document) {
         .map_or_else(|| app.i18n.t("model-none"), |m| m.name.clone());
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("prop-printer-model")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("prop-printer-model")).color(theme::pal().text2))
             .id;
         egui::ComboBox::from_id_salt("printer_model")
             .selected_text(shown)
@@ -702,7 +713,7 @@ pub fn label_tab(app: &mut LabelyApp, ui: &mut Ui, doc: &Document) {
         let mut d = doc.label.density.unwrap_or(m.density_default);
         ui.horizontal(|ui| {
             let lbl = ui
-                .label(RichText::new(app.i18n.t("prop-density")).color(theme::TEXT2))
+                .label(RichText::new(app.i18n.t("prop-density")).color(theme::pal().text2))
                 .id;
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(RichText::new(format!("{d} / {}", m.density_max)).font(theme::bold(12.5)));
@@ -722,7 +733,7 @@ pub fn label_tab(app: &mut LabelyApp, ui: &mut Ui, doc: &Document) {
     theme::section(ui, &app.i18n.t("props-grid-snap"));
     ui.horizontal(|ui| {
         let lbl = ui
-            .label(RichText::new(app.i18n.t("action-show-grid")).color(theme::TEXT2))
+            .label(RichText::new(app.i18n.t("action-show-grid")).color(theme::pal().text2))
             .id;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             switch(ui, &mut app.ui.show_grid).labelled_by(lbl);
@@ -790,19 +801,22 @@ pub fn label_colors(app: &mut LabelyApp, ui: &mut Ui) {
             });
             let c = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
             if active {
-                ui.painter()
-                    .circle_stroke(rect.center(), 11.5, Stroke::new(2.0, theme::PRIMARY));
+                ui.painter().circle_stroke(
+                    rect.center(),
+                    11.5,
+                    Stroke::new(2.0, theme::pal().primary),
+                );
             }
             if key == "color-transparent" {
                 ui.painter().add(egui::Shape::dashed_line(
                     &circle_points(rect.center(), 8.5),
-                    Stroke::new(1.0, theme::MUTED),
+                    Stroke::new(1.0, theme::pal().muted),
                     2.0,
                     2.0,
                 ));
             } else {
                 ui.painter()
-                    .circle(rect.center(), 8.5, c, Stroke::new(1.0, theme::BORDER));
+                    .circle(rect.center(), 8.5, c, Stroke::new(1.0, theme::pal().border));
             }
             if resp.on_hover_text(app.i18n.t(key)).clicked() {
                 chosen = Some(rgb);
@@ -812,7 +826,7 @@ pub fn label_colors(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t(current))
                     .size(12.0)
-                    .color(theme::TEXT2),
+                    .color(theme::pal().text2),
             );
         });
         if let Some(rgb) = chosen {
@@ -844,7 +858,7 @@ pub fn check_cards(app: &mut LabelyApp, ui: &mut Ui) {
                     egui::Button::new(
                         RichText::new(app.i18n.t("action-run-check"))
                             .size(12.0)
-                            .color(theme::PRIMARY),
+                            .color(theme::pal().primary),
                     )
                     .frame(false),
                 )
@@ -859,7 +873,7 @@ pub fn check_cards(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new(app.i18n.t("check-not-run"))
                 .size(12.0)
-                .color(theme::MUTED),
+                .color(theme::pal().muted),
         );
         return;
     };
@@ -867,9 +881,9 @@ pub fn check_cards(app: &mut LabelyApp, ui: &mut Ui) {
     if issues.is_empty() {
         card(
             ui,
-            theme::GREEN_TINT,
+            theme::pal().green_tint,
             "check",
-            theme::GREEN,
+            theme::pal().green,
             &app.i18n.t("check-clean"),
             "",
         );
@@ -877,9 +891,9 @@ pub fn check_cards(app: &mut LabelyApp, ui: &mut Ui) {
     }
     for issue in issues {
         let (tint, icon, color) = match issue["severity"].as_str() {
-            Some("error") => (Color32::from_rgb(0xFF, 0xF0, 0xF0), "warn", theme::RED),
-            Some("warning") => (theme::AMBER_TINT, "warn", theme::AMBER),
-            _ => (theme::BG, "info", theme::MUTED),
+            Some("error") => (theme::pal().red_tint, "warn", theme::pal().red),
+            Some("warning") => (theme::pal().amber_tint, "warn", theme::pal().amber),
+            _ => (theme::pal().bg, "info", theme::pal().muted),
         };
         let r = card(
             ui,
@@ -902,7 +916,7 @@ pub fn check_cards(app: &mut LabelyApp, ui: &mut Ui) {
                 .t_args("check-count", &[("count", Arg::Num(n as f64))]),
         )
         .size(11.5)
-        .color(theme::MUTED),
+        .color(theme::pal().muted),
     );
 }
 
@@ -928,14 +942,16 @@ fn card(
                         egui::Label::new(
                             RichText::new(title)
                                 .font(theme::bold(12.5))
-                                .color(theme::TEXT),
+                                .color(theme::pal().text),
                         )
                         .wrap(),
                     );
                     if !hint.is_empty() {
                         ui.add(
-                            egui::Label::new(RichText::new(hint).size(11.5).color(theme::TEXT2))
-                                .wrap(),
+                            egui::Label::new(
+                                RichText::new(hint).size(11.5).color(theme::pal().text2),
+                            )
+                            .wrap(),
                         );
                     }
                 });

@@ -164,7 +164,7 @@ fn dialog_header(app: &LabelyApp, ui: &mut Ui, title: &str) -> bool {
         ui.label(
             RichText::new(title)
                 .font(theme::bold(17.0))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         theme::trailing(ui, |ui| {
             close = icons::button(ui, "close", &app.i18n.t("action-cancel"), false).clicked();
@@ -181,7 +181,7 @@ fn size_preview(ui: &mut Ui, w_mm: f64, h_mm: f64, area: egui::Vec2, fill: Color
     let (w, h) = (w_mm.max(1.0) as f32, h_mm.max(1.0) as f32);
     let scale = ((area.x - 70.0) / w).min((area.y - 60.0) / h);
     let label = egui::Rect::from_center_size(rect.center() + vec2(10.0, 10.0), vec2(w, h) * scale);
-    let line = Stroke::new(1.0, theme::TEXT2);
+    let line = Stroke::new(1.0, theme::pal().text2);
     let top = label.top() - 18.0;
     p.line_segment(
         [
@@ -198,7 +198,7 @@ fn size_preview(ui: &mut Ui, w_mm: f64, h_mm: f64, area: egui::Vec2, fill: Color
         egui::Align2::CENTER_BOTTOM,
         format!("{} mm", crate::home::mm(w_mm)),
         theme::regular(11.5),
-        theme::TEXT2,
+        theme::pal().text2,
     );
     let left = label.left() - 18.0;
     p.line_segment(
@@ -216,7 +216,7 @@ fn size_preview(ui: &mut Ui, w_mm: f64, h_mm: f64, area: egui::Vec2, fill: Color
         egui::Align2::RIGHT_CENTER,
         crate::home::mm(h_mm),
         theme::regular(11.5),
-        theme::TEXT2,
+        theme::pal().text2,
     );
     p.add(egui::Shape::rect_filled(
         label.translate(vec2(0.0, 3.0)),
@@ -227,7 +227,7 @@ fn size_preview(ui: &mut Ui, w_mm: f64, h_mm: f64, area: egui::Vec2, fill: Color
         label,
         CornerRadius::same(8),
         fill,
-        Stroke::new(1.0, theme::BORDER),
+        Stroke::new(1.0, theme::pal().border),
         egui::StrokeKind::Inside,
     );
     let inner = label.shrink(6.0);
@@ -240,7 +240,7 @@ fn size_preview(ui: &mut Ui, w_mm: f64, h_mm: f64, area: egui::Vec2, fill: Color
     ];
     p.add(egui::Shape::dashed_line(
         &pts,
-        Stroke::new(1.0, theme::PRIMARY_TINT2),
+        Stroke::new(1.0, theme::pal().primary_tint2),
         4.0,
         3.0,
     ));
@@ -393,7 +393,8 @@ fn new_doc(app: &mut LabelyApp, ui: &mut Ui, f: &mut NewDocForm) -> bool {
                         let name = d.model.as_ref().map_or(d.name.clone(), |m| m.name.clone());
                         ui.horizontal(|ui| {
                             let (r, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-                            ui.painter().circle_filled(r.center(), 4.0, theme::GREEN);
+                            ui.painter()
+                                .circle_filled(r.center(), 4.0, theme::pal().green);
                             ui.label(
                                 RichText::new(
                                     app.i18n
@@ -418,7 +419,7 @@ fn new_doc(app: &mut LabelyApp, ui: &mut Ui, f: &mut NewDocForm) -> bool {
                                         &[("width", Arg::Num(w)), ("height", Arg::Num(h))],
                                     ))
                                     .size(11.5)
-                                    .color(theme::TEXT2),
+                                    .color(theme::pal().text2),
                                 );
                                 if crate::home::chip(ui, &app.i18n.t("newdoc-use-size"), true)
                                     .clicked()
@@ -451,7 +452,7 @@ fn new_doc(app: &mut LabelyApp, ui: &mut Ui, f: &mut NewDocForm) -> bool {
             "grid",
             &app.i18n.t("newdoc-from-template"),
             None,
-            theme::PRIMARY,
+            theme::pal().primary,
             None,
         )
         .clicked()
@@ -564,7 +565,7 @@ fn export(app: &mut LabelyApp, ui: &mut Ui, f: &mut ExportForm) -> bool {
                 ],
             ))
             .size(11.5)
-            .color(theme::MUTED),
+            .color(theme::pal().muted),
         );
     }
     ui.add_space(10.0);
@@ -575,7 +576,7 @@ fn export(app: &mut LabelyApp, ui: &mut Ui, f: &mut ExportForm) -> bool {
                 ui,
                 "download",
                 &app.i18n.t("export-action"),
-                Some(theme::PRIMARY),
+                Some(theme::pal().primary),
                 Color32::WHITE,
                 None,
             );
@@ -703,7 +704,7 @@ fn caption(ui: &mut Ui, text: &str) -> egui::Id {
     ui.label(
         RichText::new(text)
             .font(theme::bold(12.5))
-            .color(theme::TEXT),
+            .color(theme::pal().text),
     )
     .id
 }
@@ -720,7 +721,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         ui.label(
             RichText::new(app.i18n.t("menu-print"))
                 .font(theme::bold(17.0))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         theme::trailing(ui, |ui| {
             if icons::button(ui, "close", &app.i18n.t("action-cancel"), false).clicked() {
@@ -741,7 +742,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
                 egui::Frame::new()
-                    .fill(theme::BG)
+                    .fill(theme::pal().bg)
                     .corner_radius(CornerRadius::same(theme::RADIUS_LG))
                     .inner_margin(Margin::same(16))
                     .show(ui, |ui| {
@@ -751,13 +752,13 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                             ui.label(
                                 RichText::new(app.i18n.t("print-preview"))
                                     .font(theme::bold(13.0))
-                                    .color(theme::TEXT),
+                                    .color(theme::pal().text),
                             );
                             theme::trailing(ui, |ui| {
                                 ui.label(
                                     RichText::new(app.i18n.t("print-1bit"))
                                         .size(11.5)
-                                        .color(theme::MUTED),
+                                        .color(theme::pal().muted),
                                 );
                             });
                         });
@@ -766,7 +767,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                         ui.painter().rect_filled(
                             area,
                             CornerRadius::same(theme::RADIUS),
-                            theme::CANVAS,
+                            theme::pal().canvas,
                         );
                         print_preview(app, ui, &form, area.shrink(18.0));
                         if let Some(r) = &app.raster {
@@ -778,7 +779,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                                         &[("dpi", Arg::Num(f64::from(r.dpi)))],
                                     ))
                                     .size(11.5)
-                                    .color(theme::MUTED),
+                                    .color(theme::pal().muted),
                                 );
                             });
                         }
@@ -838,7 +839,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                 let l = caption(ui, &app.i18n.t("print-printer"));
                 let device = connected.iter().find(|d| d.address == form.address);
                 egui::Frame::new()
-                    .stroke(Stroke::new(1.5, theme::PRIMARY))
+                    .stroke(Stroke::new(1.5, theme::pal().primary))
                     .corner_radius(CornerRadius::same(theme::RADIUS_LG))
                     .inner_margin(Margin::same(10))
                     .show(ui, |ui| {
@@ -848,13 +849,13 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                             ui.painter().rect_filled(
                                 r,
                                 CornerRadius::same(theme::RADIUS),
-                                theme::PRIMARY_TINT,
+                                theme::pal().primary_tint,
                             );
                             icons::paint(
                                 ui.painter(),
                                 r.shrink(8.0),
                                 "printer",
-                                theme::PRIMARY,
+                                theme::pal().primary,
                                 1.5,
                             );
                             ui.vertical(|ui| {
@@ -870,7 +871,9 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                                         if let Some(b) = crate::shell::battery(app, &d.address) {
                                             sub.push_str(&format!(" · {b}%"));
                                         }
-                                        ui.label(RichText::new(sub).size(11.5).color(theme::GREEN));
+                                        ui.label(
+                                            RichText::new(sub).size(11.5).color(theme::pal().green),
+                                        );
                                     }
                                     None => {
                                         ui.label(
@@ -880,7 +883,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                                         ui.label(
                                             RichText::new(app.i18n.t("print-not-connected"))
                                                 .size(11.5)
-                                                .color(theme::MUTED),
+                                                .color(theme::pal().muted),
                                         );
                                     }
                                 }
@@ -999,7 +1002,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                     ui.label(
                         RichText::new(app.i18n.t("print-records-hint"))
                             .size(11.5)
-                            .color(theme::MUTED),
+                            .color(theme::pal().muted),
                     );
                 }
                 egui::CollapsingHeader::new(app.i18n.t("print-advanced"))
@@ -1033,19 +1036,24 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                     .and_then(|c| c["issues"].as_array().map(Vec::len));
                 let (fill, icon, color, text) = match issues {
                     Some(0) => (
-                        theme::GREEN_TINT,
+                        theme::pal().green_tint,
                         "check",
-                        theme::GREEN,
+                        theme::pal().green,
                         app.i18n.t("print-check-ok"),
                     ),
                     Some(n) => (
-                        theme::AMBER_TINT,
+                        theme::pal().amber_tint,
                         "warn",
-                        theme::AMBER,
+                        theme::pal().amber,
                         app.i18n
                             .t_args("check-count", &[("count", Arg::Num(n as f64))]),
                     ),
-                    None => (theme::BG, "info", theme::MUTED, app.i18n.t("check-not-run")),
+                    None => (
+                        theme::pal().bg,
+                        "info",
+                        theme::pal().muted,
+                        app.i18n.t("check-not-run"),
+                    ),
                 };
                 egui::Frame::new()
                     .fill(fill)
@@ -1055,7 +1063,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                         ui.set_width(ui.available_width());
                         ui.horizontal(|ui| {
                             icons::show(ui, icon, 15.0, color);
-                            ui.label(RichText::new(text).size(12.5).color(theme::TEXT2));
+                            ui.label(RichText::new(text).size(12.5).color(theme::pal().text2));
                             theme::trailing(ui, |ui| {
                                 ui.label(
                                     RichText::new(app.i18n.t_args(
@@ -1076,7 +1084,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
     ui.add_space(4.0);
     let total = doc.as_ref().map_or(0, |d| total_labels(d, &form));
     ui.horizontal(|ui| {
-        icons::show(ui, "sparkle", 14.0, theme::MUTED);
+        icons::show(ui, "sparkle", 14.0, theme::pal().muted);
         let note = if app.ui.allow_agent_print {
             "print-agents-allowed"
         } else {
@@ -1085,7 +1093,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
         ui.label(
             RichText::new(app.i18n.t(note))
                 .size(12.0)
-                .color(theme::MUTED),
+                .color(theme::pal().muted),
         );
         theme::trailing(ui, |ui| {
             let label = app
@@ -1095,7 +1103,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                 ui,
                 "printer",
                 &label,
-                Some(theme::PRIMARY),
+                Some(theme::pal().primary),
                 Color32::WHITE,
                 None,
             )
@@ -1109,7 +1117,7 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                 "close",
                 &app.i18n.t("action-cancel"),
                 None,
-                theme::TEXT,
+                theme::pal().text,
                 None,
             )
             .clicked()

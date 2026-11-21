@@ -28,6 +28,7 @@ import org.labely.app.ui.IconTile
 import org.labely.app.ui.LargeTitle
 import org.labely.app.ui.ListRow
 import org.labely.app.ui.RowDivider
+import org.labely.app.ui.theme.Appearance
 import org.labely.app.ui.theme.Ic
 import org.labely.app.ui.theme.LIcon
 import org.labely.app.ui.theme.Palette
@@ -98,6 +99,18 @@ fun SettingsScreen(state: AppState) {
                 // Every size field and size shown follows the unit.
                 ListRow(stringResource(R.string.settings_units), stringResource(R.string.settings_units_sub), leading = { IconTile(Ic.Rect) }) {
                     Segmented(listOf("mm", "inch"), state.units.ordinal) { state.units = Units.entries[it] }
+                }
+                RowDivider()
+                ListRow(stringResource(R.string.settings_appearance), leading = { IconTile(Ic.Contrast) }) {
+                    Segmented(
+                        listOf(
+                            stringResource(R.string.appearance_system),
+                            stringResource(R.string.appearance_light),
+                            stringResource(R.string.appearance_dark),
+                        ),
+                        state.appearance.ordinal,
+                        scroll = true,
+                    ) { state.appearance = Appearance.entries[it] }
                 }
             }
         }

@@ -2,25 +2,28 @@ import LabelyKit
 import SwiftUI
 
 /// Colours of `design/labely-mobile.figcraft` (`C` in design/gen.py), as `Palette` on Android.
+/// Each one follows the colour scheme in effect, so every view adapts to dark mode. The label
+/// preview keeps white paper and black ink in both (it shows the print).
 enum Palette {
-    static let primary = Color(hex: 0x4C6EF5)
-    static let primaryDark = Color(hex: 0x3B5BDB)
-    static let primaryTint = Color(hex: 0xEDF2FF)
-    static let primaryTint2 = Color(hex: 0xDBE4FF)
-    static let bg = Color(hex: 0xF5F6F8)
-    static let surface = Color.white
-    static let border = Color(hex: 0xE4E7EC)
-    static let borderSoft = Color(hex: 0xEEF0F3)
-    static let text = Color(hex: 0x1B2130)
-    static let text2 = Color(hex: 0x475066)
-    static let muted = Color(hex: 0x8A93A6)
-    static let canvas = Color(hex: 0xE8EBF0)
-    static let field = Color(hex: 0xE9ECF1)
-    static let green = Color(hex: 0x12B886)
-    static let greenTint = Color(hex: 0xE6FCF5)
-    static let amber = Color(hex: 0xF59F00)
-    static let amberTint = Color(hex: 0xFFF4E0)
-    static let red = Color(hex: 0xFA5252)
+    static let primary = Color(light: 0x4C6EF5, dark: 0x5C7CFA)
+    /// Accent text on the tints.
+    static let primaryDark = Color(light: 0x3B5BDB, dark: 0x91A7FF)
+    static let primaryTint = Color(light: 0xEDF2FF, dark: 0x1E2640)
+    static let primaryTint2 = Color(light: 0xDBE4FF, dark: 0x28345C)
+    static let bg = Color(light: 0xF5F6F8, dark: 0x14171D)
+    static let surface = Color(light: 0xFFFFFF, dark: 0x1C2028)
+    static let border = Color(light: 0xE4E7EC, dark: 0x2E3440)
+    static let borderSoft = Color(light: 0xEEF0F3, dark: 0x262B35)
+    static let text = Color(light: 0x1B2130, dark: 0xE6E9EF)
+    static let text2 = Color(light: 0x475066, dark: 0xB4BCCB)
+    static let muted = Color(light: 0x8A93A6, dark: 0x8790A3)
+    static let canvas = Color(light: 0xE8EBF0, dark: 0x101318)
+    static let field = Color(light: 0xE9ECF1, dark: 0x252A34)
+    static let green = Color(light: 0x12B886, dark: 0x20C997)
+    static let greenTint = Color(light: 0xE6FCF5, dark: 0x0F2E26)
+    static let amber = Color(light: 0xF59F00, dark: 0xFAB005)
+    static let amberTint = Color(light: 0xFFF4E0, dark: 0x33270D)
+    static let red = Color(light: 0xFA5252, dark: 0xFF6B6B)
 }
 
 extension Color {
@@ -30,6 +33,33 @@ extension Color {
             green: Double((hex >> 8) & 0xFF) / 255,
             blue: Double(hex & 0xFF) / 255
         )
+    }
+
+    /// A colour that is `light` in the light scheme and `dark` in the dark one.
+    init(light: UInt32, dark: UInt32) {
+        self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light) })
+    }
+}
+
+extension UIColor {
+    convenience init(rgb: UInt32) {
+        self.init(
+            red: CGFloat((rgb >> 16) & 0xFF) / 255,
+            green: CGFloat((rgb >> 8) & 0xFF) / 255,
+            blue: CGFloat(rgb & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+}
+
+extension Appearance {
+    /// The scheme for `preferredColorScheme`: nil follows the system.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 }
 

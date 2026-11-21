@@ -1,4 +1,4 @@
-//! Studio preferences kept between runs: recent files and the length unit.
+//! Studio preferences kept between runs: recent files, the length unit and the theme.
 //!
 //! One JSON file under `<app-data>` (`studio.json`), written through a temp file and a rename.
 //! A missing or unreadable file gives the defaults.
@@ -86,6 +86,29 @@ impl Units {
     }
 }
 
+/// Light or dark look; `System` follows the operating system.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemePref {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePref {
+    pub const ALL: [ThemePref; 3] = [ThemePref::System, ThemePref::Light, ThemePref::Dark];
+
+    /// i18n key of the choice's name.
+    pub fn key(self) -> &'static str {
+        match self {
+            ThemePref::System => "theme-system",
+            ThemePref::Light => "theme-light",
+            ThemePref::Dark => "theme-dark",
+        }
+    }
+}
+
 /// Everything the studio remembers between runs.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -93,6 +116,8 @@ pub struct Prefs {
     /// Recently opened or saved documents, newest first.
     pub recent: Vec<PathBuf>,
     pub units: Units,
+    /// Light, dark or the system's look.
+    pub theme: ThemePref,
     /// UI language code ("en", "hu"); `None` follows the system language.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
@@ -161,6 +186,13 @@ mod tests {
     }
 
     #[test]
+    fn old_prefs_without_theme_load() {
+        let p: Prefs = serde_json::from_str(r#"{"recent":[],"units":"inch"}"#).unwrap();
+        assert_eq!(p.theme, ThemePref::System);
+        assert_eq!(p.units, Units::Inch);
+    }
+
+    #[test]
     fn recent_list_and_round_trip() {
         let mut p = Prefs::default();
         for i in 0..12 {
@@ -178,8 +210,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("sub").join(PREFS_FILE);
         p.units = Units::Inch;
+        p.theme = ThemePref::Dark;
         p.save(&file).unwrap();
         assert_eq!(Prefs::load(&file), p);
+        assert!(
+            std::fs::read_to_string(&file)
+                .unwrap()
+                .contains("\"theme\": \"dark\"")
+        );
         assert_eq!(Prefs::load(&dir.path().join("none.json")), Prefs::default());
     }
 }

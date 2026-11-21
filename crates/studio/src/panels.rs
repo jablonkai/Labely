@@ -1,7 +1,7 @@
 //! Side panels: layers, properties (generated from the command schemas), check results,
 //! printers, the status bar, the welcome screen and the print-raster preview.
 
-use egui::{Color32, Context, RichText, Ui};
+use egui::{Context, RichText, Ui};
 use labely_core::{Element, ElementId, Registry};
 use labely_i18n::Arg;
 use serde_json::{Map, Value, json};
@@ -977,15 +977,15 @@ pub(crate) fn check_panel(app: &mut LabelyApp, ui: &mut Ui) {
     };
     let issues = check["issues"].as_array().cloned().unwrap_or_default();
     if issues.is_empty() {
-        ui.colored_label(Color32::from_rgb(40, 150, 70), app.i18n.t("check-clean"));
+        ui.colored_label(crate::theme::pal().green, app.i18n.t("check-clean"));
     }
     egui::ScrollArea::vertical()
         .id_salt("check")
         .show(ui, |ui| {
             for issue in issues {
                 let (sym, color) = match issue["severity"].as_str() {
-                    Some("error") => ("⛔", Color32::from_rgb(200, 50, 50)),
-                    Some("warning") => ("⚠", Color32::from_rgb(200, 140, 0)),
+                    Some("error") => ("⛔", crate::theme::pal().red),
+                    Some("warning") => ("⚠", crate::theme::pal().amber),
                     _ => ("ℹ", ui.visuals().weak_text_color()),
                 };
                 let text = format!(
@@ -1160,7 +1160,7 @@ pub(crate) fn connect_help(app: &mut LabelyApp, ui: &mut Ui, address: &str) {
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.colored_label(
-                Color32::from_rgb(200, 60, 60),
+                crate::theme::pal().red,
                 app.i18n
                     .t_args("connect-failed", &[("address", Arg::Str(address))]),
             );

@@ -57,6 +57,7 @@ import org.labely.app.ui.templates.TemplateGrid
 import org.labely.app.ui.templates.displayName
 import org.labely.app.ui.theme.Ic
 import org.labely.app.ui.theme.LIcon
+import org.labely.app.ui.theme.LabelyColors
 import org.labely.app.ui.theme.Palette
 import org.labely.app.ui.theme.Type
 
@@ -182,7 +183,7 @@ private fun ActionCard(icon: Ic, title: String, sub: String, primary: Boolean, m
     val shape = RoundedCornerShape(18.dp)
     val bg =
         if (primary) {
-            Modifier.background(Brush.verticalGradient(listOf(Palette.primary, Palette.primaryDark)))
+            Modifier.background(Brush.verticalGradient(listOf(Palette.primary, if (Palette.dark) GRADIENT_END_DARK else Palette.primaryDark)))
         } else {
             Modifier.background(Palette.surface).border(1.dp, Palette.border, shape)
         }
@@ -198,3 +199,6 @@ private fun ActionCard(icon: Ic, title: String, sub: String, primary: Boolean, m
         }
     }
 }
+
+/** In dark, primaryDark is a light accent for text; the gradient keeps a deep blue under white text. */
+private val GRADIENT_END_DARK = LabelyColors.Light.primaryDark

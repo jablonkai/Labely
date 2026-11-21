@@ -644,10 +644,12 @@ impl LabelyApp {
         if !self.themed {
             // Fonts take effect next frame; the bold family must exist before it is used.
             theme::apply(&ctx);
+            theme::set_pref(&ctx, self.prefs.theme);
             self.themed = true;
             ctx.request_repaint();
             return;
         }
+        theme::sync(&ctx);
         let active = self.session.active_doc_id().map(str::to_owned);
         if active != self.ui.last_active {
             self.ui.home = false;
@@ -662,24 +664,26 @@ impl LabelyApp {
         crate::jobs::watch(self, &ctx);
         menu::shortcuts(self, &ctx);
         let line = |side: bool| {
-            egui::Frame::new().fill(theme::SURFACE).stroke(if side {
-                egui::Stroke::new(1.0, theme::BORDER)
-            } else {
-                egui::Stroke::NONE
-            })
+            egui::Frame::new()
+                .fill(theme::pal().surface)
+                .stroke(if side {
+                    egui::Stroke::new(1.0, theme::pal().border)
+                } else {
+                    egui::Stroke::NONE
+                })
         };
         egui::Panel::top("menu")
-            .frame(shell::bar_frame(theme::CHROME, 8, 2))
+            .frame(shell::bar_frame(theme::pal().chrome, 8, 2))
             .show(ui, |ui| menu::menu_bar(self, ui));
         egui::Panel::top("tabs")
-            .frame(shell::bar_frame(theme::CHROME, 10, 6))
+            .frame(shell::bar_frame(theme::pal().chrome, 10, 6))
             .show(ui, |ui| shell::title_bar(self, ui));
         egui::Panel::bottom("status")
-            .frame(shell::bar_frame(theme::CHROME, 14, 4))
+            .frame(shell::bar_frame(theme::pal().chrome, 14, 4))
             .show(ui, |ui| shell::status_bar(self, ui));
         if self.editing() {
             egui::Panel::top("toolbar")
-                .frame(shell::bar_frame(theme::SURFACE, 12, 6))
+                .frame(shell::bar_frame(theme::pal().surface, 12, 6))
                 .show(ui, |ui| shell::toolbar(self, ui));
             egui::Panel::left("rail")
                 .exact_size(72.0)
@@ -719,11 +723,11 @@ impl LabelyApp {
                     .show(ui, |ui| crate::data::records_table(self, ui));
             }
             egui::CentralPanel::default()
-                .frame(egui::Frame::new().fill(theme::CANVAS))
+                .frame(egui::Frame::new().fill(theme::pal().canvas))
                 .show(ui, |ui| canvas::canvas(self, ui));
         } else {
             egui::CentralPanel::default()
-                .frame(egui::Frame::new().fill(theme::BG))
+                .frame(egui::Frame::new().fill(theme::pal().bg))
                 .show(ui, |ui| home::home(self, ui));
         }
         if self.ui.show_preview {

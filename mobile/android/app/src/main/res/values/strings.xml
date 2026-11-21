@@ -473,6 +473,10 @@
     <string name="settings_canvas">Canvas</string>
     <string name="settings_units">Units</string>
     <string name="settings_units_sub">For every size field</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="appearance_system">System</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
     <string name="show">Show</string>
     <string name="snap">Snap</string>
     <string name="snap_sub">To the label, other elements and the grid, with guides</string>

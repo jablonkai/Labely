@@ -51,14 +51,14 @@ pub fn home(app: &mut LabelyApp, ui: &mut Ui) {
         .resizable(false)
         .frame(
             egui::Frame::new()
-                .fill(theme::CHROME)
+                .fill(theme::pal().chrome)
                 .inner_margin(Margin::same(14)),
         )
         .show(ui, |ui| nav(app, ui));
     egui::CentralPanel::default()
         .frame(
             egui::Frame::new()
-                .fill(theme::BG)
+                .fill(theme::pal().bg)
                 .inner_margin(Margin::symmetric(30, 22)),
         )
         .show(ui, |ui| match app.ui.home_page {
@@ -76,15 +76,19 @@ fn nav_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Response
     let enabled = ui.is_enabled();
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, enabled, active, &label));
     let bg = if active {
-        theme::PRIMARY_TINT
+        theme::pal().primary_tint
     } else if resp.hovered() {
-        theme::BG
+        theme::pal().bg
     } else {
         Color32::TRANSPARENT
     };
     ui.painter()
         .rect_filled(rect, CornerRadius::same(theme::RADIUS), bg);
-    let color = if active { theme::PRIMARY } else { theme::TEXT2 };
+    let color = if active {
+        theme::pal().primary
+    } else {
+        theme::pal().text2
+    };
     icons::paint(
         ui.painter(),
         egui::Rect::from_center_size(rect.left_center() + vec2(20.0, 0.0), vec2(18.0, 18.0)),
@@ -103,9 +107,9 @@ fn nav_item(ui: &mut Ui, icon: &str, text: &str, active: bool) -> egui::Response
             theme::regular(13.5)
         },
         if active {
-            theme::PRIMARY_DARK
+            theme::pal().primary_dark
         } else {
-            theme::TEXT
+            theme::pal().text
         },
         rect.right() - rect.left() - 48.0,
     );
@@ -116,7 +120,7 @@ fn nav(app: &mut LabelyApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         let (r, _) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::hover());
         ui.painter()
-            .rect_filled(r, CornerRadius::same(7), theme::PRIMARY);
+            .rect_filled(r, CornerRadius::same(7), theme::pal().primary);
         icons::paint(
             ui.painter(),
             r.shrink(6.0),
@@ -127,7 +131,7 @@ fn nav(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new("Labely")
                 .font(theme::bold(19.0))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
     });
     ui.add_space(16.0);
@@ -204,10 +208,11 @@ fn device_card(app: &mut LabelyApp, ui: &mut Ui) {
             ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 let Some(d) = connected.first() else {
                     ui.horizontal(|ui| {
-                        icons::show(ui, "printer", 18.0, theme::MUTED);
+                        icons::show(ui, "printer", 18.0, theme::pal().muted);
                         ui.add(
                             egui::Label::new(
-                                RichText::new(app.i18n.t("home-printer-none")).color(theme::TEXT2),
+                                RichText::new(app.i18n.t("home-printer-none"))
+                                    .color(theme::pal().text2),
                             )
                             .wrap(),
                         );
@@ -219,16 +224,22 @@ fn device_card(app: &mut LabelyApp, ui: &mut Ui) {
                     ui.painter().rect_filled(
                         r,
                         CornerRadius::same(theme::RADIUS),
-                        theme::GREEN_TINT,
+                        theme::pal().green_tint,
                     );
-                    icons::paint(ui.painter(), r.shrink(7.0), "printer", theme::GREEN, 1.5);
+                    icons::paint(
+                        ui.painter(),
+                        r.shrink(7.0),
+                        "printer",
+                        theme::pal().green,
+                        1.5,
+                    );
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 0.0;
                         let name = d.model.as_ref().map_or(d.name.clone(), |m| m.name.clone());
                         ui.label(
                             RichText::new(name)
                                 .font(theme::bold(13.5))
-                                .color(theme::TEXT),
+                                .color(theme::pal().text),
                         );
                         let transport = d
                             .address
@@ -242,7 +253,7 @@ fn device_card(app: &mut LabelyApp, ui: &mut Ui) {
                                 app.i18n.t("home-printer-connected")
                             ))
                             .size(11.5)
-                            .color(theme::GREEN),
+                            .color(theme::pal().green),
                         );
                     });
                 });
@@ -252,7 +263,7 @@ fn device_card(app: &mut LabelyApp, ui: &mut Ui) {
                         ui.label(
                             RichText::new(app.i18n.t("home-battery"))
                                 .size(11.5)
-                                .color(theme::MUTED),
+                                .color(theme::pal().muted),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(RichText::new(format!("{b}%")).font(theme::bold(11.5)));
@@ -261,11 +272,11 @@ fn device_card(app: &mut LabelyApp, ui: &mut Ui) {
                     let (r, _) =
                         ui.allocate_exact_size(vec2(ui.available_width(), 5.0), Sense::hover());
                     ui.painter()
-                        .rect_filled(r, CornerRadius::same(3), theme::BORDER_SOFT);
+                        .rect_filled(r, CornerRadius::same(3), theme::pal().border_soft);
                     let mut fill = r;
                     fill.set_width(r.width() * (b.min(100) as f32 / 100.0));
                     ui.painter()
-                        .rect_filled(fill, CornerRadius::same(3), theme::GREEN);
+                        .rect_filled(fill, CornerRadius::same(3), theme::pal().green);
                 }
                 if let Some(doc) = app.session.doc(None) {
                     ui.add_space(6.0);
@@ -273,7 +284,7 @@ fn device_card(app: &mut LabelyApp, ui: &mut Ui) {
                         ui.label(
                             RichText::new(app.i18n.t("home-paper"))
                                 .size(11.5)
-                                .color(theme::MUTED),
+                                .color(theme::pal().muted),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(
@@ -314,9 +325,9 @@ fn action_card(
     let (fill, stroke, fg, sub, tile, tile_fg) = if primary {
         (
             if hovered {
-                theme::PRIMARY_DARK
+                theme::pal().primary_hover
             } else {
-                theme::PRIMARY
+                theme::pal().primary
             },
             Stroke::NONE,
             Color32::WHITE,
@@ -326,19 +337,19 @@ fn action_card(
         )
     } else {
         (
-            theme::SURFACE,
+            theme::pal().surface,
             Stroke::new(
                 1.0,
                 if hovered {
-                    theme::PRIMARY_TINT2
+                    theme::pal().primary_tint2
                 } else {
-                    theme::BORDER
+                    theme::pal().border
                 },
             ),
-            theme::TEXT,
-            theme::MUTED,
-            theme::PRIMARY_TINT,
-            theme::PRIMARY,
+            theme::pal().text,
+            theme::pal().muted,
+            theme::pal().primary_tint,
+            theme::pal().primary,
         )
     };
     let p = ui.painter();
@@ -373,21 +384,21 @@ fn action_card(
 pub(crate) fn chip(ui: &mut Ui, text: &str, active: bool) -> egui::Response {
     ui.add(
         egui::Button::new(RichText::new(text).size(12.5).color(if active {
-            theme::PRIMARY_DARK
+            theme::pal().primary_dark
         } else {
-            theme::TEXT
+            theme::pal().text
         }))
         .fill(if active {
-            theme::PRIMARY_TINT
+            theme::pal().primary_tint
         } else {
-            theme::SURFACE
+            theme::pal().surface
         })
         .stroke(Stroke::new(
             1.0,
             if active {
-                theme::PRIMARY_TINT2
+                theme::pal().primary_tint2
             } else {
-                theme::BORDER
+                theme::pal().border
             },
         ))
         .corner_radius(CornerRadius::same(14))
@@ -403,12 +414,12 @@ fn main(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t("home-greeting"))
                     .size(13.0)
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
             ui.label(
                 RichText::new(app.i18n.t("home-title"))
                     .font(theme::bold(25.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -511,7 +522,7 @@ fn main(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new(app.i18n.t("home-quick-size"))
                 .size(12.5)
-                .color(theme::MUTED),
+                .color(theme::pal().muted),
         );
         for (i, (w, h)) in QUICK_SIZES.iter().enumerate() {
             if chip(ui, &format!("{} × {} mm", mm(*w), mm(*h)), i == 0).clicked() {
@@ -573,7 +584,7 @@ fn template_sections(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t(key))
                     .font(theme::bold(15.5))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
@@ -581,7 +592,7 @@ fn template_sections(app: &mut LabelyApp, ui: &mut Ui) {
                         egui::Button::new(
                             RichText::new(app.i18n.t("home-all"))
                                 .size(12.5)
-                                .color(theme::PRIMARY),
+                                .color(theme::pal().primary),
                         )
                         .frame(false),
                     )
@@ -627,13 +638,13 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
     ui.painter().rect(
         rect,
         CornerRadius::same(theme::RADIUS_LG),
-        theme::SURFACE,
+        theme::pal().surface,
         Stroke::new(
             1.0,
             if hovered {
-                theme::PRIMARY_TINT2
+                theme::pal().primary_tint2
             } else {
-                theme::BORDER
+                theme::pal().border
             },
         ),
         egui::StrokeKind::Inside,
@@ -643,7 +654,7 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
         vec2(width - 16.0, width * 0.62 - 8.0),
     );
     ui.painter()
-        .rect_filled(well, CornerRadius::same(theme::RADIUS), theme::CANVAS);
+        .rect_filled(well, CornerRadius::same(theme::RADIUS), theme::pal().canvas);
     let ctx = ui.ctx().clone();
     if let Some(tex) = templates::thumbnail(app, &ctx, t) {
         let s = tex.size_vec2();
@@ -666,7 +677,7 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
         egui::Align2::LEFT_TOP,
         &name,
         theme::bold(13.5),
-        theme::TEXT,
+        theme::pal().text,
         rect.width() - 24.0,
     );
     theme::fit_text(
@@ -675,7 +686,7 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
         egui::Align2::LEFT_TOP,
         &size,
         theme::regular(11.5),
-        theme::MUTED,
+        theme::pal().muted,
         rect.width() - 24.0,
     );
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -692,7 +703,7 @@ fn recent(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new(app.i18n.t("menu-recent"))
                 .font(theme::bold(15.5))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         ui.add_space(8.0);
         let recent = app.prefs.recent.clone();
@@ -700,7 +711,7 @@ fn recent(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t("home-recent-empty"))
                     .size(12.5)
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
         }
         for path in &recent {
@@ -725,22 +736,31 @@ fn recent(app: &mut LabelyApp, ui: &mut Ui) {
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, true, &label));
             if resp.hovered() {
                 ui.painter()
-                    .rect_filled(rect, CornerRadius::same(theme::RADIUS), theme::BG);
+                    .rect_filled(rect, CornerRadius::same(theme::RADIUS), theme::pal().bg);
             }
             let t = egui::Rect::from_center_size(
                 rect.left_center() + vec2(22.0, 0.0),
                 vec2(32.0, 32.0),
             );
-            ui.painter()
-                .rect_filled(t, CornerRadius::same(theme::RADIUS), theme::PRIMARY_TINT);
-            icons::paint(ui.painter(), t.shrink(8.0), "file", theme::PRIMARY, 1.5);
+            ui.painter().rect_filled(
+                t,
+                CornerRadius::same(theme::RADIUS),
+                theme::pal().primary_tint,
+            );
+            icons::paint(
+                ui.painter(),
+                t.shrink(8.0),
+                "file",
+                theme::pal().primary,
+                1.5,
+            );
             theme::fit_text(
                 ui.painter(),
                 egui::pos2(rect.left() + 48.0, rect.center().y - 9.0),
                 egui::Align2::LEFT_CENTER,
                 &stem,
                 theme::bold(13.5),
-                theme::TEXT,
+                theme::pal().text,
                 rect.width() - 56.0,
             );
             theme::fit_text(
@@ -749,7 +769,7 @@ fn recent(app: &mut LabelyApp, ui: &mut Ui) {
                 egui::Align2::LEFT_CENTER,
                 &folder,
                 theme::regular(11.5),
-                theme::MUTED,
+                theme::pal().muted,
                 rect.width() - 56.0,
             );
             let resp = resp.on_hover_text(path.display().to_string());
@@ -759,24 +779,24 @@ fn recent(app: &mut LabelyApp, ui: &mut Ui) {
         }
         at_bottom(ui, "home-agents-card", |ui| {
             egui::Frame::new()
-                .fill(theme::PRIMARY_TINT)
+                .fill(theme::pal().primary_tint)
                 .corner_radius(CornerRadius::same(theme::RADIUS))
                 .inner_margin(Margin::same(14))
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                         ui.horizontal(|ui| {
-                            icons::show(ui, "agent", 16.0, theme::PRIMARY);
+                            icons::show(ui, "agent", 16.0, theme::pal().primary);
                             ui.label(
                                 RichText::new(app.i18n.t("home-agents-title"))
                                     .font(theme::bold(13.0))
-                                    .color(theme::TEXT),
+                                    .color(theme::pal().text),
                             );
                         });
                         ui.label(
                             RichText::new(app.i18n.t("home-agents-text"))
                                 .size(12.5)
-                                .color(theme::TEXT2),
+                                .color(theme::pal().text2),
                         );
                     });
                 });
@@ -803,7 +823,7 @@ fn setting_row(ui: &mut Ui, title: &str, hint: &str, first: bool, add: impl FnOn
         ui.add_space(4.0);
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
         ui.painter()
-            .rect_filled(r, CornerRadius::ZERO, theme::BORDER_SOFT);
+            .rect_filled(r, CornerRadius::ZERO, theme::pal().border_soft);
         ui.add_space(4.0);
     }
     ui.horizontal(|ui| {
@@ -817,10 +837,13 @@ fn setting_row(ui: &mut Ui, title: &str, hint: &str, first: bool, add: impl FnOn
             ui.label(
                 RichText::new(title)
                     .font(theme::bold(13.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
             if !hint.is_empty() {
-                ui.add(egui::Label::new(RichText::new(hint).size(11.5).color(theme::MUTED)).wrap());
+                ui.add(
+                    egui::Label::new(RichText::new(hint).size(11.5).color(theme::pal().muted))
+                        .wrap(),
+                );
             }
         });
         theme::trailing(ui, add);
@@ -844,11 +867,11 @@ fn settings_card(
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                icons::show(ui, icon, 16.0, theme::PRIMARY);
+                icons::show(ui, icon, 16.0, theme::pal().primary);
                 ui.label(
                     RichText::new(app.i18n.t(title))
                         .font(theme::bold(15.0))
-                        .color(theme::TEXT),
+                        .color(theme::pal().text),
                 );
             });
             ui.add_space(6.0);
@@ -866,9 +889,9 @@ fn settings(app: &mut LabelyApp, ui: &mut Ui) {
     ui.label(
         RichText::new(app.i18n.t("home-settings"))
             .font(theme::bold(25.0))
-            .color(theme::TEXT),
+            .color(theme::pal().text),
     );
-    ui.label(RichText::new(app.i18n.t("settings-subtitle")).color(theme::MUTED));
+    ui.label(RichText::new(app.i18n.t("settings-subtitle")).color(theme::pal().muted));
     ui.add_space(14.0);
     let h = ui.available_height();
     ui.horizontal_top(|ui| {
@@ -945,6 +968,24 @@ fn settings_cards(app: &mut LabelyApp, ui: &mut Ui) {
                 app.save_prefs();
             }
         });
+        let theme_t = app.i18n.t("settings-theme");
+        setting_row(ui, &theme_t, "", false, |ui| {
+            let all = crate::prefs::ThemePref::ALL;
+            let items: Vec<_> = all.iter().map(|t| (app.i18n.t(t.key()), None)).collect();
+            let sel = all.iter().position(|t| *t == app.prefs.theme).unwrap_or(0);
+            let picked = ui
+                .allocate_ui_with_layout(
+                    vec2(300.0, 34.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| crate::inspector::segmented(ui, &items, sel),
+                )
+                .inner;
+            if let Some(i) = picked {
+                app.prefs.theme = all[i];
+                crate::theme::set_pref(ui.ctx(), all[i]);
+                app.save_prefs();
+            }
+        });
     });
     settings_card(app, ui, "appearance", |app, ui| {
         let t = app.i18n.t("action-show-rulers");
@@ -981,10 +1022,10 @@ fn settings_cards(app: &mut LabelyApp, ui: &mut Ui) {
             let (text, fg, bg) = match &url {
                 Some(_) => (
                     app.i18n.t("settings-mcp-on"),
-                    theme::GREEN,
-                    theme::GREEN_TINT,
+                    theme::pal().green,
+                    theme::pal().green_tint,
                 ),
-                None => (app.i18n.t("mcp-off"), theme::MUTED, theme::BG),
+                None => (app.i18n.t("mcp-off"), theme::pal().muted, theme::pal().bg),
             };
             egui::Frame::new()
                 .fill(bg)
@@ -1051,7 +1092,7 @@ pub fn templates_pane(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new(app.i18n.t("rail-templates"))
                 .font(theme::bold(16.0))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let tip = app.i18n.t("templates-title");
@@ -1091,7 +1132,7 @@ pub fn templates_pane(app: &mut LabelyApp, ui: &mut Ui) {
         .max_height((ui.available_height() - footer).max(60.0))
         .show(ui, |ui| {
             if all.is_empty() {
-                ui.label(RichText::new(app.i18n.t("templates-empty")).color(theme::MUTED));
+                ui.label(RichText::new(app.i18n.t("templates-empty")).color(theme::pal().muted));
             }
             let gap = 8.0;
             let w = (ui.available_width() - gap) / 2.0;
@@ -1114,7 +1155,7 @@ pub fn templates_pane(app: &mut LabelyApp, ui: &mut Ui) {
                     "plus",
                     &menu::command_label(&app.i18n, "template.save"),
                     None,
-                    theme::TEXT,
+                    theme::pal().text,
                     None,
                 )
                 .clicked()
