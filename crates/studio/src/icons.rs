@@ -319,20 +319,20 @@ pub fn button_named(
         egui::WidgetInfo::selected(egui::Role::Button, enabled, active, &label_owned)
     });
     let bg = if active {
-        theme::PRIMARY_TINT
+        theme::pal().primary_tint
     } else if resp.hovered() && enabled {
-        theme::BG
+        theme::pal().bg
     } else {
         Color32::TRANSPARENT
     };
     ui.painter()
         .rect_filled(rect, egui::CornerRadius::same(theme::RADIUS), bg);
     let color = if !enabled {
-        theme::BORDER
+        theme::pal().border
     } else if active {
-        theme::PRIMARY
+        theme::pal().primary
     } else {
-        theme::TEXT2
+        theme::pal().text2
     };
     paint(ui.painter(), rect.shrink(size * 0.22), name, color, 1.5);
     if label.is_empty() {
@@ -360,11 +360,17 @@ pub fn text_button(
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &label));
     let hovered = resp.hovered();
     let (bg, stroke) = match fill {
-        Some(c) if hovered && c == theme::PRIMARY => (theme::PRIMARY_DARK, Stroke::NONE),
+        Some(c) if hovered && c == theme::pal().primary => {
+            (theme::pal().primary_hover, Stroke::NONE)
+        }
         Some(c) => (c, Stroke::NONE),
         None => (
-            if hovered { theme::BG } else { theme::SURFACE },
-            Stroke::new(1.0, theme::BORDER),
+            if hovered {
+                theme::pal().bg
+            } else {
+                theme::pal().surface
+            },
+            Stroke::new(1.0, theme::pal().border),
         ),
     };
     ui.painter().rect(

@@ -314,6 +314,8 @@ fun LabelCanvas(ed: EditorState, modifier: Modifier = Modifier) {
             val showGrid = app.showGrid
             val showRulers = app.showRulers
             val gridMm = app.gridMm
+            // Read in composition, so a theme change recomposes and the lambda below redraws.
+            val colors = Palette.current
             // Drawn over the label in screen pixels, so lines and handles keep their size at any zoom.
             Canvas(Modifier.fillMaxSize()) {
                 val z = fit.clamp(zoom)
@@ -324,20 +326,20 @@ fun LabelCanvas(ed: EditorState, modifier: Modifier = Modifier) {
                 val stroke = 1.5.dp.toPx()
                 if (span != null) {
                     // What the printhead cannot reach, as the studio shades it.
-                    val shade = Palette.red.copy(alpha = 0.16f)
+                    val shade = colors.red.copy(alpha = 0.16f)
                     drawRect(shade, o, Size(span.first.toFloat() * k, h))
                     drawRect(shade, Offset(o.x + span.second.toFloat() * k, o.y), Size(w - span.second.toFloat() * k, h))
                 }
                 if (showGrid && gridMm * k >= 4.dp.toPx()) {
-                    val c = Palette.text2.copy(alpha = 0.14f)
+                    val c = colors.text2.copy(alpha = 0.14f)
                     for (x in gridLines(label.widthMm, gridMm)) drawLine(c, Offset(o.x + x.toFloat() * k, o.y), Offset(o.x + x.toFloat() * k, o.y + h))
                     for (y in gridLines(label.heightMm, gridMm)) drawLine(c, Offset(o.x, o.y + y.toFloat() * k), Offset(o.x + w, o.y + y.toFloat() * k))
                 }
-                if (showRulers) rulers(o, w, h, k, label.widthMm, label.heightMm)
+                if (showRulers) rulers(colors.text2.copy(alpha = 0.6f), o, w, h, k, label.widthMm, label.heightMm)
 
                 val l = live
                 if (l is Moved) {
-                    val guide = Palette.red
+                    val guide = colors.red
                     for (x in l.xs) drawLine(guide, Offset(o.x + x.toFloat() * k, o.y - 8.dp.toPx()), Offset(o.x + x.toFloat() * k, o.y + h + 8.dp.toPx()), 1.dp.toPx())
                     for (y in l.ys) drawLine(guide, Offset(o.x - 8.dp.toPx(), o.y + y.toFloat() * k), Offset(o.x + w + 8.dp.toPx(), o.y + y.toFloat() * k), 1.dp.toPx())
                 }
@@ -356,7 +358,7 @@ fun LabelCanvas(ed: EditorState, modifier: Modifier = Modifier) {
                     val centre = Offset(tl.x + size.width / 2, tl.y + size.height / 2)
                     rotate(rot.toFloat(), centre) {
                         drawRect(
-                            Palette.primary, tl, size,
+                            colors.primary, tl, size,
                             style = Stroke(stroke, pathEffect = if (e.locked) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())) else null),
                         )
                         if (e.id == single?.id) {
@@ -364,15 +366,15 @@ fun LabelCanvas(ed: EditorState, modifier: Modifier = Modifier) {
                             for (hd in Handle.of(e)) {
                                 val c = Offset(tl.x + size.width * hd.fx - r, tl.y + size.height * hd.fy - r)
                                 drawRect(Color.White, c, Size(2 * r, 2 * r))
-                                drawRect(Palette.primary, c, Size(2 * r, 2 * r), style = Stroke(stroke))
+                                drawRect(colors.primary, c, Size(2 * r, 2 * r), style = Stroke(stroke))
                             }
                             if (!e.locked && !e.hidden) {
                                 // The rotation handle: a round knob on a stem above the top edge.
                                 val top = Offset(centre.x, tl.y)
                                 val knob = top - Offset(0f, KNOB_DISTANCE.toPx())
-                                drawLine(Palette.primary, top, knob, stroke)
+                                drawLine(colors.primary, top, knob, stroke)
                                 drawCircle(Color.White, 5.dp.toPx(), knob)
-                                drawCircle(Palette.primary, 5.dp.toPx(), knob, style = Stroke(stroke))
+                                drawCircle(colors.primary, 5.dp.toPx(), knob, style = Stroke(stroke))
                             }
                         }
                     }
@@ -380,15 +382,15 @@ fun LabelCanvas(ed: EditorState, modifier: Modifier = Modifier) {
                 if (l is Marquee) {
                     val a = fit.toPx(z, l.box.left, l.box.top)
                     val size = Size(l.box.width.toFloat() * k, l.box.height.toFloat() * k)
-                    drawRect(Palette.primary.copy(alpha = 0.12f), a, size)
-                    drawRect(Palette.primary, a, size, style = Stroke(1.dp.toPx()))
+                    drawRect(colors.primary.copy(alpha = 0.12f), a, size)
+                    drawRect(colors.primary, a, size, style = Stroke(1.dp.toPx()))
                 }
             }
             (live as? Shaped)?.let { s ->
                 if (s.rotation != single?.rotationDeg) {
                     Text(
                         stringResource(R.string.degrees, mm(s.rotation)),
-                        style = Type.bodyStrong.copy(fontSize = 13.sp, color = Color.White),
+                        style = Type.bodyStrong.copy(fontSize = 13.sp, color = Palette.surface),
                         modifier = Modifier.align(Alignment.TopCenter).padding(12.dp).clip(RoundedCornerShape(50)).background(Palette.text).padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
@@ -410,8 +412,7 @@ fun LabelCanvas(ed: EditorState, modifier: Modifier = Modifier) {
 }
 
 /** Millimetre ticks along the label's top and left edges; longer every 5 and 10 mm. */
-private fun DrawScope.rulers(o: Offset, w: Float, h: Float, k: Float, widthMm: Double, heightMm: Double) {
-    val c = Palette.text2.copy(alpha = 0.6f)
+private fun DrawScope.rulers(c: Color, o: Offset, w: Float, h: Float, k: Float, widthMm: Double, heightMm: Double) {
     val gap = 3.dp.toPx()
     val step = if (k >= 3.dp.toPx()) 1 else 5
     fun len(i: Int) = (if (i % 10 == 0) 8.dp else if (i % 5 == 0) 5.dp else 3.dp).toPx()

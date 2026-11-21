@@ -307,6 +307,10 @@ action-show-rulers = Rulers
 menu-units = Units
 units-mm = Millimetres
 units-inch = Inches
+settings-theme = Appearance
+theme-system = System
+theme-light = Light
+theme-dark = Dark
 
 ## Text and data (3.6c)
 cmd-element-mirror = Mirror copy (left–right)

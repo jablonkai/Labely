@@ -29,9 +29,9 @@ fn badge(ui: &mut Ui, text: &str, fg: Color32, bg: Color32) {
 fn printer_icon(ui: &mut Ui, size: f32, active: bool) {
     let (r, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
     let (bg, fg) = if active {
-        (theme::PRIMARY_TINT, theme::PRIMARY)
+        (theme::pal().primary_tint, theme::pal().primary)
     } else {
-        (theme::BG, theme::TEXT2)
+        (theme::pal().bg, theme::pal().text2)
     };
     ui.painter()
         .rect_filled(r, CornerRadius::same(theme::RADIUS), bg);
@@ -51,12 +51,12 @@ fn device_row(
     trailing: impl FnOnce(&mut Ui),
 ) -> egui::Response {
     let stroke = if selected {
-        Stroke::new(2.0, theme::PRIMARY)
+        Stroke::new(2.0, theme::pal().primary)
     } else {
-        Stroke::new(1.0, theme::BORDER)
+        Stroke::new(1.0, theme::pal().border)
     };
     let r = egui::Frame::new()
-        .fill(theme::SURFACE)
+        .fill(theme::pal().surface)
         .stroke(stroke)
         .corner_radius(CornerRadius::same(theme::RADIUS_LG))
         .inner_margin(Margin::symmetric(12, 10))
@@ -69,13 +69,13 @@ fn device_row(
                     ui.label(
                         RichText::new(name)
                             .font(theme::bold(14.0))
-                            .color(theme::TEXT),
+                            .color(theme::pal().text),
                     );
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 5.0;
                         let (d, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
                         ui.painter().circle_filled(d.center(), 4.0, dot);
-                        ui.label(RichText::new(sub).size(11.5).color(theme::MUTED));
+                        ui.label(RichText::new(sub).size(11.5).color(theme::pal().muted));
                     });
                 });
                 theme::trailing(ui, trailing);
@@ -111,16 +111,16 @@ pub fn page(app: &mut LabelyApp, ui: &mut Ui) {
             ui.label(
                 RichText::new(app.i18n.t("panel-printers"))
                     .font(theme::bold(25.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
-            ui.label(RichText::new(app.i18n.t("printers-subtitle")).color(theme::MUTED));
+            ui.label(RichText::new(app.i18n.t("printers-subtitle")).color(theme::pal().muted));
         });
         theme::trailing(ui, |ui| {
             if icons::text_button(
                 ui,
                 "search",
                 &app.i18n.t("printers-search"),
-                Some(theme::PRIMARY),
+                Some(theme::pal().primary),
                 Color32::WHITE,
                 None,
             )
@@ -166,7 +166,7 @@ pub fn page(app: &mut LabelyApp, ui: &mut Ui) {
                                     ui.add_space(8.0);
                                     ui.label(
                                         RichText::new(app.i18n.t("printers-none"))
-                                            .color(theme::MUTED),
+                                            .color(theme::pal().muted),
                                     );
                                 });
                                 ui.add_space(20.0);
@@ -182,7 +182,7 @@ pub fn page(app: &mut LabelyApp, ui: &mut Ui) {
 fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
     theme::section(ui, &app.i18n.t("printers-mine"));
     if connected.is_empty() {
-        ui.label(RichText::new(app.i18n.t("printers-none-connected")).color(theme::MUTED));
+        ui.label(RichText::new(app.i18n.t("printers-none-connected")).color(theme::pal().muted));
     }
     for d in connected {
         let name = d.model.as_ref().map_or(d.name.clone(), |m| m.name.clone());
@@ -194,11 +194,11 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
             ui,
             &name,
             &sub.join(" · "),
-            theme::GREEN,
+            theme::pal().green,
             active,
             true,
             |ui| {
-                badge(ui, &text, theme::GREEN, theme::GREEN_TINT);
+                badge(ui, &text, theme::pal().green, theme::pal().green_tint);
             },
         )
         .clicked()
@@ -219,7 +219,7 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
                     egui::Button::new(
                         RichText::new(app.i18n.t("printers-rescan"))
                             .size(12.0)
-                            .color(theme::PRIMARY),
+                            .color(theme::pal().primary),
                     )
                     .frame(false),
                 )
@@ -238,7 +238,7 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
         let name = d["name"].as_str().unwrap_or("?").to_owned();
         let sub = format!("{} · {address}", transport(&address));
         let label = app.i18n.t("action-connect");
-        device_row(ui, &name, &sub, theme::PRIMARY, false, false, |ui| {
+        device_row(ui, &name, &sub, theme::pal().primary, false, false, |ui| {
             if ui
                 .add(egui::Button::new(label).min_size(vec2(0.0, 30.0)))
                 .clicked()
@@ -257,13 +257,13 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
     ui.add_space(6.0);
     // Manual address: a dashed row with a field and Connect.
     egui::Frame::new()
-        .stroke(Stroke::new(1.0, theme::BORDER))
+        .stroke(Stroke::new(1.0, theme::pal().border))
         .corner_radius(CornerRadius::same(theme::RADIUS_LG))
         .inner_margin(Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                icons::show(ui, "plus", 15.0, theme::TEXT2);
+                icons::show(ui, "plus", 15.0, theme::pal().text2);
                 let w = ui.available_width() - 100.0;
                 let l = ui
                     .add(
@@ -288,12 +288,12 @@ fn devices(app: &mut LabelyApp, ui: &mut Ui, connected: &[DeviceInfo]) {
         });
     ui.add_space(14.0);
     ui.horizontal_top(|ui| {
-        icons::show(ui, "info", 14.0, theme::MUTED);
+        icons::show(ui, "info", 14.0, theme::pal().muted);
         ui.add(
             egui::Label::new(
                 RichText::new(app.i18n.t("printers-tip"))
                     .size(11.5)
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             )
             .wrap(),
         );
@@ -311,7 +311,7 @@ fn tile(
     bar: Option<f32>,
 ) {
     egui::Frame::new()
-        .fill(theme::BG)
+        .fill(theme::pal().bg)
         .corner_radius(CornerRadius::same(theme::RADIUS_LG))
         .inner_margin(Margin::same(12))
         .show(ui, |ui| {
@@ -319,23 +319,23 @@ fn tile(
             ui.spacing_mut().item_spacing.y = 3.0;
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 5.0;
-                icons::show(ui, icon, 13.0, theme::MUTED);
-                ui.label(RichText::new(caption).size(11.5).color(theme::MUTED));
+                icons::show(ui, icon, 13.0, theme::pal().muted);
+                ui.label(RichText::new(caption).size(11.5).color(theme::pal().muted));
             });
             ui.label(
                 RichText::new(value)
                     .font(theme::bold(19.0))
-                    .color(theme::TEXT),
+                    .color(theme::pal().text),
             );
-            ui.label(RichText::new(note).size(11.5).color(theme::MUTED));
+            ui.label(RichText::new(note).size(11.5).color(theme::pal().muted));
             if let Some(f) = bar {
                 let (r, _) = ui.allocate_exact_size(vec2(width - 44.0, 4.0), Sense::hover());
                 ui.painter()
-                    .rect_filled(r, CornerRadius::same(2), theme::BORDER);
+                    .rect_filled(r, CornerRadius::same(2), theme::pal().border);
                 let mut fill = r;
                 fill.set_width(r.width() * f.clamp(0.0, 1.0));
                 ui.painter()
-                    .rect_filled(fill, CornerRadius::same(2), theme::GREEN);
+                    .rect_filled(fill, CornerRadius::same(2), theme::pal().green);
             }
         });
 }
@@ -351,7 +351,7 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
                 ui.label(
                     RichText::new(&name)
                         .font(theme::bold(21.0))
-                        .color(theme::TEXT),
+                        .color(theme::pal().text),
                 );
                 badge(
                     ui,
@@ -360,8 +360,8 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
                         app.i18n.t("printers-connected"),
                         transport(&d.address)
                     ),
-                    theme::GREEN,
-                    theme::GREEN_TINT,
+                    theme::pal().green,
+                    theme::pal().green_tint,
                 );
             });
             let mut facts = Vec::new();
@@ -383,7 +383,7 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
             ui.label(
                 RichText::new(facts.join(" · "))
                     .size(12.0)
-                    .color(theme::MUTED),
+                    .color(theme::pal().muted),
             );
             ui.add_space(4.0);
             ui.horizontal(|ui| {
@@ -392,7 +392,7 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
                     "rotate",
                     &app.i18n.t("action-status"),
                     None,
-                    theme::TEXT,
+                    theme::pal().text,
                     None,
                 )
                 .clicked()
@@ -411,7 +411,8 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
                 if ui
                     .add(
                         egui::Button::new(
-                            RichText::new(app.i18n.t("action-disconnect")).color(theme::PRIMARY),
+                            RichText::new(app.i18n.t("action-disconnect"))
+                                .color(theme::pal().primary),
                         )
                         .frame(false),
                     )
@@ -518,10 +519,10 @@ fn details(app: &mut LabelyApp, ui: &mut Ui, d: &DeviceInfo) {
                 ui.label(
                     RichText::new(title)
                         .font(theme::bold(13.0))
-                        .color(theme::TEXT),
+                        .color(theme::pal().text),
                 );
                 if !sub.is_empty() {
-                    ui.label(RichText::new(sub).size(11.5).color(theme::MUTED));
+                    ui.label(RichText::new(sub).size(11.5).color(theme::pal().muted));
                 }
             });
             theme::trailing(ui, |ui| add(ui));

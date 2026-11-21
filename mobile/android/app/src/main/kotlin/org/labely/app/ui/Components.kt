@@ -44,6 +44,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -123,7 +124,7 @@ fun SearchField(value: String, placeholder: String, onChange: (String) -> Unit) 
         LIcon(Ic.Search, Palette.muted, 18.dp)
         Box(Modifier.weight(1f)) {
             if (value.isEmpty()) Text(placeholder, style = Type.body.copy(color = Palette.muted), maxLines = 1)
-            BasicTextField(value, onChange, singleLine = true, textStyle = Type.body, modifier = Modifier.fillMaxWidth())
+            BasicTextField(value, onChange, singleLine = true, textStyle = Type.body, cursorBrush = SolidColor(Palette.text), modifier = Modifier.fillMaxWidth())
         }
         if (value.isNotEmpty()) LIcon(Ic.Close, Palette.muted, 16.dp, Modifier.clickable { onChange("") })
     }
@@ -251,6 +252,7 @@ fun NumberField(label: String, value: Double, onCommit: (Double) -> Unit, modifi
             { text = it },
             singleLine = true,
             textStyle = Type.body,
+            cursorBrush = SolidColor(Palette.text),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { commit() }),
             modifier = Modifier.weight(1f).onFocusChanged { if (!it.isFocused) commit() },

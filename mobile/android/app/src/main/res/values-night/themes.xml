@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark when the system is dark (Palette.bg of LabelyColors.Dark). -->
+    <style name="Theme.Labely" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/labely_bg</item>
+    </style>
+
+    <color name="labely_bg">#14171D</color>
+</resources>

@@ -301,6 +301,10 @@ action-show-rulers = Vonalzók
 menu-units = Mértékegység
 units-mm = Milliméter
 units-inch = Hüvelyk
+settings-theme = Megjelenés
+theme-system = Rendszer
+theme-light = Világos
+theme-dark = Sötét
 
 ## Szöveg és adatok (3.6c)
 cmd-element-mirror = Tükrözött másolat (balra–jobbra)

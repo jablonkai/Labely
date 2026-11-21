@@ -9,8 +9,8 @@ struct LabelyApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(state: state)
-                // The design is light only (as on Android).
-                .preferredColorScheme(.light)
+                // System (nil), light or dark, from Settings.
+                .preferredColorScheme(state.prefs.appearance.colorScheme)
                 .tint(Palette.primary)
         }
     }
@@ -159,7 +159,7 @@ private struct Toast: View {
     var body: some View {
         if let notice = state.message {
             Text(text(notice))
-                .style(.bodyStrong.with(color: .white))
+                .style(.bodyStrong.with(color: Palette.surface))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(Palette.text.opacity(0.92), in: RoundedRectangle(cornerRadius: 12))

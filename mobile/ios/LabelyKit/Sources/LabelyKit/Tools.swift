@@ -3,6 +3,12 @@ import Synchronization
 
 // Pure helpers of the shell: units, record ranges, the element clipboard and text spans.
 
+/// The colour scheme the app is shown in: the system's (the default), or always light or dark.
+/// The label preview stays white paper and black ink in either.
+public enum Appearance: String, Sendable, CaseIterable, Codable {
+    case system, light, dark
+}
+
 /// The unit sizes are shown and typed in. The engine and the files always use millimetres.
 public enum LengthUnit: String, Sendable, CaseIterable, Codable {
     case mm, inch
@@ -233,6 +239,8 @@ public struct Prefs: Sendable, Equatable, Codable {
     public var autoApplyPaper = false
     /// Colour the label is drawn with on screen, `RRGGBB`; the print is not affected.
     public var labelColor = "FFFFFF"
+    /// Light, dark or the system's colour scheme.
+    public var appearance = Appearance.system
 
     public init() {}
 
@@ -246,6 +254,7 @@ public struct Prefs: Sendable, Equatable, Codable {
         rotateSnap = try c.decodeIfPresent(Bool.self, forKey: .rotateSnap) ?? true
         autoApplyPaper = try c.decodeIfPresent(Bool.self, forKey: .autoApplyPaper) ?? false
         labelColor = try c.decodeIfPresent(String.self, forKey: .labelColor) ?? "FFFFFF"
+        appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .system
     }
 }
 

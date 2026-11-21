@@ -473,6 +473,10 @@
     <string name="settings_canvas">Vászon</string>
     <string name="settings_units">Mértékegység</string>
     <string name="settings_units_sub">Minden méretmezőhöz</string>
+    <string name="settings_appearance">Megjelenés</string>
+    <string name="appearance_system">Rendszer</string>
+    <string name="appearance_light">Világos</string>
+    <string name="appearance_dark">Sötét</string>
     <string name="show">Megjelenítés</string>
     <string name="snap">Illesztés</string>
     <string name="snap_sub">A címkéhez, más elemekhez és a rácshoz, segédvonalakkal</string>

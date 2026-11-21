@@ -455,7 +455,7 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     };
     app.ui.last_view = Some(view);
 
-    painter.rect_filled(area, 0.0, crate::theme::CANVAS);
+    painter.rect_filled(area, 0.0, crate::theme::pal().canvas);
     let radius = CornerRadius::same((doc.label.corner_radius_mm as f32 * zoom).min(120.0) as u8);
     painter.add(
         egui::Shadow {
@@ -504,7 +504,7 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     painter.rect_stroke(
         label,
         radius,
-        Stroke::new(1.0, crate::theme::BORDER),
+        Stroke::new(1.0, crate::theme::pal().border),
         StrokeKind::Outside,
     );
     if let Some((x0, x1)) = printable_span(app, &doc) {
@@ -526,7 +526,7 @@ pub fn canvas(app: &mut LabelyApp, ui: &mut Ui) {
     }
 
     let selection = app.selection();
-    let accent = crate::theme::PRIMARY;
+    let accent = crate::theme::pal().primary;
     for e in doc.elements().filter(|e| !e.hidden) {
         let f = Frame::of(e);
         let corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)].map(|h| handle_pos(&view, &f, h));

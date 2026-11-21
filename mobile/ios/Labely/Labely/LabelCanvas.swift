@@ -324,7 +324,7 @@ private struct SelectionFrame: View {
             ForEach(handles.indices, id: \.self) { i in
                 let c = point(handles[i])
                 Rectangle()
-                    .fill(.white)
+                    .fill(Palette.surface)
                     .overlay(Rectangle().stroke(Palette.primary, lineWidth: 1.5))
                     .frame(width: 8, height: 8)
                     .rotationEffect(.degrees(isLine ? 0 : frame.rotation))
@@ -332,7 +332,7 @@ private struct SelectionFrame: View {
             }
             if rotateHandle {
                 Circle()
-                    .fill(.white)
+                    .fill(Palette.surface)
                     .overlay(Circle().stroke(Palette.primary, lineWidth: 1.5))
                     .overlay(LIcon(.rotate, Palette.primary, size: 12))
                     .frame(width: 20, height: 20)

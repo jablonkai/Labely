@@ -1,7 +1,7 @@
 import LabelyKit
 import SwiftUI
 
-/// M10 · Beállítások: units, the canvas defaults, the paper behaviour, language and Bluetooth
+/// M10 · Beállítások: units, appearance, the canvas defaults, the paper behaviour, language and Bluetooth
 /// (both in the app's page of the Settings app), the assistant print consent (ADR-0033) and
 /// About.
 struct SettingsScreen: View {
@@ -20,6 +20,10 @@ struct SettingsScreen: View {
                     SegmentRow(title: L("settings_units"), value: state.prefs.unit, options: [
                         (.mm, L("unit_mm")), (.inch, L("unit_inch")),
                     ]) { state.prefs.unit = $0 }
+                    RowDivider()
+                    SegmentRow(title: L("settings_appearance"), value: state.prefs.appearance, options: [
+                        (.system, L("appearance_system")), (.light, L("appearance_light")), (.dark, L("appearance_dark")),
+                    ]) { state.prefs.appearance = $0 }
                 }
                 CanvasOptions(state: state)
                 GroupTitle(L("papers"))

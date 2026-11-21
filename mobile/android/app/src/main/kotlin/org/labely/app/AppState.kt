@@ -20,6 +20,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.labely.app.editor.EditorState
 import org.labely.app.editor.Units
+import org.labely.app.ui.theme.Appearance
 import org.labely.app.engine.Detected
 import org.labely.app.engine.JobInfo
 import org.labely.app.engine.CommandFailure
@@ -87,6 +88,15 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
             unitsState = u
             org.labely.app.ui.Lengths.units = u
             prefs.edit { putString("units", u.id) }
+        }
+
+    /** Settings → Appearance: follow the system, or always light or dark. */
+    private var appearanceState by mutableStateOf(Appearance.of(prefs.getString("appearance", null)))
+    var appearance: Appearance
+        get() = appearanceState
+        set(a) {
+            appearanceState = a
+            prefs.edit { putString("appearance", a.id) }
         }
 
     /** Canvas aids, kept across documents like the studio's view settings. */

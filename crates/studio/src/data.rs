@@ -39,17 +39,17 @@ fn is_bound(doc: &Document, column: &str) -> bool {
 fn bind_chip(app: &mut LabelyApp, ui: &mut Ui, column: &str, bound: bool, can_bind: bool) {
     if bound && !can_bind {
         egui::Frame::new()
-            .fill(theme::GREEN_TINT)
+            .fill(theme::pal().green_tint)
             .corner_radius(CornerRadius::same(10))
             .inner_margin(Margin::symmetric(8, 2))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 3.0;
-                    icons::show(ui, "check", 12.0, theme::GREEN);
+                    icons::show(ui, "check", 12.0, theme::pal().green);
                     ui.label(
                         RichText::new(app.i18n.t("data-bound"))
                             .size(11.5)
-                            .color(theme::GREEN),
+                            .color(theme::pal().green),
                     );
                 });
             });
@@ -61,10 +61,10 @@ fn bind_chip(app: &mut LabelyApp, ui: &mut Ui, column: &str, bound: bool, can_bi
             egui::Button::new(
                 RichText::new(app.i18n.t("action-bind"))
                     .size(11.5)
-                    .color(theme::PRIMARY),
+                    .color(theme::pal().primary),
             )
-            .fill(theme::SURFACE)
-            .stroke(Stroke::new(1.0, theme::PRIMARY_TINT2))
+            .fill(theme::pal().surface)
+            .stroke(Stroke::new(1.0, theme::pal().primary_tint2))
             .corner_radius(CornerRadius::same(10))
             .min_size(vec2(0.0, 22.0)),
         )
@@ -86,10 +86,10 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new(app.i18n.t("panel-data"))
                 .font(theme::bold(16.0))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.menu_button(RichText::new("···").color(theme::MUTED), |ui| {
+            ui.menu_button(RichText::new("···").color(theme::pal().muted), |ui| {
                 for id in [
                     "data.attach_csv",
                     "data.attach_xlsx",
@@ -110,7 +110,7 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
     egui::ScrollArea::vertical().id_salt("data").show(ui, |ui| {
         match &doc.data {
             None => {
-                ui.label(RichText::new(app.i18n.t("data-none")).color(theme::TEXT2));
+                ui.label(RichText::new(app.i18n.t("data-none")).color(theme::pal().text2));
                 ui.add_space(6.0);
                 for (id, icon) in [("data.attach_csv", "file"), ("data.attach_xlsx", "table")] {
                     let w = ui.available_width();
@@ -119,7 +119,7 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                         icon,
                         &menu::command_label(&app.i18n, id),
                         None,
-                        theme::TEXT,
+                        theme::pal().text,
                         Some(w),
                     )
                     .clicked()
@@ -137,9 +137,9 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                         ui.painter().rect_filled(
                             r,
                             CornerRadius::same(theme::RADIUS),
-                            theme::GREEN_TINT,
+                            theme::pal().green_tint,
                         );
-                        icons::paint(ui.painter(), r.shrink(8.0), "file", theme::GREEN, 1.5);
+                        icons::paint(ui.painter(), r.shrink(8.0), "file", theme::pal().green, 1.5);
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 0.0;
                             let name = d.origin.clone().unwrap_or_else(|| app.i18n.t("panel-data"));
@@ -158,7 +158,7 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                                     )
                                 ))
                                 .size(11.5)
-                                .color(theme::MUTED),
+                                .color(theme::pal().muted),
                             );
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -175,7 +175,7 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                 ui.label(
                     RichText::new(app.i18n.t("data-drag-hint"))
                         .size(11.5)
-                        .color(theme::MUTED),
+                        .color(theme::pal().muted),
                 );
                 ui.add_space(4.0);
                 theme::section(ui, &app.i18n.t("data-columns-title"));
@@ -183,7 +183,7 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                     let bound = is_bound(&doc, c);
                     egui::Frame::new()
                         .fill(if bound {
-                            theme::BG
+                            theme::pal().bg
                         } else {
                             Color32::TRANSPARENT
                         })
@@ -196,7 +196,11 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                                     ui,
                                     if bound { "bind" } else { "data" },
                                     15.0,
-                                    if bound { theme::PRIMARY } else { theme::MUTED },
+                                    if bound {
+                                        theme::pal().primary
+                                    } else {
+                                        theme::pal().muted
+                                    },
                                 );
                                 let text_w = ui.available_width() - 96.0;
                                 ui.vertical(|ui| {
@@ -207,7 +211,7 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
                                         egui::Label::new(
                                             RichText::new(values.get(c).map_or("", String::as_str))
                                                 .size(11.5)
-                                                .color(theme::MUTED),
+                                                .color(theme::pal().muted),
                                         )
                                         .truncate(),
                                     );
@@ -255,10 +259,10 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
         ui.label(
             RichText::new(app.i18n.t("data-records-title"))
                 .font(theme::bold(13.5))
-                .color(theme::TEXT),
+                .color(theme::pal().text),
         );
         egui::Frame::new()
-            .stroke(Stroke::new(1.0, theme::BORDER))
+            .stroke(Stroke::new(1.0, theme::pal().border))
             .corner_radius(CornerRadius::same(10))
             .inner_margin(Margin::symmetric(8, 2))
             .show(ui, |ui| {
@@ -268,7 +272,7 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
                             .t_args("data-records", &[("count", Arg::Num(n as f64))]),
                     )
                     .size(11.5)
-                    .color(theme::TEXT2),
+                    .color(theme::pal().text2),
                 );
             });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -280,7 +284,7 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
                     .desired_width(90.0),
             )
             .on_hover_text(app.i18n.t("print-records-hint"));
-            ui.label(RichText::new(lbl).size(12.0).color(theme::TEXT2));
+            ui.label(RichText::new(lbl).size(12.0).color(theme::pal().text2));
             app.ui.print.records = range;
             ui.add_space(12.0);
             if icons::button_sized(
@@ -328,7 +332,7 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
             egui::Align2::LEFT_CENTER,
             "#",
             theme::regular(11.5),
-            theme::MUTED,
+            theme::pal().muted,
         );
         for (i, c) in d.columns.iter().enumerate() {
             p.text(
@@ -339,7 +343,7 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
                 egui::Align2::LEFT_CENTER,
                 c,
                 theme::regular(11.5),
-                theme::MUTED,
+                theme::pal().muted,
             );
         }
     };
@@ -363,18 +367,18 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
                 let selected = r == record;
                 let p = ui.painter();
                 if selected {
-                    p.rect_filled(rect, CornerRadius::ZERO, theme::PRIMARY_TINT);
+                    p.rect_filled(rect, CornerRadius::ZERO, theme::pal().primary_tint);
                 } else if resp.hovered() {
-                    p.rect_filled(rect, CornerRadius::ZERO, theme::BG);
+                    p.rect_filled(rect, CornerRadius::ZERO, theme::pal().bg);
                 }
                 p.line_segment(
                     [rect.left_top(), rect.right_top()],
-                    Stroke::new(1.0, theme::BORDER_SOFT),
+                    Stroke::new(1.0, theme::pal().border_soft),
                 );
                 let fg = if selected {
-                    theme::PRIMARY
+                    theme::pal().primary
                 } else {
-                    theme::TEXT
+                    theme::pal().text
                 };
                 p.text(
                     rect.left_center() + vec2(10.0, 0.0),

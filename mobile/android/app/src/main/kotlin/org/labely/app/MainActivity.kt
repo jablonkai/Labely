@@ -1,6 +1,7 @@
 package org.labely.app
 
 import android.app.Application
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -50,7 +51,9 @@ import org.labely.app.ui.home.HomeScreen
 import org.labely.app.ui.printers.PrintersScreen
 import org.labely.app.ui.settings.SettingsScreen
 import org.labely.app.ui.templates.TemplatesScreen
+import org.labely.app.ui.theme.Appearance
 import org.labely.app.ui.theme.Ic
+import org.labely.app.ui.theme.isDark
 import org.labely.app.ui.theme.LIcon
 import org.labely.app.ui.theme.LabelyTheme
 import org.labely.app.ui.theme.Palette
@@ -66,14 +69,28 @@ class LabelyApplication : Application() {
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The design is light only, so the bar icons stay dark even in system dark mode.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+        val state = (application as LabelyApplication).state
+        // Before the first frame, from the saved appearance and the system's mode.
+        edgeToEdge(
+            when (state.appearance) {
+                Appearance.System -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+                Appearance.Light -> false
+                Appearance.Dark -> true
+            },
         )
         super.onCreate(savedInstanceState)
-        val state = (application as LabelyApplication).state
-        setContent { LabelyTheme { App(state) } }
+        setContent {
+            val dark = state.appearance.isDark()
+            // The bar icons follow the app's theme, which Settings → Appearance can override.
+            LaunchedEffect(dark) { edgeToEdge(dark) }
+            LabelyTheme(dark) { App(state) }
+        }
+    }
+
+    /** Transparent bars with light icons on [dark] and dark icons otherwise. */
+    private fun edgeToEdge(dark: Boolean) {
+        val style = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
     }
 }
 
