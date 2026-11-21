@@ -17,6 +17,7 @@ cargo xtask xcframework            # iOS XCFramework and Swift bindings; see mob
 (cd mobile/ios/LabelyKit && swift test)              # iOS shell logic on the engine (macOS)
 cargo xtask package                # studio packages with cargo-packager (ADR-0038): app, dmg, MSI, AppImage, deb
 dist build --artifacts=local --target <triple>   # CLI archive with dist
+(cd mobile/android && ./gradlew :app:bundleRelease)   # Play bundle; a tag releases, see docs/releasing.md
 cargo xtask bless                  # rewrite render goldens after an intended change
 cargo xtask schema-hash            # print the command-schema hash
 ```

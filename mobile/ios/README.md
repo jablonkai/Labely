@@ -36,6 +36,10 @@ without a printer. New Swift files in `Labely/Labely` join the target by themsel
 synchronized folder). App strings go in `Localizable.xcstrings` with English and Hungarian;
 `cargo xtask i18n-check` checks both.
 
+The release workflow archives the app and exports the App Store package after
+`Labely/ExportOptions.plist` ([releasing.md](../../docs/releasing.md), ADR-0039).
+`MARKETING_VERSION` must be the version of `Cargo.toml`; an xtask test checks it.
+
 The App Intents are in `Labely/Intents.swift` (ADR-0033); their logic is
 `LabelyKit/Sources/LabelyKit/Assistant.swift`. Intent strings are `intent_…` keys in
 `Localizable.xcstrings`, and the App Shortcuts phrases are in `AppShortcuts.xcstrings`. To try

@@ -5,7 +5,7 @@
   "publisher": "Labely",
   "description": "Label designer for thermal label printers",
   "longDescription": "Labely designs labels with text, barcodes, QR codes and images, fills them from data, and prints them on NIIMBOT, Phomemo, Marklife, ESC/POS, TSPL and ZPL label printers over Bluetooth, USB serial and the network.",
-  "homepage": "https://github.com/labely/labely",
+  "homepage": "https://github.com/jablonkai/Labely",
   "copyright": "Copyright (c) the Labely authors. MIT OR Apache-2.0.",
   "category": "Productivity",
   "licenseFile": "LICENSE-MIT",

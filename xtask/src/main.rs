@@ -492,7 +492,10 @@ fn package(formats: Option<String>) -> Result<()> {
     )?;
     let base = std::fs::read_to_string(repo.join("crates/studio/packaging/packager.json"))
         .context("reading packager.json")?;
-    let identity = std::env::var("LABELY_SIGNING_IDENTITY").ok();
+    // An unset CI secret arrives as an empty variable.
+    let identity = std::env::var("LABELY_SIGNING_IDENTITY")
+        .ok()
+        .filter(|identity| !identity.is_empty());
     if identity.is_none() && cfg!(target_os = "macos") {
         eprintln!("package: LABELY_SIGNING_IDENTITY is not set, the app is not signed");
     }
@@ -605,6 +608,37 @@ mod tests {
         assert_eq!(config["macos"]["signingIdentity"], "Developer ID");
         assert_eq!(config["macos"]["minimumSystemVersion"], "11.0");
         Ok(())
+    }
+
+    /// dist 0.34.0 writes `uses: $/...` for the custom jobs; the file is fixed by hand
+    /// (ADR-0039), and a later `dist generate` must not bring the bug back.
+    #[test]
+    fn release_workflow_calls_the_custom_jobs() {
+        let release = include_str!("../../.github/workflows/release.yml");
+        assert!(!release.contains("uses: $/"), "run the fix of ADR-0039");
+        for job in ["release-studio", "release-mobile", "release-checksums"] {
+            assert!(
+                release.contains(&format!("uses: ./.github/workflows/{job}.yml")),
+                "{job} is not called"
+            );
+        }
+    }
+
+    /// The Xcode project repeats the workspace version; Android reads it from Cargo.toml.
+    #[test]
+    fn ios_version_is_the_workspace_version() {
+        let project = include_str!("../../mobile/ios/Labely/Labely.xcodeproj/project.pbxproj");
+        let expected = format!("MARKETING_VERSION = {};", env!("CARGO_PKG_VERSION"));
+        let versions: Vec<&str> = project
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.starts_with("MARKETING_VERSION"))
+            .collect();
+        assert!(!versions.is_empty());
+        assert!(
+            versions.iter().all(|line| *line == expected),
+            "{versions:?}"
+        );
     }
 
     #[test]

@@ -12,6 +12,25 @@ val cargoBin: String =
         ?: File(System.getProperty("user.home"), ".cargo/bin/cargo").takeIf(File::exists)?.path
         ?: "cargo"
 
+// The version is the workspace version of Cargo.toml (ADR-0039).
+val labelyVersion: String =
+    Regex("""(?m)^version\s*=\s*"([^"]+)"""")
+        .find(providers.fileContents(layout.projectDirectory.file("../../../Cargo.toml")).asText.get())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Cargo.toml has no workspace version")
+
+// Play wants a version code that grows: 1.2.3 is 1002003. `labely.versionCode` overrides it,
+// for a second upload of the same version.
+val labelyVersionCode: Int =
+    providers.gradleProperty("labely.versionCode").orNull?.toInt()
+        ?: labelyVersion.substringBefore('-').split('.').map(String::toInt).let { (major, minor, patch) ->
+            major * 1_000_000 + minor * 1_000 + patch
+        }
+
+// The upload key of a release build. Without the four variables the release is not signed.
+val keystoreFile: String? = providers.environmentVariable("LABELY_KEYSTORE_FILE").orNull?.takeIf(String::isNotEmpty)
+
 android {
     namespace = "org.labely.app"
     compileSdk {
@@ -22,8 +41,8 @@ android {
         applicationId = "org.labely.app"
         minSdk { version = release(26) }
         targetSdk { version = release(37) }
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = labelyVersionCode
+        versionName = labelyVersion
         // Only the ABIs the engine is built for; JNA alone would add mips, armeabi and x86.
         ndk {
             abiFilters +=
@@ -31,8 +50,20 @@ android {
         }
     }
 
+    signingConfigs {
+        if (keystoreFile != null) {
+            create("upload") {
+                storeFile = file(keystoreFile)
+                storePassword = providers.environmentVariable("LABELY_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("LABELY_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("LABELY_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("upload")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))

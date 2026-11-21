@@ -1,0 +1,98 @@
+name: Studio packages
+
+# Builds the studio packages (ADR-0038). The release calls it as a dist custom job and
+# publishes what it uploads as `artifacts-*` (ADR-0039). On its own it only builds.
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The dist plan of the release
+        required: false
+        type: string
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - crates/studio/packaging/**
+      - dist-workspace.toml
+      - xtask/**
+      - .github/workflows/release-studio.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Linux system libraries (BLE, serial, studio, AppImage)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libudev-dev pkg-config libxkbcommon-dev libwayland-dev libfuse2
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-packager and dist
+        run: cargo install --locked cargo-packager@0.11.8 cargo-dist@0.34.0
+      # An unset secret is an empty string, and cargo-packager takes an empty variable as a
+      # value. So the variables are only set when the secrets are there.
+      - name: macOS signing and notarisation
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          API_KEY: ${{ secrets.APPSTORE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          if [ -z "$CERTIFICATE" ] || [ -z "$SIGNING_IDENTITY" ]; then
+            echo "::notice::No Developer ID certificate: the studio is not signed."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$(printf '%s' "$CERTIFICATE" | tr -d '\n')"
+            echo "APPLE_CERTIFICATE_PASSWORD=$CERTIFICATE_PASSWORD"
+            echo "LABELY_SIGNING_IDENTITY=$SIGNING_IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -z "$API_KEY" ] || [ -z "$API_KEY_ID" ] || [ -z "$API_ISSUER_ID" ]; then
+            echo "::notice::No App Store Connect key: the studio is not notarised."
+            exit 0
+          fi
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "APPLE_API_KEY=$API_KEY_ID"
+            echo "APPLE_API_ISSUER=$API_ISSUER_ID"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+          } >> "$GITHUB_ENV"
+      - name: Studio packages
+        run: cargo xtask package
+      # The release builds the CLI archives in the dist jobs.
+      - name: CLI archive
+        if: ${{ !inputs.plan }}
+        run: dist build --artifacts=local --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-studio-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            target/packager/*.dmg
+            target/packager/*.msi
+            target/packager/*.AppImage
+            target/packager/*.deb

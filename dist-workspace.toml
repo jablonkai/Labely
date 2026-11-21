@@ -1,13 +1,23 @@
-# dist (cargo-dist) packages the `labely` CLI (ADR-0038). The studio is packaged by
-# `cargo xtask package`; the tag-driven release workflow is slice 6.5.
+# dist (cargo-dist) packages the `labely` CLI (ADR-0038) and generates the tag-driven release
+# workflow (ADR-0039). The studio is packaged by `cargo xtask package`.
 [workspace]
 members = ["cargo:."]
 
 [dist]
 # The dist version every build uses (Cargo.toml SemVer syntax)
 cargo-dist-version = "0.34.0"
-# No CI backend yet: slice 6.5 adds `ci = "github"` and the generated release workflow.
-ci = []
+# `dist generate` writes .github/workflows/release.yml (ADR-0039).
+ci = "github"
+# dist 0.34.0 writes the custom jobs as `uses: $/.github/workflows/...`, which GitHub rejects
+# (0.33.1 wrote `./`). After `dist generate`, change the three `$/` to `./` by hand. Until a
+# dist release fixes it, dist must not compare the file with what it would generate.
+allow-dirty = ["ci"]
+# The studio packages and the store builds are built next to the CLI archives, and
+# SHA256SUMS is added once the release is published.
+local-artifacts-jobs = ["./release-studio", "./release-mobile"]
+post-announce-jobs = ["./release-checksums"]
+# A pull request only plans the release.
+pr-run-mode = "plan"
 hosting = "github"
 # Installers for the CLI
 installers = ["shell", "powershell"]

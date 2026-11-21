@@ -1,0 +1,33 @@
+name: Release checksums
+
+# Adds SHA256SUMS to a published release (ADR-0039). It covers every file of the release:
+# the dist archives and installers, the studio packages and the APK. The release calls it as
+# a dist custom job after the announcement.
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The dist plan of the release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  checksums:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ fromJson(inputs.plan).announcement_tag }}
+    steps:
+      - name: Download the release files
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release
+      - name: Write SHA256SUMS
+        working-directory: release
+        run: |
+          rm -f SHA256SUMS
+          sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS"
+          cat "$RUNNER_TEMP/SHA256SUMS"
+      - name: Upload SHA256SUMS
+        run: gh release upload "$TAG" "$RUNNER_TEMP/SHA256SUMS" --repo "$GITHUB_REPOSITORY" --clobber
