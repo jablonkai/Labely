@@ -17,9 +17,14 @@ cargo-ndk and generates its Kotlin bindings, and `:app` is the UI.
 ./gradlew :app:assembleDebug -Plabely.abis=arm64-v8a  # one ABI, faster
 ./gradlew :app:testDebugUnitTest                    # AppFunctions on Robolectric, with the engine built for the host
 ./gradlew :ffi:connectedDebugAndroidTest            # engine smoke tests on a device or emulator
+./gradlew :app:bundleRelease :app:assembleRelease   # Play bundle and APK, see docs/releasing.md
 ```
 
 The Rust libraries and the Kotlin bindings are generated into `build/`. Never commit them.
+
+The version is the workspace version of `Cargo.toml`. A release build signs with the upload key
+of the `LABELY_KEYSTORE_FILE`, `LABELY_KEYSTORE_PASSWORD`, `LABELY_KEY_ALIAS` and
+`LABELY_KEY_PASSWORD` variables, and is unsigned without them (ADR-0039).
 
 ## App
 

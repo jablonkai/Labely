@@ -40,3 +40,4 @@
 | [0036](0036-niimbot-variants.md) | NIIMBOT variants (Phase 6.2) | proposed |
 | [0037](0037-other-vendors.md) | Other vendors (Phase 6.3) | proposed |
 | [0038](0038-desktop-packaging.md) | Desktop packaging (Phase 6.4) | proposed |
+| [0039](0039-store-builds-and-releases.md) | Store builds and releases (Phase 6.5) | proposed |

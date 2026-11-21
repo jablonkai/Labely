@@ -1,0 +1,137 @@
+name: Store builds
+
+# Builds the Play bundle and the App Store package (ADR-0039). The release calls it as a dist
+# custom job. The store files stay workflow artefacts (`store-*`) and are uploaded to the
+# stores by hand; only the signed APK goes into the GitHub release (`artifacts-*`).
+on:
+  workflow_call:
+    inputs:
+      plan:
+        description: The dist plan of the release
+        required: false
+        type: string
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - mobile/android/app/build.gradle.kts
+      - mobile/ios/Labely/ExportOptions.plist
+      - .github/workflows/release-mobile.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Rust Android targets and cargo-ndk
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          cargo install cargo-ndk --locked
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v4
+      - name: Install NDK
+        run: sdkmanager "ndk;30.0.16248370" "platforms;android-37.2"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Upload key
+        id: key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::notice::No upload key: the bundle is not signed and no APK is released."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          echo "LABELY_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - name: Build the bundle and the APK
+        working-directory: mobile/android
+        env:
+          LABELY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LABELY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LABELY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --console=plain :app:bundleRelease :app:assembleRelease
+      - name: Name the files after the version
+        id: files
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          mkdir out
+          cp mobile/android/app/build/outputs/bundle/release/app-release.aab "out/Labely_${version}_android.aab"
+          if [ "${{ steps.key.outputs.signed }}" = "true" ]; then
+            cp mobile/android/app/build/outputs/apk/release/app-release.apk "out/Labely_${version}_android.apk"
+          fi
+      - name: Play bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: store-android
+          if-no-files-found: error
+          path: out/*.aab
+      - name: APK for the release
+        if: steps.key.outputs.signed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-android
+          if-no-files-found: error
+          path: out/*.apk
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Rust iOS targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the XCFramework
+        run: cargo xtask xcframework
+      # With an App Store Connect key Xcode signs with cloud-managed certificates. Without
+      # one the archive is built unsigned, which only proves that it builds.
+      - name: Archive and export
+        working-directory: mobile/ios/Labely
+        env:
+          API_KEY: ${{ secrets.APPSTORE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' ../../../Cargo.toml | head -n 1)
+          # The App Store takes three numbers; a pre-release suffix is dropped.
+          archive=(xcodebuild archive -quiet -project Labely.xcodeproj -scheme Labely
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Labely.xcarchive"
+            "MARKETING_VERSION=${version%%-*}" "CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
+          if [ -z "$API_KEY" ] || [ -z "$API_KEY_ID" ] || [ -z "$API_ISSUER_ID" ] || [ -z "$TEAM_ID" ]; then
+            echo "::notice::No App Store Connect key: the archive is not signed and nothing is exported."
+            "${archive[@]}" CODE_SIGNING_ALLOWED=NO
+            exit 0
+          fi
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8"
+            -authenticationKeyID "$API_KEY_ID" -authenticationKeyIssuerID "$API_ISSUER_ID")
+          "${archive[@]}" "DEVELOPMENT_TEAM=$TEAM_ID" "${auth[@]}"
+          xcodebuild -exportArchive -quiet -archivePath "$RUNNER_TEMP/Labely.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist -exportPath "$RUNNER_TEMP/export" "${auth[@]}"
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp "$RUNNER_TEMP/export/Labely.ipa" "$GITHUB_WORKSPACE/out/Labely_${version}_ios.ipa"
+      - name: App Store package
+        uses: actions/upload-artifact@v7
+        with:
+          name: store-ios
+          if-no-files-found: ignore
+          path: out/*.ipa
