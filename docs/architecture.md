@@ -259,7 +259,7 @@ print.submit ─▶ DeviceHub ─▶ PrinterSession (worker thread per printer, 
   - `labely commands [--json]`
   - `labely render <file> -o out.png [--record N]`
   - `labely check <file>`
-  - `labely print <file> --printer <ble:NAME|usb:PORT|tcp:HOST[:PORT]|sim:MODEL|fake:DIR> [--data x.csv]`
+  - `labely print <file> --printer <ble:NAME|usb:PORT|tcp:HOST[:PORT]|sim:MODEL|fake:DIR> [--data x.csv]` (`--data -` reads CSV from stdin)
   - `labely devices`
   - `labely mcp [--headless|--connect]`
   - `labely capture <trace>`

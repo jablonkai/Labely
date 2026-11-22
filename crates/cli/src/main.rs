@@ -3,6 +3,7 @@
 //! Every subcommand is a thin wrapper around `Session::execute`; `labely run` exposes the
 //! registry directly.
 
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -74,7 +75,8 @@ enum Cmd {
         /// Data record to render, 1-based.
         #[arg(long)]
         record: Option<usize>,
-        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods).
+        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods; `-` reads CSV
+        /// from stdin).
         #[arg(long)]
         data: Option<PathBuf>,
     },
@@ -86,7 +88,8 @@ enum Cmd {
         output: PathBuf,
         #[arg(long)]
         dpi: Option<u32>,
-        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods).
+        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods; `-` reads CSV
+        /// from stdin).
         #[arg(long)]
         data: Option<PathBuf>,
         /// PDF: records to export, 1-based (`all` by default). PNG: the one record (`3`).
@@ -113,7 +116,8 @@ enum Cmd {
         copies: u16,
         #[arg(long)]
         density: Option<u8>,
-        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods).
+        /// Attach this CSV or spreadsheet first (.csv, .tsv, .xlsx, .xls, .ods; `-` reads CSV
+        /// from stdin).
         #[arg(long)]
         data: Option<PathBuf>,
         /// Records to print, 1-based: `all` (default), `3`, `1,4,6-9`.
@@ -188,8 +192,18 @@ impl Ctx {
         Ok(())
     }
 
-    /// Attach a CSV (by extension) or spreadsheet as the document's data.
+    /// Attach a CSV (by extension) or spreadsheet as the document's data. `-` reads CSV
+    /// from stdin and passes it inline, so no file path is checked.
     fn attach(&mut self, path: &Path) -> Result<()> {
+        if path == Path::new("-") {
+            let mut text = String::new();
+            std::io::stdin()
+                .read_to_string(&mut text)
+                .context("reading CSV from stdin")?;
+            self.exec("data.attach_csv", json!({ "text": text }))
+                .context("attaching CSV from stdin")?;
+            return Ok(());
+        }
         let ext = path
             .extension()
             .map(|e| e.to_string_lossy().to_ascii_lowercase())

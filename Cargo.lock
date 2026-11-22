@@ -2752,6 +2752,7 @@ dependencies = [
  "labely-mcp",
  "labely-printers",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing-subscriber",
 ]
