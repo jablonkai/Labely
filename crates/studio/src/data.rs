@@ -245,6 +245,39 @@ pub fn data_pane(app: &mut LabelyApp, ui: &mut Ui) {
     });
 }
 
+/// Find box of the records table: Enter (as a barcode scanner sends it) runs
+/// `data.find_record` and returns the matching record. The box is cleared and keeps the
+/// focus after a hit, ready for the next scan.
+fn find_box(app: &mut LabelyApp, ui: &mut Ui) -> Option<usize> {
+    let label = app.i18n.t("data-find");
+    let mut query = std::mem::take(&mut app.ui.record_query);
+    let r = ui
+        .add(
+            egui::TextEdit::singleline(&mut query)
+                .hint_text(&label)
+                .desired_width(150.0),
+        )
+        .on_hover_text(app.i18n.t("data-find-hint"));
+    r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, &label));
+    let submitted = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+    let mut found = None;
+    if submitted && !query.trim().is_empty() {
+        let env = app.run_reporting("data.find_record", json!({"value": query.trim()}));
+        found = env
+            .result
+            .as_ref()
+            .and_then(|v| v["record"].as_u64())
+            .map(|n| n as usize);
+        if found.is_some() {
+            query.clear();
+        }
+        app.ui.found_record = found;
+        r.request_focus();
+    }
+    app.ui.record_query = query;
+    found
+}
+
 /// The records table under the canvas: paging, the print range, one row per record.
 pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
     let Some(doc) = app.session.doc_arc(None) else {
@@ -275,6 +308,25 @@ pub fn records_table(app: &mut LabelyApp, ui: &mut Ui) {
                     .color(theme::pal().text2),
                 );
             });
+        ui.add_space(8.0);
+        if let Some(found) = find_box(app, ui) {
+            record = found;
+        }
+        if app.ui.found_record == Some(record)
+            && ui
+                .button(
+                    RichText::new(
+                        app.i18n
+                            .t_args("data-find-print", &[("record", Arg::Num(record as f64))]),
+                    )
+                    .size(12.0)
+                    .color(theme::pal().primary),
+                )
+                .clicked()
+        {
+            app.ui.print.records = record.to_string();
+            menu::invoke(app, "print.submit");
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let mut range = app.ui.print.records.clone();
             let lbl = app.i18n.t("data-print-range");

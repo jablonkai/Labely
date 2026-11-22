@@ -12338,6 +12338,82 @@ expression: r
       "undoable": false
     },
     {
+      "description": "Find the record whose cell equals `value` (trimmed, exact), in `column` or in any column. Returns the first matching record (1-based) and every match, e.g. to print the record of a scanned barcode with print.submit {records}.",
+      "id": "data.find_record",
+      "journal": false,
+      "kind": "query",
+      "label": "Find record",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "column": {
+            "description": "Column the first match was found in.",
+            "type": "string"
+          },
+          "match_count": {
+            "description": "Number of matching records.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "matches": {
+            "description": "Matching records, 1-based, in order (at most 50).",
+            "items": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "record": {
+            "description": "First matching record, 1-based; pass it to render.preview or print.submit `records`.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record",
+          "column",
+          "match_count",
+          "matches"
+        ],
+        "title": "FindRecordOutput",
+        "type": "object"
+      },
+      "params_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "default": null,
+            "description": "Column to search; every column when absent.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "doc_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "description": "Value to look for, such as a scanned barcode. Compared with each cell exactly,\nafter trimming surrounding whitespace on both sides.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "FindRecordParams",
+        "type": "object"
+      },
+      "undoable": false
+    },
+    {
       "description": "Create or replace a serial counter `{{name}}` (default name `serial`): prefix + zero-padded (start + step × n) + suffix, where n is the label's 0-based position in the print job. Bind it with data.bind or `{{name}}` in any text.",
       "id": "data.set_serial",
       "journal": true,

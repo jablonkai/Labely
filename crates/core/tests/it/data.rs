@@ -120,6 +120,44 @@ fn bind_and_preview_record() {
 }
 
 #[test]
+fn find_record_by_value() {
+    let mut s = session_with_doc();
+    let e = err(&mut s, "data.find_record", json!({"value": "B-2"}));
+    assert_eq!(e.code, ErrorCode::BadParams);
+    ok(
+        &mut s,
+        "data.attach_csv",
+        json!({"text": "name;sku;qty\nAda;A-1;2\nBob;B-2;0\nCy; B-2 ;1\nDi;D-4;B-2\n"}),
+    );
+    // Any column: Bob, Cy (trimmed) and Di (in qty) match; Bob is first.
+    let r = ok(&mut s, "data.find_record", json!({"value": " B-2\n"}));
+    assert_eq!(r["record"], 2);
+    assert_eq!(r["column"], "sku");
+    assert_eq!(r["match_count"], 3);
+    assert_eq!(r["matches"], json!([2, 3, 4]));
+    let r = ok(
+        &mut s,
+        "data.find_record",
+        json!({"value": "B-2", "column": "qty"}),
+    );
+    assert_eq!(r["record"], 4);
+    assert_eq!(r["matches"], json!([4]));
+    // Exact, case-sensitive.
+    let e = err(&mut s, "data.find_record", json!({"value": "b-2"}));
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert_eq!(e.param.as_deref(), Some("value"));
+    let e = err(
+        &mut s,
+        "data.find_record",
+        json!({"value": "B-2", "column": "nope"}),
+    );
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert_eq!(e.param.as_deref(), Some("column"));
+    let e = err(&mut s, "data.find_record", json!({"value": "  "}));
+    assert_eq!(e.param.as_deref(), Some("value"));
+}
+
+#[test]
 fn serial_set_update_remove() {
     let mut s = session_with_doc();
     let r = ok(

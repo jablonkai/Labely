@@ -358,6 +358,7 @@ fn builtin_entries() -> Vec<Entry> {
         Entry::of::<data::Get>(),
         Entry::of::<data::Bind>(),
         Entry::of::<data::PreviewRecord>(),
+        Entry::of::<data::FindRecord>(),
         Entry::of::<data::SetSerial>().in_menu("data", None),
         Entry::of::<data::RemoveSerial>(),
         Entry::of::<render::RenderPreview>().in_menu("view", None),

@@ -91,6 +91,7 @@ Hints:
 | `data.get` | query | from (1-based), limit |
 | `data.bind` | edit | id, column (a column, serial or variable) |
 | `data.preview_record` | query | record (1-based) |
+| `data.find_record` | query | value (trimmed, exact), column (default: any) → first record (1-based), matches |
 | `data.set_serial` | edit | name (default `serial`), start, step, digits, prefix, suffix |
 | `data.remove_serial` | edit | name |
 | `render.preview` | query | dpi, page, record |

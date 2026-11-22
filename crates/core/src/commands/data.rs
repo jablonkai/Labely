@@ -667,6 +667,109 @@ impl Command for PreviewRecord {
     }
 }
 
+/// Most record numbers listed in a `data.find_record` result.
+const MAX_MATCHES: usize = 50;
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FindRecordParams {
+    #[serde(default)]
+    pub doc_id: Option<String>,
+    /// Value to look for, such as a scanned barcode. Compared with each cell exactly,
+    /// after trimming surrounding whitespace on both sides.
+    pub value: String,
+    /// Column to search; every column when absent.
+    #[serde(default)]
+    pub column: Option<String>,
+}
+
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct FindRecordOutput {
+    /// First matching record, 1-based; pass it to render.preview or print.submit `records`.
+    pub record: usize,
+    /// Column the first match was found in.
+    pub column: String,
+    /// Number of matching records.
+    pub match_count: usize,
+    /// Matching records, 1-based, in order (at most 50).
+    pub matches: Vec<usize>,
+}
+
+/// `data.find_record`
+#[derive(Debug)]
+pub struct FindRecord;
+
+impl Command for FindRecord {
+    const ID: &'static str = "data.find_record";
+    type Params = FindRecordParams;
+    type Output = FindRecordOutput;
+
+    fn meta() -> CommandMeta {
+        CommandMeta::query(
+            "Find record",
+            "Find the record whose cell equals `value` (trimmed, exact), in `column` or in \
+             any column. Returns the first matching record (1-based) and every match, e.g. \
+             to print the record of a scanned barcode with print.submit {records}.",
+        )
+    }
+
+    fn run(ctx: &mut Ctx<'_>, p: FindRecordParams) -> Result<FindRecordOutput, CommandError> {
+        let doc = ctx.doc(p.doc_id.as_deref())?;
+        let Some(d) = &doc.data else {
+            return Err(CommandError::bad_params("the document has no data source")
+                .with_hint("attach data with data.attach_csv or data.attach_xlsx"));
+        };
+        let value = p.value.trim();
+        if value.is_empty() {
+            return Err(CommandError::bad_params("value must not be empty").with_param("value"));
+        }
+        let cols: Vec<usize> = match p.column.as_deref().map(str::trim) {
+            None | Some("") => (0..d.columns.len()).collect(),
+            Some(c) => match d.columns.iter().position(|n| n == c) {
+                Some(i) => vec![i],
+                None => {
+                    return Err(CommandError::not_found(format!("no column `{c}`"))
+                        .with_param("column")
+                        .with_accepted(d.columns.iter().take(50).cloned()));
+                }
+            },
+        };
+        let mut first: Option<(usize, usize)> = None;
+        let mut matches = Vec::new();
+        let mut match_count = 0;
+        for (i, row) in d.rows.iter().enumerate() {
+            let Some(&c) = cols
+                .iter()
+                .find(|&&c| row.get(c).is_some_and(|v| v.trim() == value))
+            else {
+                continue;
+            };
+            first.get_or_insert((i, c));
+            match_count += 1;
+            if matches.len() < MAX_MATCHES {
+                matches.push(i + 1);
+            }
+        }
+        let Some((row, col)) = first else {
+            let place = match &p.column {
+                Some(c) if !c.trim().is_empty() => format!("column `{}`", c.trim()),
+                _ => "any column".to_owned(),
+            };
+            return Err(
+                CommandError::not_found(format!("no record has `{value}` in {place}"))
+                    .with_param("value")
+                    .with_hint("values are compared exactly; check the column with data.get"),
+            );
+        };
+        Ok(FindRecordOutput {
+            record: row + 1,
+            column: d.columns.get(col).cloned().unwrap_or_default(),
+            match_count,
+            matches,
+        })
+    }
+}
+
 /// 0-based row for a 1-based `record` param, or `None` without data (only record 1 is valid).
 pub(crate) fn record_index(doc: &Document, record: usize) -> Result<Option<usize>, CommandError> {
     match &doc.data {
