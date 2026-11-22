@@ -85,8 +85,12 @@ impl Command for DocNew {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpenParams {
-    /// Path of a `.labely` file.
+    /// Path of a `.labely` file or a NiimBlue label/template export (`.json`).
     pub path: String,
+    /// Dots per inch of a NiimBlue export (default 203; 300 for 300 dpi printers). The file
+    /// does not record it. Ignored for `.labely` files.
+    #[serde(default)]
+    pub dpi: Option<f64>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -119,16 +123,43 @@ impl Command for DocOpen {
     fn meta() -> CommandMeta {
         CommandMeta::edit(
             "Open document",
-            "Open a `.labely` file as a new document and make it active. Returns {doc_id, name}.",
+            "Open a `.labely` file as a new document and make it active. A NiimBlue label or \
+             template export (JSON) is imported instead: it opens unsaved, warnings name what \
+             did not come across, and `dpi` (default 203) sizes it. Returns {doc_id, name}.",
         )
         .undoable(false)
     }
 
     fn run(ctx: &mut Ctx<'_>, p: OpenParams) -> Result<OpenOutput, CommandError> {
+        if let Some(dpi) = p.dpi
+            && !(dpi.is_finite() && (100.0..=1200.0).contains(&dpi))
+        {
+            return Err(
+                CommandError::bad_params(format!("`dpi` must be 100 … 1200, got {dpi}"))
+                    .with_param("dpi"),
+            );
+        }
         let path = ctx.check_path("path", &p.path, false)?;
-        let doc = file::load(&path).map_err(file_error)?;
+        let (doc, saved_path) = match file::open(&path, p.dpi).map_err(file_error)? {
+            file::Opened::Labely(doc) => {
+                if p.dpi.is_some() {
+                    ctx.warn("`dpi` applies only to NiimBlue files and was ignored");
+                }
+                (doc, Some(path))
+            }
+            file::Opened::NiimBlue(im) => {
+                ctx.warn(format!(
+                    "imported from NiimBlue at {} dpi; save it as a .labely file to keep it",
+                    p.dpi.unwrap_or(file::niimblue::DEFAULT_DPI).round()
+                ));
+                for w in im.warnings {
+                    ctx.warn(w);
+                }
+                (im.doc, None)
+            }
+        };
         let name = doc.name.clone();
-        let doc_id = ctx.session().state.add_doc(OpenDoc::new(doc, Some(path)));
+        let doc_id = ctx.session().state.add_doc(OpenDoc::new(doc, saved_path));
         Ok(OpenOutput { doc_id, name })
     }
 }
@@ -521,23 +552,8 @@ impl Command for DocRotateLabel {
 
     fn run(ctx: &mut Ctx<'_>, p: RotateLabelParams) -> Result<SetLabelOutput, CommandError> {
         let doc = ctx.doc_mut(p.doc_id.as_deref())?;
-        let (w, h) = (doc.label.width_mm, doc.label.height_mm);
         let cw = p.direction.unwrap_or_default() == Turn::Cw;
-        if p.rotate_content.unwrap_or(true) {
-            for page in &mut doc.pages {
-                for e in &mut page.elements {
-                    let (cx, cy) = (e.x_mm + e.width_mm / 2.0, e.y_mm + e.height_mm / 2.0);
-                    // y points down, so a clockwise turn maps (x, y) to (h − y, x).
-                    let (nx, ny) = if cw { (h - cy, cx) } else { (cy, w - cx) };
-                    e.x_mm = nx - e.width_mm / 2.0;
-                    e.y_mm = ny - e.height_mm / 2.0;
-                    let turn = if cw { 90.0 } else { 270.0 };
-                    e.rotation_deg = (e.rotation_deg + turn).rem_euclid(360.0);
-                }
-            }
-        }
-        doc.label.width_mm = h;
-        doc.label.height_mm = w;
+        doc.rotate_label(cw, p.rotate_content.unwrap_or(true));
         validate_label(&doc.label)?;
         Ok(SetLabelOutput {
             label: doc.label.clone(),

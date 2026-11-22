@@ -10,6 +10,7 @@ mod elements;
 mod file;
 mod history;
 mod jobs;
+mod niimblue;
 mod paper;
 mod phase2;
 mod schema;

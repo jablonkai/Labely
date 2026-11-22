@@ -1,4 +1,7 @@
-//! `.labely` load/save: pretty JSON with a `format_version` gate.
+//! `.labely` load/save: pretty JSON with a `format_version` gate. Opening also reads
+//! NiimBlue exports ([`niimblue`]).
+
+pub mod niimblue;
 
 use std::path::{Path, PathBuf};
 
@@ -24,6 +27,8 @@ pub enum FileError {
     },
     #[error("not a valid .labely document: {0}")]
     Parse(String),
+    #[error("not a valid NiimBlue label: {0}")]
+    NiimBlue(String),
     #[error(
         "document format_version {found} is newer than this Labely supports ({supported}); upgrade Labely to open it"
     )]
@@ -33,6 +38,10 @@ pub enum FileError {
 /// Parse a `.labely` JSON string.
 pub fn from_json(text: &str) -> Result<Document, FileError> {
     let v: Value = serde_json::from_str(text).map_err(|e| FileError::Parse(e.to_string()))?;
+    from_value(v)
+}
+
+fn from_value(v: Value) -> Result<Document, FileError> {
     let found = v
         .get("format_version")
         .and_then(Value::as_u64)
@@ -69,6 +78,34 @@ pub fn load(path: &Path) -> Result<Document, FileError> {
         source,
     })?;
     from_json(&text)
+}
+
+/// A file opened by [`open`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum Opened {
+    Labely(Document),
+    /// Imported from NiimBlue; it has no `.labely` file yet.
+    NiimBlue(niimblue::Import),
+}
+
+/// Open a `.labely` document or import a NiimBlue export, told apart by content. `dpi`
+/// converts NiimBlue dots to mm (default [`niimblue::DEFAULT_DPI`]).
+pub fn open(path: &Path, dpi: Option<f64>) -> Result<Opened, FileError> {
+    let text = std::fs::read_to_string(path).map_err(|source| FileError::Read {
+        path: path.to_owned(),
+        source,
+    })?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| FileError::Parse(e.to_string()))?;
+    if !niimblue::detect(&v) {
+        return from_value(v).map(Opened::Labely);
+    }
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Imported");
+    niimblue::import(&v, stem, dpi.unwrap_or(niimblue::DEFAULT_DPI))
+        .map(Opened::NiimBlue)
+        .map_err(FileError::NiimBlue)
 }
 
 /// Save; returns the number of bytes written.

@@ -44,3 +44,4 @@
 | [0040](0040-phase-6-close-out.md) | Phase 6 close-out | proposed |
 | [0041](0041-rfid-paper-auto-apply.md) | Automatic use of a recognised paper, bundled RFID table | proposed |
 | [0042](0042-mobile-parity.md) | Mobile parity | proposed |
+| [0043](0043-niimblue-import.md) | NiimBlue import | proposed |

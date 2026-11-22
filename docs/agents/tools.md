@@ -8,7 +8,7 @@
 | `command_run` | `{id, params}` | Runs any command. |
 | `command_batch` | `command.batch` | Several steps, atomic by default, with `$N` references. |
 | `document_new` | `doc.new` | |
-| `document_open` | `doc.open {path}` | The path must be under the allowed roots. |
+| `document_open` | `doc.open {path, dpi?}` | The path must be under the allowed roots. A NiimBlue JSON export is imported (ADR-0043). |
 | `document_save` | `doc.save {path?}` | The path must be under the allowed roots. |
 | `document_get` | `doc.get` | The full document JSON. |
 | `render_preview` | `render.preview` | Returns a PNG `image` block. `png_base64` is removed from the JSON. |
@@ -29,7 +29,7 @@ Hints:
 | `command.list` | query | prefix |
 | `command.batch` | edit | steps, atomic, stop_on_error, label, terse |
 | `doc.new` | edit | width_mm, height_mm, name, corner_radius_mm, media, printer_model, density |
-| `doc.open` | edit | path |
+| `doc.open` | edit | path, dpi (NiimBlue import) |
 | `doc.save` | query | path, doc_id |
 | `doc.close` | edit | doc_id |
 | `doc.list` | query | → docs (doc_id, name, path, dirty, active) in open order |
