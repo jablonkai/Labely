@@ -284,6 +284,11 @@
     <string name="data_header">First row is the header</string>
     <string name="data_header_sub">Otherwise the columns are A, B, C…</string>
     <string name="data_images">Pictures</string>
+    <string name="scan_add">Scan a code</string>
+    <string name="scan_title">Scan a barcode or QR code</string>
+    <string name="scan_hint">Point the camera at a barcode or QR code. It is read on this device.</string>
+    <string name="scan_no_camera">Labely needs the camera to scan codes. Allow it in Settings.</string>
+    <string name="scan_open_settings">Open Settings</string>
     <string name="data_sheet">Sheet</string>
     <string name="degrees">%1$s°</string>
     <string name="density_default">Default darkness</string>

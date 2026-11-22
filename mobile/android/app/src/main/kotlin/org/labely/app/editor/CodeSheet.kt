@@ -54,6 +54,14 @@ fun CodeSheet(ed: EditorState, id: Long, onBinding: () -> Unit, onDismiss: () ->
     // Changes nothing; tells whether the value as it is encodes.
     LaunchedEffect(id) { check = ed.applyCode(element, symbology, value) }
     val bound = ed.boundColumn(e)
+    var scanning by remember { mutableStateOf(false) }
+    if (scanning) {
+        // A scanned code of the element's kind brings its symbology; otherwise only its value.
+        ScanSheet({ scanning = false }) { code ->
+            scanning = false
+            apply(if (code.kind == e.type) code.symbology else symbology, code.text)
+        }
+    }
 
     Sheet(kindName(e.type), onDismiss) {
         Segmented(options.map { it.second }, options.indexOfFirst { it.first == symbology }, Modifier.fillMaxWidth(), scroll = true) { apply(options[it].first, value) }
@@ -62,10 +70,11 @@ fun CodeSheet(ed: EditorState, id: Long, onBinding: () -> Unit, onDismiss: () ->
         ContentField(
             value,
             stringResource(R.string.data_hint),
-            trailing = if (ed.data != null || bound != null) {
-                { IconButton(Ic.Link, onBinding, if (bound != null) Palette.primary else Palette.muted) }
-            } else {
-                null
+            trailing = {
+                Row {
+                    IconButton(Ic.Scan, { scanning = true }, Palette.muted)
+                    if (ed.data != null || bound != null) IconButton(Ic.Link, onBinding, if (bound != null) Palette.primary else Palette.muted)
+                }
             },
         ) { apply(symbology, it) }
         val c = check

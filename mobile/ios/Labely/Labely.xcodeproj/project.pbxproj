@@ -194,6 +194,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Labely;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Labely finds and connects to your label printer over Bluetooth.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Labely scans barcodes and QR codes into your labels. The camera image stays on this device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -223,6 +224,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Labely;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Labely finds and connects to your label printer over Bluetooth.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Labely scans barcodes and QR codes into your labels. The camera image stays on this device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;

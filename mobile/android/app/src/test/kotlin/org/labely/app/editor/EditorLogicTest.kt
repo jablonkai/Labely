@@ -155,4 +155,21 @@ class EditorLogicTest {
         // A tall one is limited by the height.
         assertEquals(Frame(18.0, 1.0, 14.0, 28.0), imageFrame(50.0, 30.0, 500, 1000))
     }
+
+    @Test
+    fun scannedCodesTakeLabelySymbologies() {
+        assertEquals(FoundCode("barcode", "ean13", "5901234123457"), scannedCode("EAN_13", "]E0", "5901234123457"))
+        assertEquals(FoundCode("barcode", "code128", "ABC-1"), scannedCode("CODE_128", "]C0", "ABC-1"))
+        // FNC1 first marks GS1-128; HRI text keeps the (AI) form the engine encodes.
+        assertEquals(FoundCode("barcode", "gs1_128", "(01)09501101530003"), scannedCode("CODE_128", "]C1", "(01)09501101530003"))
+        assertEquals("itf", scannedCode("ITF_14", null, "15400141288763")?.symbology)
+        assertEquals(FoundCode("code2d", "qr", "https://labely.org"), scannedCode("QR_CODE", "]Q1", "https://labely.org"))
+        assertEquals("data_matrix", scannedCode("DATA_MATRIX", null, "x")?.symbology)
+        assertEquals("pdf417", scannedCode("PDF_417", null, "x")?.symbology)
+        assertEquals("aztec", scannedCode("AZTEC", null, "x")?.symbology)
+        // Labely prints neither of these, and an empty read is no code.
+        assertNull(scannedCode("MAXI_CODE", null, "x"))
+        assertNull(scannedCode("MICRO_QR_CODE", null, "x"))
+        assertNull(scannedCode("QR_CODE", null, ""))
+    }
 }

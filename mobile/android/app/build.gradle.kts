@@ -138,6 +138,12 @@ dependencies {
     implementation(libs.appfunctions)
     ksp(libs.appfunctions.compiler)
 
+    // Camera barcode and QR scanning, on the device (#41).
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(libs.zxing.cpp)
+
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

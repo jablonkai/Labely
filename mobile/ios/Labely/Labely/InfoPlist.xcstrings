@@ -12,6 +12,12 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Labely finds and connects to your label printer over Bluetooth." } },
         "hu" : { "stringUnit" : { "state" : "translated", "value" : "A Labely Bluetooth-on keresi meg a címkenyomtatót, és ezen csatlakozik hozzá." } }
       }
+    },
+    "NSCameraUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Labely scans barcodes and QR codes into your labels. The camera image stays on this device." } },
+        "hu" : { "stringUnit" : { "state" : "translated", "value" : "A Labely vonalkódokat és QR-kódokat olvas be a címkéidbe. A kamera képe nem hagyja el az eszközt." } }
+      }
     }
   },
   "version" : "1.0"

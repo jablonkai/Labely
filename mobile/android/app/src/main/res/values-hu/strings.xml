@@ -284,6 +284,11 @@
     <string name="data_header">Az első sor a fejléc</string>
     <string name="data_header_sub">Különben az oszlopok neve A, B, C…</string>
     <string name="data_images">Képek</string>
+    <string name="scan_add">Kód beolvasása</string>
+    <string name="scan_title">Vonalkód vagy QR-kód beolvasása</string>
+    <string name="scan_hint">Irányítsd a kamerát egy vonalkódra vagy QR-kódra. A beolvasás ezen az eszközön történik.</string>
+    <string name="scan_no_camera">A kódok beolvasásához a Labelynek kamerahozzáférés kell. Engedélyezd a Beállításokban.</string>
+    <string name="scan_open_settings">Beállítások megnyitása</string>
     <string name="data_sheet">Munkalap</string>
     <string name="degrees">%1$s°</string>
     <string name="density_default">Alap sötétség</string>

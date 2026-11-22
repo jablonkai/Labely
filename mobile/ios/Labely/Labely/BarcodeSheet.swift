@@ -10,6 +10,7 @@ struct BarcodeSheet: View {
     /// The engine's reason when it cannot encode the value.
     @State private var problem: String?
     @FocusState private var focused: Bool
+    @State private var scanning = false
 
     var body: some View {
         let e = isCode(ed.selected) ? ed.selected : nil
@@ -64,6 +65,12 @@ struct BarcodeSheet: View {
         }
         // A binding or an undo changed the value underneath.
         .onChange(of: e?.data) { if !focused, let data = e?.data { value = data } }
+        .fullScreenCover(isPresented: $scanning) {
+            ScanSheet(onDismiss: { scanning = false }) { code in
+                scanning = false
+                scanned(code)
+            }
+        }
     }
 
     private func close() {
@@ -98,6 +105,10 @@ struct BarcodeSheet: View {
                 .submitLabel(.done)
                 .onSubmit { commit(e) }
             if ed.boundColumn(e) != nil { LIcon(.link, Palette.primary, size: 18) }
+            IconButton(.scan, tint: Palette.muted, size: 36, label: L("scan_title")) {
+                endEditing()
+                scanning = true
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: 48)
@@ -111,6 +122,16 @@ struct BarcodeSheet: View {
         guard value != e.data else { return }
         let new = value
         Task { problem = await ed.setCode(e.id, ["data": JSON(new)]) }
+    }
+
+    /// Apply a scanned code: a code of the element's kind brings its symbology, otherwise only
+    /// its value.
+    private func scanned(_ code: ScannedCode) {
+        guard let e = isCode(ed.selected) ? ed.selected : nil else { return }
+        value = code.text
+        var props: JSON = ["data": JSON(code.text)]
+        if code.kind == e.type { props = props.with("symbology", JSON(code.symbology)) }
+        Task { problem = await ed.setCode(e.id, props) }
     }
 
     @ViewBuilder private func validity(_ e: Element) -> some View {

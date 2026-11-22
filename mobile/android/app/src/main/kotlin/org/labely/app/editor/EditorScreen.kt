@@ -121,6 +121,8 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
         if (app.printer != null) ed.detectPaper()
     }
     var found by remember { mutableStateOf<List<FoundCode>?>(null) }
+    // The data panel's camera scanner: the scanned code becomes an element.
+    var scanning by remember { mutableStateOf(false) }
     val noCode = stringResource(R.string.found_codes_none)
     val notFont = stringResource(R.string.font_not_added)
     val copySaved = stringResource(R.string.save_copy_done)
@@ -221,7 +223,7 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
         }
         HorizontalDivider(color = Palette.border)
         if (dataPanel) {
-            DataPanel(ed, Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT), onImages = { pickImages.launch(visual) }, onOptions = { open(Sheet.Data) }) { pickData.launch(DATA_MIME_TYPES) }
+            DataPanel(ed, Modifier.fillMaxWidth().height(INSPECTOR_HEIGHT), onImages = { pickImages.launch(visual) }, onOptions = { open(Sheet.Data) }, onScan = { scanning = true }) { pickData.launch(DATA_MIME_TYPES) }
         } else {
             Inspector(ed, onBinding = { open(Sheet.Binding) }, onMore = { open(Sheet.Element) }, onIcon = { open(Sheet.ChangeIcon) })
         }
@@ -244,6 +246,12 @@ fun EditorScreen(ed: EditorState, onClose: () -> Unit) {
     ed.codeSheet?.let { id -> CodeSheet(ed, id, onBinding = { sheet = Sheet.Binding }) { ed.codeSheet = null } }
     ed.tableSheet?.let { id -> TableSheet(ed, id) { ed.tableSheet = null } }
     found?.let { codes -> FoundCodesSheet(ed, codes) { found = null } }
+    if (scanning) {
+        ScanSheet({ scanning = false }) { code ->
+            scanning = false
+            ed.addCode(code)
+        }
+    }
     when (sheet) {
         Sheet.Insert -> InsertSheet(
             ed,

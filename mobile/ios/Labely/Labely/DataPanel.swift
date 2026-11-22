@@ -11,6 +11,8 @@ struct DataPanel: View {
     let onImages: () -> Void
     /// Open the data options: sheet, header row, columns and serial numbers.
     let onOptions: () -> Void
+    /// Scan a code with the camera; it is added as an element.
+    let onScan: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +36,7 @@ struct DataPanel: View {
                 SecondaryButton(text: L("data_images"), icon: .image, action: onImages)
                 SecondaryButton(text: ed.serials.isEmpty ? L("data_serials") : L("data_serials_n", ed.serials.count), icon: .hash, action: onOptions)
             }
+            SecondaryButton(text: L("scan_add"), icon: .scan, action: onScan)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -53,6 +56,7 @@ struct DataPanel: View {
                 Button(L("data_options"), action: onOptions)
                 Button(L("data_replace"), action: onChoose)
                 Button(L("data_images"), action: onImages)
+                Button(L("scan_add"), action: onScan)
                 Button(L("data_remove"), role: .destructive) { ed.detachData() }
             } label: {
                 LIcon(.settings, Palette.text2, size: 20).frame(width: 36, height: 36).contentShape(Rectangle())

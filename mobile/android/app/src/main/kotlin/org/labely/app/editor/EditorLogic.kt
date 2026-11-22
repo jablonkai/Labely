@@ -227,6 +227,32 @@ val SYMBOLOGIES_1D = listOf(
 val SYMBOLOGIES_2D = listOf("qr" to "QR", "data_matrix" to "Data Matrix", "pdf417" to "PDF417", "aztec" to "Aztec")
 
 /**
+ * A code the camera read, in Labely's terms: [format] is the zxing-cpp format name and
+ * [symbologyId] its AIM identifier (`]C1` marks GS1-128). Null for a format Labely cannot print
+ * or an empty [text].
+ */
+fun scannedCode(format: String, symbologyId: String?, text: String?): FoundCode? {
+    if (text.isNullOrEmpty()) return null
+    val symbology = when (format) {
+        "EAN_13", "ISBN" -> "ean13"
+        "EAN_8" -> "ean8"
+        "UPC_A" -> "upc_a"
+        "UPC_E" -> "upc_e"
+        "CODE_128" -> if (symbologyId == "]C1") "gs1_128" else "code128"
+        "CODE_39", "CODE_39_STD", "CODE_39_EXT" -> "code39"
+        "CODE_93" -> "code93"
+        "ITF", "ITF_14" -> "itf"
+        "CODABAR" -> "codabar"
+        "QR_CODE", "QR_CODE_MODEL_1", "QR_CODE_MODEL_2" -> "qr"
+        "DATA_MATRIX" -> "data_matrix"
+        "PDF_417", "COMPACT_PDF_417" -> "pdf417"
+        "AZTEC", "AZTEC_CODE" -> "aztec"
+        else -> return null
+    }
+    return FoundCode(if (SYMBOLOGIES_2D.any { it.first == symbology }) "code2d" else "barcode", symbology, text)
+}
+
+/**
  * The check digit of EAN-13, EAN-8 or UPC-A [data]: the last digit of a complete number, or the
  * one the printer adds when it is left off. Null for other symbologies and other lengths.
  */

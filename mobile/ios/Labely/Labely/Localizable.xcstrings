@@ -2881,6 +2881,102 @@
         }
       }
     },
+    "scan_add": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan a code"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kód beolvasása"
+          }
+        }
+      }
+    },
+    "scan_hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Point the camera at a barcode or QR code. It is read on this device."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Irányítsd a kamerát egy vonalkódra vagy QR-kódra. A beolvasás ezen az eszközön történik."
+          }
+        }
+      }
+    },
+    "scan_no_camera": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Labely needs the camera to scan codes. Allow it in Settings."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A kódok beolvasásához a Labelynek kamerahozzáférés kell. Engedélyezd a Beállításokban."
+          }
+        }
+      }
+    },
+    "scan_open_settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beállítások megnyitása"
+          }
+        }
+      }
+    },
+    "scan_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan a barcode or QR code"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vonalkód vagy QR-kód beolvasása"
+          }
+        }
+      }
+    },
+    "scan_unsupported": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device cannot scan codes with its camera."
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ez az eszköz nem tud kódot beolvasni a kamerájával."
+          }
+        }
+      }
+    },
     "scanning": {
       "localizations": {
         "en": {
