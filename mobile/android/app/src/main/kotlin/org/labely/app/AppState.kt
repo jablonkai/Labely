@@ -245,6 +245,7 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
                     seenModels.values.map {
                         JSONObject().put("id", it.id).put("name", it.name).put("density_min", it.densityMin).put("density_max", it.densityMax)
                             .put("density_default", it.densityDefault).put("dpi", it.dpi).put("head_dots", it.headDots).put("max_width_mm", it.maxWidthMm)
+                            .put("gray", it.gray)
                     },
                 ).toString(),
             )
@@ -256,7 +257,7 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
             JSONArray(prefs.getString("models", "[]")).objects().associate {
                 it.getString("id") to org.labely.app.engine.Model(
                     it.getString("id"), it.optString("name"), it.optInt("density_min", 1), it.optInt("density_max", 5), it.optInt("density_default", 3),
-                    it.optInt("dpi", 203), it.optInt("head_dots"), it.optDouble("max_width_mm", 0.0),
+                    it.optInt("dpi", 203), it.optInt("head_dots"), it.optDouble("max_width_mm", 0.0), it.optBoolean("gray"),
                 )
             }
         }.getOrDefault(emptyMap())
@@ -407,7 +408,7 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
         val all = runCatching { engine.call("device.models").getJSONArray("models").objects() }.getOrDefault(emptyList()).map {
             org.labely.app.engine.Model(
                 it.getString("id"), it.optString("name"), it.optInt("density_min", 1), it.optInt("density_max", 5), it.optInt("density_default", 3),
-                it.optInt("dpi", 203), it.optInt("head_dots"), it.optDouble("max_width_mm", 0.0),
+                it.optInt("dpi", 203), it.optInt("head_dots"), it.optDouble("max_width_mm", 0.0), it.optBoolean("gray"),
             )
         }
         seenModels = seenModels + all.associateBy { it.id }

@@ -48,6 +48,8 @@ pub struct PrintForm {
     pub mirror: bool,
     /// Turn the print 180°.
     pub rotate_180: bool,
+    /// Print gray levels; sent only to a printer whose model has them.
+    pub grayscale: bool,
     /// Data column holding the copies of each record; empty = `copies` for every record.
     pub copies_column: String,
     /// Address whose saved offsets are loaded into the form.
@@ -67,6 +69,7 @@ impl Default for PrintForm {
             offset_y_mm: 0.0,
             mirror: false,
             rotate_180: false,
+            grayscale: false,
             copies_column: String::new(),
             offsets_for: None,
         }
@@ -1005,6 +1008,13 @@ fn print(app: &mut LabelyApp, ui: &mut Ui) -> bool {
                             .color(theme::pal().muted),
                     );
                 }
+                if device
+                    .and_then(|d| d.model.as_ref())
+                    .is_some_and(|m| m.gray)
+                {
+                    ui.checkbox(&mut form.grayscale, app.i18n.t("print-grayscale"))
+                        .on_hover_text(app.i18n.t("print-grayscale-hint"));
+                }
                 egui::CollapsingHeader::new(app.i18n.t("print-advanced"))
                     .id_salt("print-advanced")
                     .show(ui, |ui| {
@@ -1199,6 +1209,9 @@ fn submit(
     if form.rotate_180 {
         p["rotate_180"] = json!(true);
     }
+    if form.grayscale && gray_printer(app, &form.address) {
+        p["grayscale"] = json!(true);
+    }
     if app.run_reporting("print.submit", p).ok {
         save_offsets(app, form);
         app.set_status(app.i18n.t("status-queued"), false);
@@ -1207,6 +1220,16 @@ fn submit(
     } else {
         false
     }
+}
+
+/// The connected printer at `address` prints gray levels.
+fn gray_printer(app: &LabelyApp, address: &str) -> bool {
+    app.session
+        .services()
+        .devices
+        .connected()
+        .iter()
+        .any(|d| d.address == address && d.model.as_ref().is_some_and(|m| m.gray))
 }
 
 /// Save, discard or keep a document with unsaved changes.

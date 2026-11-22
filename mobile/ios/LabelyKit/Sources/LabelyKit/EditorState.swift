@@ -28,6 +28,8 @@ public struct PrintOptions: Sendable, Equatable {
     public var offsetYMm = 0.0
     public var mirror = false
     public var rotate180 = false
+    /// 16 gray levels; only for a model whose `printsGray` is true.
+    public var grayscale = false
 
     public init() {}
 }
@@ -288,6 +290,7 @@ public final class EditorState: Identifiable {
                         "offset_x_mm": o.offsetXMm == 0 ? nil : JSON(o.offsetXMm),
                         "offset_y_mm": o.offsetYMm == 0 ? nil : JSON(o.offsetYMm),
                         "mirror": o.mirror ? true : nil, "rotate_180": o.rotate180 ? true : nil,
+                        "grayscale": o.grayscale ? true : nil,
                         "wait": false,
                     ])
                     guard let jobId = r["job_id"]?.idString else { return }

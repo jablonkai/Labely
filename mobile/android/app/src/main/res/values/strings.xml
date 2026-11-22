@@ -416,6 +416,8 @@
     <string name="print_offset_y">Y offset</string>
     <string name="print_rotate_180">Turn 180°</string>
     <string name="print_rotate_180_sub">Labels leave the printer the other way round</string>
+    <string name="print_grayscale">Grayscale</string>
+    <string name="print_grayscale_sub">Photos and shades in 16 gray levels instead of dots</string>
     <string name="printable_width">Printable width</string>
     <string name="printer_model">Printer model</string>
     <string name="prop_align">Alignment</string>

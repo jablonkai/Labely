@@ -7285,6 +7285,38 @@
         }
       }
     },
+    "print_grayscale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grayscale"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szürkeárnyalatos"
+          }
+        }
+      }
+    },
+    "print_grayscale_sub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos and shades in 16 gray levels instead of dots"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotók és árnyalatok 16 szürke szinttel, pontozás helyett"
+          }
+        }
+      }
+    },
     "printable_width": {
       "localizations": {
         "en": {

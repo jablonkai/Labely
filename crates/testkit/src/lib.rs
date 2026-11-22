@@ -298,6 +298,7 @@ pub fn fake_model() -> ModelInfo {
         density_max: 5,
         density_default: 3,
         media: vec![MediaType::Gap, MediaType::Continuous],
+        gray: false,
     }
 }
 
@@ -314,6 +315,8 @@ struct HubState {
     /// Media of each calibration, in order.
     calibrations: Vec<MediaType>,
     settings: DeviceSettings,
+    /// The fake model reports gray levels.
+    gray: bool,
 }
 
 /// One fake printer at [`FAKE_ADDRESS`]; records every [`PrintRequest`].
@@ -330,6 +333,18 @@ impl FakeDeviceHub {
     /// Jobs printed so far, with their address.
     pub fn prints(&self) -> Vec<(String, PrintRequest)> {
         lock(&self.state).prints.clone()
+    }
+
+    /// Whether the fake model reports gray levels (default false).
+    pub fn set_gray(&self, gray: bool) {
+        lock(&self.state).gray = gray;
+    }
+
+    fn model(&self) -> ModelInfo {
+        ModelInfo {
+            gray: lock(&self.state).gray,
+            ..fake_model()
+        }
     }
 
     /// Paper reported by `status` (RFID).
@@ -370,7 +385,7 @@ impl FakeDeviceHub {
             address: FAKE_ADDRESS.to_owned(),
             name: "Fake Printer".to_owned(),
             connected,
-            model: Some(fake_model()),
+            model: Some(self.model()),
             firmware: None,
             hardware: None,
             serial: None,
@@ -392,7 +407,7 @@ impl FakeDeviceHub {
 
 impl DeviceHub for FakeDeviceHub {
     fn models(&self) -> Vec<ModelInfo> {
-        vec![fake_model()]
+        vec![self.model()]
     }
 
     fn scan(&self, _timeout_ms: u64) -> Result<Vec<DeviceInfo>, DeviceError> {

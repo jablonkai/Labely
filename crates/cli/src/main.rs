@@ -141,6 +141,9 @@ enum Cmd {
         /// Turn the print 180° for the other output direction.
         #[arg(long)]
         rotate_180: bool,
+        /// Print 16 gray levels instead of dithered dots (B1 Pro, B2 Pro, B21 Pro).
+        #[arg(long)]
+        grayscale: bool,
     },
     /// Show a printer's status (battery, lid, loaded labels).
     Status {
@@ -406,6 +409,7 @@ fn run(cli: Cli) -> Result<()> {
             offset_y,
             mirror,
             rotate_180,
+            grayscale,
         } => {
             ctx.open(&file)?;
             if let Some(d) = &data {
@@ -436,6 +440,9 @@ fn run(cli: Cli) -> Result<()> {
             }
             if rotate_180 {
                 p["rotate_180"] = json!(true);
+            }
+            if grayscale {
+                p["grayscale"] = json!(true);
             }
             let env = ctx.exec("print.submit", p)?;
             ctx.show(&env)?;

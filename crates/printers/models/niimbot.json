@@ -192,7 +192,8 @@
    "rfid": true,
    "transports": [
     "ble"
-   ]
+   ],
+   "gray": true
   },
   {
    "id": "niimbot.b1_se",
@@ -383,7 +384,8 @@
    "rfid": true,
    "transports": [
     "ble"
-   ]
+   ],
+   "gray": true
   },
   {
    "id": "niimbot.b203",
@@ -613,7 +615,8 @@
    "transports": [
     "ble",
     "usb"
-   ]
+   ],
+   "gray": true
   },
   {
    "id": "niimbot.b31",

@@ -8,7 +8,8 @@ use crate::command::{Command, CommandError, CommandMeta, Ctx, ErrorCode};
 use crate::document::MediaType;
 use crate::jobs::{JobSpec, JobState};
 use crate::services::{
-    DeviceInfo, DeviceSettings, DeviceStatus, ModelInfo, PagePlanes, PrintRequest,
+    DeviceInfo, DeviceSettings, DeviceStatus, GrayImage, ModelInfo, PagePlanes, PrintRequest,
+    RenderOutput,
 };
 
 /// Longest allowed scan.
@@ -411,6 +412,10 @@ pub struct PrintParams {
     /// Turn the print 180° so labels leave the printer the other way round (default false).
     #[serde(default)]
     pub rotate_180: Option<bool>,
+    /// Print photos and shades in 16 gray levels instead of 1-bit dots (default false).
+    /// Only for models whose `gray` is true (device.list); others reject it.
+    #[serde(default)]
+    pub grayscale: Option<bool>,
     /// Wait until the job has printed (default true). With false the job is queued and the
     /// command returns at once; follow it with job.get or job.wait.
     #[serde(default)]
@@ -461,6 +466,42 @@ impl PageTransform {
             b = b.rotate_180();
         }
         b
+    }
+
+    /// As [`Self::apply`], for a gray map.
+    fn apply_gray(&self, mut g: crate::raster::Gray4) -> crate::raster::Gray4 {
+        if self.dx != 0 || self.dy != 0 {
+            g = g.shifted(self.dx, self.dy);
+        }
+        if self.mirror {
+            g = g.mirror_h();
+        }
+        if self.rotate_180 {
+            g = g.rotate_180();
+        }
+        g
+    }
+}
+
+/// The gray map of a rendered page: the renderer's gray stage, else the 1-bit page.
+fn gray_of(out: &RenderOutput, preview: Option<GrayImage>) -> crate::raster::Gray4 {
+    use crate::raster::Gray4;
+    match preview {
+        Some(g) if g.width == out.bitmap.width() && g.height == out.bitmap.height() => {
+            Gray4::from_gray8(g.width, g.height, &g.data)
+        }
+        _ => {
+            let b = &out.bitmap;
+            let mut g = Gray4::new(b.width(), b.height());
+            for y in 0..b.height() {
+                for x in 0..b.width() {
+                    if b.get(x, y) {
+                        g.set(x, y, Gray4::BLACK);
+                    }
+                }
+            }
+            g
+        }
     }
 }
 
@@ -571,7 +612,8 @@ impl Command for PrintSubmit {
              through the print queue; by default the command waits until the job has \
              printed, `wait: false` returns {job_id} at once. offset_x_mm/offset_y_mm (±10) \
              move the print, mirror flips it for transparent media, rotate_180 turns it \
-             for the other output direction. Run doc.check first.",
+             for the other output direction. grayscale prints 16 gray levels instead of \
+             dithered dots, on models with `gray`. Run doc.check first.",
         )
     }
 
@@ -617,6 +659,15 @@ impl Command for PrintSubmit {
                 doc.label.width_mm, m.name, m.max_width_mm
             ));
         }
+        let grayscale = p.grayscale.unwrap_or(false);
+        if grayscale && !model.as_ref().is_some_and(|m| m.gray) {
+            let name = model.as_ref().map_or("this printer", |m| m.name.as_str());
+            return Err(
+                CommandError::bad_params(format!("{name} does not print gray levels"))
+                    .with_param("grayscale")
+                    .with_hint("print without grayscale; see `gray` in device.list"),
+            );
+        }
         let transform = PageTransform::from_params(&p, dpi)?;
         let labels = plan_labels(&doc, &p, copies)?;
         let uniform = labels.iter().all(|l| l.2 == copies);
@@ -640,16 +691,28 @@ impl Command for PrintSubmit {
         }
         let renderer = ctx.services().renderer.clone();
         let mut pages = Vec::with_capacity(total);
+        let mut grays = Vec::with_capacity(if grayscale { total } else { 0 });
         for &(row, n, c) in &labels {
             for page in 0..doc.pages.len() {
-                let out = renderer
-                    .render(&doc, &render_options_for(&doc, dpi, page, row, n))
-                    .map_err(|e| {
-                        let at = row.map_or(String::new(), |r| format!(" of record {}", r + 1));
-                        CommandError::bad_params(format!("cannot render page {page}{at}: {e}"))
-                    })?;
-                let bitmap = transform.apply(out.bitmap);
+                let opts = render_options_for(&doc, dpi, page, row, n);
+                let rendered = if grayscale {
+                    renderer.render_with_preview(&doc, &opts)
+                } else {
+                    renderer.render(&doc, &opts).map(|o| (o, None))
+                };
+                let (out, preview) = rendered.map_err(|e| {
+                    let at = row.map_or(String::new(), |r| format!(" of record {}", r + 1));
+                    CommandError::bad_params(format!("cannot render page {page}{at}: {e}"))
+                })?;
                 let reps = if uniform { 1 } else { c };
+                if grayscale {
+                    let gray = transform.apply_gray(gray_of(&out, preview));
+                    for _ in 1..reps {
+                        grays.push(gray.clone());
+                    }
+                    grays.push(gray);
+                }
+                let bitmap = transform.apply(out.bitmap);
                 for _ in 1..reps {
                     pages.push(bitmap.clone());
                 }
@@ -662,7 +725,11 @@ impl Command for PrintSubmit {
             copies: if uniform { copies } else { 1 },
             density,
             media: doc.label.media,
-            planes: PagePlanes::None,
+            planes: if grayscale {
+                PagePlanes::Gray(grays)
+            } else {
+                PagePlanes::None
+            },
             half_cut: None,
         };
         let spec = JobSpec {

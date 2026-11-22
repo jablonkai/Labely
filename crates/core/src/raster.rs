@@ -220,6 +220,52 @@ impl Gray4 {
         }
         out
     }
+
+    /// The 16 levels of an 8-bit gray image (row-major, 0 = black, 255 = white), each
+    /// rounded to the nearest level. Missing pixels are white.
+    pub fn from_gray8(width: u32, height: u32, gray: &[u8]) -> Self {
+        let mut out = Self::new(width, height);
+        for (dst, &g) in out.data.iter_mut().zip(gray) {
+            *dst = ((u16::from(255 - g) * u16::from(Self::BLACK) + 127) / 255) as u8;
+        }
+        out
+    }
+
+    /// Mirror left to right.
+    pub fn mirror_h(&self) -> Self {
+        let mut out = Self::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                out.set(self.width - 1 - x, y, self.get(x, y));
+            }
+        }
+        out
+    }
+
+    /// Rotate 180°.
+    pub fn rotate_180(&self) -> Self {
+        let mut out = Self::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                out.set(self.width - 1 - x, self.height - 1 - y, self.get(x, y));
+            }
+        }
+        out
+    }
+
+    /// As [`Bitmap1::shifted`]: dots pushed off the edge are dropped.
+    pub fn shifted(&self, dx: i64, dy: i64) -> Self {
+        let mut out = Self::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let (nx, ny) = (i64::from(x) + dx, i64::from(y) + dy);
+                if let (Ok(nx), Ok(ny)) = (u32::try_from(nx), u32::try_from(ny)) {
+                    out.set(nx, ny, self.get(x, y));
+                }
+            }
+        }
+        out
+    }
 }
 
 #[cfg(test)]
@@ -236,6 +282,17 @@ mod tests {
         let r = g.rotate_cw();
         assert_eq!((r.width(), r.height()), (2, 3));
         assert_eq!((r.get(1, 2), r.get(0, 0)), (15, 7));
+    }
+
+    #[test]
+    fn gray_from_gray8_and_transforms() {
+        let g = Gray4::from_gray8(4, 2, &[255, 0, 128, 200, 9, 255]);
+        assert_eq!(&g.data()[..6], &[0, 15, 7, 3, 14, 0]);
+        assert_eq!(g.get(3, 1), 0, "missing pixels are white");
+        assert_eq!(g.mirror_h().get(2, 0), 15);
+        assert_eq!(g.rotate_180().get(2, 1), 15);
+        let s = g.shifted(1, 1);
+        assert_eq!((s.get(2, 1), s.get(0, 0)), (15, 0));
     }
 
     #[test]

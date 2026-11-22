@@ -51,6 +51,9 @@ pub struct Model {
     pub rfid: bool,
     #[serde(default)]
     pub transports: Vec<String>,
+    /// Prints 16 gray levels with 0x8D rows (docs/protocol.md §7.5).
+    #[serde(default)]
+    pub gray: bool,
 }
 
 impl Model {
@@ -65,6 +68,7 @@ impl Model {
             density_max: self.density.max,
             density_default: self.density.default,
             media: self.media.clone(),
+            gray: self.gray,
         }
     }
 }

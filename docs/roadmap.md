@@ -161,7 +161,8 @@ Phase 6 lands in slices, one pull request each (ADR-0035, ADR-0036, ADR-0037, AD
 Ideas parked until everything above is done.
 
 - **Printer follow-ups from Phase 6** (ADR-0040). Each needs hardware that is not here yet.
-  - Editor colour for two-colour printers, and the gray render path.
+  - Editor colour for two-colour printers. The gray render path is in (#40): `print.submit`
+    `grayscale` on the B1 Pro, B2 Pro and B21 Pro; it has not printed on hardware yet.
   - Cut options in the print request and the print dialog.
   - Mobile BLE link for Phomemo and Marklife, a model picker for `usb:` and `tcp:`, the USB
     printer class and the Marklife P50.

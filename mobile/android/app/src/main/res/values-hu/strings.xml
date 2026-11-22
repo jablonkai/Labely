@@ -416,6 +416,8 @@
     <string name="print_offset_y">Y eltolás</string>
     <string name="print_rotate_180">Elforgatás 180°-kal</string>
     <string name="print_rotate_180_sub">A címkék fordítva jönnek ki a nyomtatóból</string>
+    <string name="print_grayscale">Szürkeárnyalatos</string>
+    <string name="print_grayscale_sub">Fotók és árnyalatok 16 szürke szinttel, pontozás helyett</string>
     <string name="printable_width">Nyomtatható szélesség</string>
     <string name="printer_model">Nyomtatómodell</string>
     <string name="prop_align">Igazítás</string>
