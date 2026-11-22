@@ -236,17 +236,24 @@ extension AppState {
     @discardableResult
     public func detectPaper() async -> PaperDetect? {
         guard let p = printer else {
-            detected = nil
+            await setDetected(nil)
             return nil
         }
         // Without `doc_id` the engine compares with its active document; that is not asked for
         // here, so only the roll itself is kept.
         guard let r = try? await engine.call("paper.detect", ["address": JSON(p.address)]) else {
-            detected = nil
+            await setDetected(nil)
             return nil
         }
-        detected = PaperDetect.from(r)
+        await setDetected(PaperDetect.from(r))
         return detected
+    }
+
+    /// Keep the detected roll; a different roll re-reads the templates that fit it.
+    private func setDetected(_ d: PaperDetect?) async {
+        let rollChanged = d?.paper?.id != detected?.paper?.id
+        detected = d
+        if rollChanged { await loadTemplates() }
     }
 
     // MARK: - Print queue

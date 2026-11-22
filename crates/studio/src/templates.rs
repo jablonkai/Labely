@@ -2,7 +2,7 @@
 //! `template.*` command; the gallery only caches the listing and thumbnails.
 
 use egui::{CornerRadius, Margin, RichText, Stroke, Ui, vec2};
-use labely_core::commands::template::{self, TemplateInfo};
+use labely_core::commands::template::{self, Category, TemplateInfo};
 use labely_core::services::RenderOptions;
 use serde_json::json;
 
@@ -28,6 +28,10 @@ pub struct Gallery {
     pub folders: Vec<String>,
     /// The listing must be read again.
     pub stale: bool,
+    /// Loaded roll the listing was read for (its `fits` refer to it).
+    pub paper: Option<String>,
+    /// Starter category filter; `None` shows every category.
+    pub category: Option<Category>,
     /// Text of the rename field (template or folder).
     pub rename: String,
     pub new_folder: String,
@@ -42,6 +46,8 @@ impl Default for Gallery {
             templates: Vec::new(),
             folders: Vec::new(),
             stale: true,
+            paper: None,
+            category: None,
             rename: String::new(),
             new_folder: String::new(),
         }
@@ -85,8 +91,41 @@ pub fn display_name(app: &LabelyApp, t: &TemplateInfo) -> String {
     t.name.clone()
 }
 
+/// The starter categories, in gallery order.
+pub const CATEGORIES: [Category; 5] = [
+    Category::Kitchen,
+    Category::Office,
+    Category::Cables,
+    Category::Shipping,
+    Category::Events,
+];
+
+/// Localised category name.
+pub fn category_name(app: &LabelyApp, c: Category) -> String {
+    let id = match c {
+        Category::Kitchen => "kitchen",
+        Category::Office => "office",
+        Category::Cables => "cables",
+        Category::Shipping => "shipping",
+        Category::Events => "events",
+    };
+    app.i18n.t(&format!("template-category-{id}"))
+}
+
+/// Paper id of the loaded roll, when the printer's RFID tag was recognised (`paper.detect`).
+pub(crate) fn loaded_paper(app: &LabelyApp) -> Option<String> {
+    app.ui.detected.as_ref()?["paper"]["id"]
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// `template.list` for the loaded roll: templates that fit it come first, with `fits` set.
 pub(crate) fn list(app: &mut LabelyApp) -> Option<(Vec<TemplateInfo>, Vec<String>)> {
-    let env = app.run_reporting("template.list", json!({}));
+    let mut params = json!({});
+    if let Some(id) = loaded_paper(app) {
+        params["paper"] = json!(id);
+    }
+    let env = app.run_reporting("template.list", params);
     let r = env.result?;
     let templates = serde_json::from_value(r["templates"].clone()).ok()?;
     let folders = serde_json::from_value(r["folders"].clone()).unwrap_or_default();
@@ -144,7 +183,9 @@ fn mm(v: f64) -> String {
 /// The template library page (design screen 7): shelves, cards, the selected template.
 pub fn library_page(app: &mut LabelyApp, ui: &mut Ui) {
     let mut g = std::mem::take(&mut app.ui.gallery);
-    if g.stale {
+    let paper = loaded_paper(app);
+    if g.stale || g.paper != paper {
+        g.paper = paper;
         if let Some((templates, folders)) = list(app) {
             g.templates = templates;
             g.folders = folders;
@@ -377,7 +418,7 @@ fn visible(app: &LabelyApp, g: &Gallery) -> Vec<TemplateInfo> {
     g.templates
         .iter()
         .filter(|t| match &g.shelf {
-            Shelf::Starters => t.starter,
+            Shelf::Starters => t.starter && (g.category.is_none() || t.category == g.category),
             Shelf::Folder(f) => !t.starter && &t.folder == f,
         })
         .filter(|t| q.is_empty() || display_name(app, t).to_lowercase().contains(&q))
@@ -407,6 +448,21 @@ fn cards(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery, height: f32) {
             .color(theme::pal().muted),
         );
     });
+    if g.shelf == Shelf::Starters {
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            let all = app.i18n.t("templates-category-all");
+            if crate::home::chip(ui, &all, g.category.is_none()).clicked() {
+                g.category = None;
+            }
+            for c in CATEGORIES {
+                let active = g.category == Some(c);
+                if crate::home::chip(ui, &category_name(app, c), active).clicked() {
+                    g.category = Some(c);
+                }
+            }
+        });
+    }
     ui.add_space(8.0);
     if items.is_empty() {
         ui.label(RichText::new(app.i18n.t("templates-empty")).color(theme::pal().muted));
@@ -429,7 +485,16 @@ fn cards(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery, height: f32) {
                     let name = display_name(app, t);
                     let thumb = thumbnail(app, &ctx, t);
                     let size = format!("{} × {} mm", mm(t.width_mm), mm(t.height_mm));
-                    let resp = card(ui, &name, &size, thumb.as_ref(), w, selected);
+                    let fits = (t.fits == Some(true)).then(|| app.i18n.t("templates-fits"));
+                    let resp = card(
+                        ui,
+                        &name,
+                        &size,
+                        fits.as_deref(),
+                        thumb.as_ref(),
+                        w,
+                        selected,
+                    );
                     if resp.clicked() {
                         g.selected = Some(t.reference.clone());
                         g.rename = name.clone();
@@ -445,11 +510,13 @@ fn cards(app: &mut LabelyApp, ui: &mut Ui, g: &mut Gallery, height: f32) {
     }
 }
 
-/// Template card: thumbnail on a grey well, name and size; named by the template name.
+/// Template card: thumbnail on a grey well, name, size and the "fits the roll" note; named by
+/// the template name.
 fn card(
     ui: &mut Ui,
     name: &str,
     size: &str,
+    fits: Option<&str>,
     thumb: Option<&egui::TextureHandle>,
     width: f32,
     selected: bool,
@@ -458,6 +525,9 @@ fn card(
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height), egui::Sense::click());
     let label = name.to_owned();
     resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &label));
+    if let Some(f) = fits {
+        resp.clone().on_hover_text(f);
+    }
     if !ui.is_rect_visible(rect) {
         return resp;
     }
@@ -506,14 +576,36 @@ fn card(
         theme::bold(13.0),
         theme::pal().text,
     );
-    p.text(
+    let size_rect = p.text(
         egui::pos2(rect.left() + 12.0, well.bottom() + 36.0),
         egui::Align2::LEFT_CENTER,
         size,
         theme::regular(11.5),
         theme::pal().muted,
     );
+    if let Some(f) = fits {
+        fits_note(
+            p,
+            size_rect.right() + 8.0,
+            well.bottom() + 36.0,
+            rect.right() - 10.0,
+            f,
+        );
+    }
     resp
+}
+
+/// "Fits the roll" note after a card's size, in the accent colour, cut to `right`.
+pub(crate) fn fits_note(p: &egui::Painter, left: f32, y: f32, right: f32, text: &str) {
+    theme::fit_text(
+        p,
+        egui::pos2(left, y),
+        egui::Align2::LEFT_CENTER,
+        text,
+        theme::bold(11.0),
+        theme::pal().primary,
+        (right - left).max(0.0),
+    );
 }
 
 pub(crate) fn open_template(app: &mut LabelyApp, reference: &str) -> bool {

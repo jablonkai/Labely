@@ -11,6 +11,10 @@ public struct Template: Sendable, Equatable, Identifiable {
     public let starter: Bool
     public let widthMm: Double
     public let heightMm: Double
+    /// Starter category (`kitchen`, `office`, `cables`, `shipping`, `events`); nil for the library.
+    public var category: String?
+    /// Fits the loaded roll; nil when no roll was recognised.
+    public var fits: Bool?
 
     public var id: String { ref }
 
@@ -23,7 +27,9 @@ public struct Template: Sendable, Equatable, Identifiable {
                 folder: t["folder"]?.string ?? "",
                 starter: t["starter"]?.bool ?? false,
                 widthMm: t["width_mm"]?.double ?? 0,
-                heightMm: t["height_mm"]?.double ?? 0
+                heightMm: t["height_mm"]?.double ?? 0,
+                category: t["category"]?.string,
+                fits: t["fits"]?.bool
             )
         }
     }

@@ -27,6 +27,7 @@ fn starters_load_and_pass_check() {
     let mut s = labely_testkit::test_session();
     let all = refs(&mut s, json!({}));
     assert_eq!(all.len(), STARTERS.len(), "no library: starters only");
+    // The real renderer's stricter check is in crates/render/tests/it/check.rs.
     for r in all {
         let out = ok(&mut s, "template.new", json!({ "ref": r }));
         assert!(out["doc_id"].as_str().is_some());
@@ -40,6 +41,83 @@ fn starters_load_and_pass_check() {
     // The library needs a directory.
     let e = err(&mut s, "template.save", json!({"name": "x"}));
     assert_eq!(e.code, ErrorCode::Disabled);
+}
+
+#[test]
+fn starters_are_tagged_and_unique() {
+    let mut s = labely_testkit::test_session();
+    let list = ok(&mut s, "template.list", json!({}));
+    let all = list["templates"].as_array().unwrap();
+    assert!(all.len() >= 50, "{}", all.len());
+    let mut ids = std::collections::BTreeSet::new();
+    for t in all {
+        assert!(
+            ids.insert(t["ref"].as_str().unwrap()),
+            "duplicate {}",
+            t["ref"]
+        );
+        assert!(t["category"].is_string(), "{t}");
+        assert!(
+            t["paper"].as_str().is_some_and(|p| p.starts_with("std:")),
+            "starter on a size the paper library lacks: {t}"
+        );
+        assert!(t.get("fits").is_none(), "{t}");
+    }
+    for c in ["kitchen", "office", "cables", "shipping", "events"] {
+        let n = refs(&mut s, json!({"category": c})).len();
+        assert!(n >= 8, "{c}: {n}");
+    }
+    let e = err(&mut s, "template.list", json!({"category": "garden"}));
+    assert_eq!(e.code, ErrorCode::BadParams);
+}
+
+#[test]
+fn list_by_paper() {
+    let (mut s, _dir) = library();
+    // A library template on 50×30 next to the starters.
+    ok(&mut s, "template.new", json!({"ref": "starter:wifi"}));
+    ok(&mut s, "template.save", json!({"name": "Mine"}));
+
+    let list = ok(&mut s, "template.list", json!({"paper": "std:50x30"}));
+    let all = list["templates"].as_array().unwrap();
+    let fits: Vec<bool> = all.iter().map(|t| t["fits"].as_bool().unwrap()).collect();
+    let first_miss = fits.iter().position(|f| !f).unwrap();
+    assert!(
+        first_miss > 0 && fits[first_miss..].iter().all(|f| !f),
+        "fit first"
+    );
+    for t in &all[..first_miss] {
+        assert_eq!(
+            (t["width_mm"].as_f64(), t["height_mm"].as_f64()),
+            (Some(50.0), Some(30.0))
+        );
+    }
+    assert!(all[..first_miss].iter().any(|t| t["ref"] == "my:Mine"));
+
+    let only = refs(&mut s, json!({"paper": "std:50x30", "fitting_only": true}));
+    assert_eq!(only.len(), first_miss);
+    assert!(only.contains(&"starter:wifi".to_owned()));
+
+    // A continuous 50 mm roll takes every 50 mm wide design, whatever its length.
+    let roll = refs(
+        &mut s,
+        json!({"paper": "std:50-roll", "fitting_only": true}),
+    );
+    assert!(roll.contains(&"starter:shipping".to_owned()), "{roll:?}");
+    assert!(roll.contains(&"starter:cable-flag".to_owned()), "{roll:?}");
+    assert!(!roll.contains(&"starter:jar".to_owned()), "{roll:?}");
+
+    // Category and paper combine; a category leaves the library out.
+    let kitchen = refs(
+        &mut s,
+        json!({"category": "kitchen", "paper": "std:40x30", "fitting_only": true}),
+    );
+    assert!(kitchen.contains(&"starter:jar".to_owned()), "{kitchen:?}");
+    assert!(kitchen.iter().all(|r| r.starts_with("starter:")));
+
+    let e = err(&mut s, "template.list", json!({"paper": "std:nope"}));
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert_eq!(e.param.as_deref(), Some("paper"));
 }
 
 #[test]
@@ -69,7 +147,10 @@ fn library_save_list_move_duplicate_delete() {
     assert_eq!(list["templates"][0]["name"], "Shelf");
     assert_eq!(list["templates"][0]["starter"], false);
     assert_eq!(list["templates"].as_array().unwrap().len(), 1);
-    assert_eq!(refs(&mut s, json!({"query": "SHEL"})), ["my:Shop/Shelf"]);
+    assert_eq!(
+        refs(&mut s, json!({"query": "SHEL"})),
+        ["starter:shelf-label", "my:Shop/Shelf"]
+    );
 
     // Duplicate numbers the copy; starters can be copied into the library.
     let r = ok(

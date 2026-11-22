@@ -96,7 +96,8 @@ struct StateTests {
 
     @Test func loadsStarterTemplatesWithThumbnails() async {
         await app.start().value
-        #expect(app.templates.filter(\.starter).count == 10)
+        #expect(app.templates.filter(\.starter).count == 50)
+        #expect(app.templates.filter(\.starter).allSatisfy { $0.category != nil && $0.fits == nil })
         #expect(app.templates.allSatisfy { app.thumbs[$0.ref] != nil })
         #expect(app.message == nil)
     }

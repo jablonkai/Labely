@@ -1,0 +1,81 @@
+{
+  "format_version": 2,
+  "name": "Order tracking",
+  "label": {
+    "width_mm": 50.0,
+    "height_mm": 30.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 2.5,
+          "y_mm": 1.5,
+          "width_mm": 45.0,
+          "height_mm": 6.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "TRACKING NUMBER",
+          "font_family": "Noto Sans",
+          "font_size_pt": 7.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.3,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 2,
+          "x_mm": 2.5,
+          "y_mm": 8.0,
+          "width_mm": 45.0,
+          "height_mm": 13.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "barcode",
+          "data": "LB123456789XX",
+          "symbology": "code128",
+          "human_readable": "none",
+          "text_size_pt": 8.0
+        },
+        {
+          "id": 3,
+          "x_mm": 2.5,
+          "y_mm": 22.0,
+          "width_mm": 45.0,
+          "height_mm": 6.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "LB 123 456 789 XX",
+          "font_family": "Noto Sans",
+          "font_size_pt": 9.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 4
+}

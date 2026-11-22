@@ -12,6 +12,10 @@ data class Template(
     val starter: Boolean,
     val widthMm: Double,
     val heightMm: Double,
+    /** Starter category (`kitchen`, `office`, `cables`, `shipping`, `events`); null for the library. */
+    val category: String? = null,
+    /** Fits the loaded roll; null when no roll was recognised. */
+    val fits: Boolean? = null,
 ) {
     companion object {
         fun list(result: JSONObject): List<Template> =
@@ -23,6 +27,8 @@ data class Template(
                     starter = it.optBoolean("starter"),
                     widthMm = it.optDouble("width_mm"),
                     heightMm = it.optDouble("height_mm"),
+                    category = it.optString("category").takeIf { c -> c.isNotEmpty() },
+                    fits = if (it.has("fits")) it.optBoolean("fits") else null,
                 )
             }
     }

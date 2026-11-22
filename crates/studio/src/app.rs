@@ -198,6 +198,8 @@ pub struct UiState {
     pub inspector_label: bool,
     /// Template listing for the home screen and the templates pane.
     pub template_cache: Option<Vec<labely_core::commands::template::TemplateInfo>>,
+    /// Loaded roll the template cache was read for.
+    pub template_cache_paper: Option<String>,
     pub layer_query: String,
     /// Value typed or scanned into the records table's find box.
     pub record_query: String,
@@ -279,6 +281,7 @@ impl Default for UiState {
             left_tab: LeftTab::Insert,
             inspector_label: false,
             template_cache: None,
+            template_cache_paper: None,
             layer_query: String::new(),
             record_query: String::new(),
             found_record: None,

@@ -1,0 +1,101 @@
+{
+  "format_version": 2,
+  "name": "Table number",
+  "label": {
+    "width_mm": 50.0,
+    "height_mm": 50.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 1.0,
+          "y_mm": 1.0,
+          "width_mm": 48.0,
+          "height_mm": 48.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "border",
+          "style": "double",
+          "stroke_mm": 0.4,
+          "corner_radius_mm": 3.0
+        },
+        {
+          "id": 2,
+          "x_mm": 4.0,
+          "y_mm": 5.0,
+          "width_mm": 42.0,
+          "height_mm": 7.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "TABLE",
+          "font_family": "Noto Sans",
+          "font_size_pt": 10.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.8,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 3,
+          "x_mm": 4.0,
+          "y_mm": 13.0,
+          "width_mm": 42.0,
+          "height_mm": 26.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "{{table}}",
+          "font_family": "Noto Sans",
+          "font_size_pt": 48.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 4,
+          "x_mm": 21.5,
+          "y_mm": 40.0,
+          "width_mm": 7.0,
+          "height_mm": 7.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "icon",
+          "icon": "star",
+          "keep_aspect": true
+        }
+      ]
+    }
+  ],
+  "serials": {
+    "table": {
+      "start": 1,
+      "step": 1,
+      "digits": 1,
+      "prefix": ""
+    }
+  },
+  "next_id": 5
+}

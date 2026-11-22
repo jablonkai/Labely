@@ -43,7 +43,7 @@ fn command_list_prefix() {
 /// this release cycle) and paste the new hash here.
 const PINNED: (u32, &str) = (
     3,
-    "e5ce129f001d5baac3baf613ffd2c7b49fd69b222838f0ffe2cf9e5316048299",
+    "82f89d3f51c12c45d6060787af7eb705109904171f64aacede3d7c2aa87fc9fe",
 );
 
 #[test]

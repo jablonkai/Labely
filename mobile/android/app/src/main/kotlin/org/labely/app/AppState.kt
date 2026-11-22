@@ -291,7 +291,8 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
 
     suspend fun loadTemplates() {
         report {
-            val r = engine.call("template.list")
+            // With the loaded roll, the templates that fit it come first (`fits`).
+            val r = engine.call("template.list", "paper" to detected?.paper?.id)
             templates = Template.list(r)
             folders = r.optJSONArray("folders").let { a -> if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) } }
             for (t in templates) if (t.ref !in thumbs) thumbnail(t.ref) { engine.call("template.new", "ref" to t.ref) }
@@ -642,7 +643,9 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
         runCatching { engine.call("device.disconnect", "address" to address) }
         printer = null
         printerStatus = null
+        val hadRoll = detected?.paper != null
         detected = null
+        if (hadRoll) loadTemplates()
     }
 
     suspend fun refreshStatus() {
@@ -664,7 +667,11 @@ class AppState(private val context: Context, val engine: Engine, val scope: Coro
     suspend fun detectPaper(docId: String? = null): Detected? {
         val p = printer ?: return null
         return try {
-            Detected.from(engine.call("paper.detect", "address" to p.address, "doc_id" to docId)).also { detected = it }
+            Detected.from(engine.call("paper.detect", "address" to p.address, "doc_id" to docId)).also {
+                val rollChanged = it.paper?.id != detected?.paper?.id
+                detected = it
+                if (rollChanged) loadTemplates()
+            }
         } catch (e: CommandFailure) {
             detected = null
             null

@@ -1,0 +1,55 @@
+{
+  "format_version": 2,
+  "name": "This way up",
+  "label": {
+    "width_mm": 40.0,
+    "height_mm": 30.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 3.0,
+          "y_mm": 4.0,
+          "width_mm": 20.0,
+          "height_mm": 20.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "icon",
+          "icon": "this_way_up",
+          "keep_aspect": true
+        },
+        {
+          "id": 2,
+          "x_mm": 23.0,
+          "y_mm": 4.0,
+          "width_mm": 15.0,
+          "height_mm": 22.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "THIS\nWAY\nUP",
+          "font_family": "Noto Sans",
+          "font_size_pt": 10.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 3
+}

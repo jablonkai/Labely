@@ -472,7 +472,7 @@ fn template_gallery_open_save_and_manage() {
     h.get_by_label("New from template…").click();
     h.run();
     assert!(h.query_all_by_label("Starter templates").next().is_some());
-    h.get_by_label("Price tag").click();
+    tap(&mut h, "Price tag");
     h.run();
     h.get_by_label("Open").click();
     h.run();
@@ -1366,4 +1366,51 @@ fn printers_page_connects_a_found_printer() {
         "{:?}",
         h.state().ui.status
     );
+}
+
+#[test]
+fn templates_for_the_loaded_roll_come_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            paper_file: Some(dir.path().join("papers.json")),
+            ..options()
+        },
+    );
+    let env = app.run("device.connect", json!({"address": "sim:niimbot.b21_pro"}));
+    assert!(env.ok, "{:?}", env.error);
+    let env = app.run("paper.detect", json!({}));
+    let barcode = env.result.unwrap()["barcode"].as_str().unwrap().to_owned();
+    assert!(
+        app.run("paper.link", json!({"barcode": barcode, "id": "std:50x15"}))
+            .ok
+    );
+    labely_studio::paper::detect(&mut app, None);
+    let mut h = harness(app);
+    h.run();
+    // Home: the starters that fit the 50×15 roll lead, marked as fitting.
+    let fitting = h
+        .query_all_by_label_contains("50 × 15 mm · Fits the roll")
+        .count();
+    assert!(fitting >= 5, "{fitting}");
+    assert!(
+        h.query_by_label("Pantry bin · 50 × 15 mm · Fits the roll")
+            .is_some()
+    );
+    // Eight cards: the seven that fit, then the first other starter; the rest wait in "All".
+    assert!(h.query_by_label("Jar · 40 × 30 mm").is_some());
+    assert!(h.query_by_label_contains("Spice · ").is_none(), "capped");
+
+    // Library page: the category filter.
+    h.get_by_label("New from template…").click();
+    h.run();
+    assert!(h.query_by_label("Jar").is_some());
+    h.get_by_label("Cables").click();
+    h.run();
+    assert!(h.query_by_label("Jar").is_none());
+    assert!(h.query_by_label("Patch panel").is_some());
+    h.get_by_label("All").click();
+    h.run();
+    assert!(h.query_by_label("Jar").is_some());
 }

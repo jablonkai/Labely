@@ -1,0 +1,79 @@
+{
+  "format_version": 2,
+  "name": "Power adapter",
+  "label": {
+    "width_mm": 40.0,
+    "height_mm": 20.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 1.5,
+          "y_mm": 3.0,
+          "width_mm": 9.0,
+          "height_mm": 9.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "icon",
+          "icon": "electricity",
+          "keep_aspect": true
+        },
+        {
+          "id": 2,
+          "x_mm": 12.0,
+          "y_mm": 1.5,
+          "width_mm": 26.0,
+          "height_mm": 8.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Laptop",
+          "font_family": "Noto Sans",
+          "font_size_pt": 11.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 3,
+          "x_mm": 12.0,
+          "y_mm": 10.0,
+          "width_mm": 26.0,
+          "height_mm": 8.5,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "19 V · 3.4 A · 65 W",
+          "font_family": "Noto Sans",
+          "font_size_pt": 7.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 4
+}

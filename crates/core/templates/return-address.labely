@@ -1,0 +1,55 @@
+{
+  "format_version": 2,
+  "name": "Return address",
+  "label": {
+    "width_mm": 50.0,
+    "height_mm": 15.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 2.0,
+          "y_mm": 3.0,
+          "width_mm": 8.0,
+          "height_mm": 8.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "icon",
+          "icon": "mail",
+          "keep_aspect": true
+        },
+        {
+          "id": 2,
+          "x_mm": 12.0,
+          "y_mm": 0.5,
+          "width_mm": 36.0,
+          "height_mm": 14.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Sample Co. · 12 Sample Street\n1234 Sampletown · Country",
+          "font_family": "Noto Sans",
+          "font_size_pt": 7.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 3
+}
