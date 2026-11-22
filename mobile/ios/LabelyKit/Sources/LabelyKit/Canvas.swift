@@ -227,7 +227,7 @@ public enum Handle: Sendable, Equatable, CaseIterable {
         let isLine = handles == line
         let inside = !isLine && box.contains(p)
         let radius = inside ? min(touchRadius, min(box.width, box.height) / 4) : touchRadius
-        var best: (Handle, Double)?
+        var best: (Handle, CGFloat)?
         for h in handles {
             let c = h.point(in: rect)
             let d = ((p.x - c.x) * (p.x - c.x) + (p.y - c.y) * (p.y - c.y)).squareRoot()
