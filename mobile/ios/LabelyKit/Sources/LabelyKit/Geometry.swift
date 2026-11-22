@@ -298,7 +298,7 @@ extension Handle {
         let f = e.rotated
         let inside = !e.isLine && f.contains(m)
         let r = inside ? min(radius, min(abs(f.width), abs(f.height)) / 4) : radius
-        var best: (Handle, Double)?
+        var best: (Handle, CGFloat)?
         for h in handles {
             let c = e.isLine ? h.point(in: CGRect(x: f.x, y: f.y, width: f.width, height: f.height)) : f.point(of: h)
             let d = hypot(m.x - c.x, m.y - c.y)

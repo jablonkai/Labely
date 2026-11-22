@@ -3,6 +3,7 @@
 //! The command registry is the only way to change a document (ADR-0004): build a
 //! [`Session`] with [`Services`] and call [`Session::execute`].
 
+pub mod address;
 pub mod command;
 pub mod commands;
 pub mod datetime;

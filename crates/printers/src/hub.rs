@@ -15,6 +15,7 @@ use std::time::Duration;
 use labely_transport::callback::{CallbackTransport, NativeBleHost};
 use labely_transport::{TransportInfo, TransportKind};
 
+use labely_core::address::split_query;
 use labely_core::document::MediaType;
 use labely_core::services::{
     DeviceError, DeviceHub, DeviceInfo, DeviceSettings, DeviceStatus, JobControl, ModelInfo,
@@ -187,7 +188,7 @@ impl Hub {
         address: &str,
         rest: &'a str,
     ) -> Result<(&'a str, Option<Model>), DeviceError> {
-        let Some((target, query)) = rest.split_once('?') else {
+        let (target, Some(query)) = split_query(rest) else {
             return Ok((rest, None));
         };
         match query.split_once('=') {
@@ -207,7 +208,8 @@ impl Hub {
         type Sim = Option<Box<dyn std::any::Any + Send>>;
         let (mut driver, sim): (Box<dyn Driver>, Sim) = match scheme {
             "fake" => {
-                let (dir, query) = rest.split_once('?').unwrap_or((rest, ""));
+                let (dir, query) = split_query(rest);
+                let query = query.unwrap_or("");
                 let mut model_id = None;
                 let mut delay_ms = 0u64;
                 for pair in query.split('&').filter(|p| !p.is_empty()) {

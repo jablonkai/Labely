@@ -162,7 +162,7 @@ impl Command for DeviceConnect {
     fn run(ctx: &mut Ctx<'_>, p: ConnectParams) -> Result<DeviceInfo, CommandError> {
         if let Some(rest) = p.address.strip_prefix("fake:") {
             // FakePrinter writes PNGs into this directory: it is a file write.
-            let dir = rest.split('?').next().unwrap_or(rest);
+            let (dir, _) = crate::address::split_query(rest);
             ctx.check_path("address", dir, true)?;
         }
         Ok(ctx.services().devices.connect(&p.address)?)
