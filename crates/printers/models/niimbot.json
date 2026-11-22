@@ -484,7 +484,8 @@
    "rfid": true,
    "transports": [
     "ble"
-   ]
+   ],
+   "red": true
   },
   {
    "id": "niimbot.b21_l2b",

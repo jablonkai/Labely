@@ -18,7 +18,7 @@ use std::sync::{Mutex, PoisonError};
 use base64::Engine as _;
 use labely_core::document::{
     BarcodeProps, Code2dProps, DEFAULT_FONT, Dither, Element, ElementKind, HumanReadable, ImageFit,
-    ImageProps, Symbology2d, TableProps, TextDirection, TextFit, TextProps, VAlign,
+    ImageProps, InkColor, Symbology2d, TableProps, TextDirection, TextFit, TextProps, VAlign,
 };
 use labely_core::raster::Bitmap1;
 use labely_core::services::{
@@ -250,9 +250,15 @@ fn render_page(
     };
     let mut bitmap = Bitmap1::new(lw, lh);
     let mut gray = vec![255u8; (lw * lh) as usize];
+    let mut red = page
+        .elements
+        .iter()
+        .any(|e| !e.hidden && e.color == InkColor::Red)
+        .then(|| Bitmap1::new(lw, lh));
     for el in page.elements.iter().filter(|e| !e.hidden) {
         if let Some((layer, conv)) = render_element(&mut ctx, engine, el, lw, lh)? {
-            let (covered, black) = compose(&mut bitmap, &mut gray, &layer, conv);
+            let ink = red.as_mut().map(|r| (r, el.color == InkColor::Red));
+            let (covered, black) = compose(&mut bitmap, ink, &mut gray, &layer, conv);
             if matches!(el.kind, ElementKind::Image(_)) && covered > 0 {
                 let pct = black as f64 * 100.0 / covered as f64;
                 if !(LOW_CONTRAST_PCT..=100.0 - LOW_CONTRAST_PCT).contains(&pct) {
@@ -266,6 +272,7 @@ fn render_page(
     }
     let out = RenderOutput {
         bitmap,
+        red,
         issues: ctx.issues,
     };
     Ok((
@@ -282,8 +289,16 @@ fn render_page(
 const LOW_CONTRAST_PCT: f64 = 2.0;
 
 /// Source-over the layer onto the gray preview and its 1-bit conversion onto the bitmap.
+/// With `red`, the red plane and whether this layer is red: its covered dots print red
+/// where they are ink, and an upper layer of any colour replaces what lies below.
 /// Returns (covered dots, black dots among them).
-fn compose(bitmap: &mut Bitmap1, gray: &mut [u8], layer: &Pixmap, conv: Conv) -> (u64, u64) {
+fn compose(
+    bitmap: &mut Bitmap1,
+    mut red: Option<(&mut Bitmap1, bool)>,
+    gray: &mut [u8],
+    layer: &Pixmap,
+    conv: Conv,
+) -> (u64, u64) {
     let (w, h) = (layer.width(), layer.height());
     let data = layer.data();
     let n = (w * h) as usize;
@@ -313,6 +328,9 @@ fn compose(bitmap: &mut Bitmap1, gray: &mut [u8], layer: &Pixmap, conv: Conv) ->
             let i = (y * w + x) as usize;
             if covered[i] {
                 bitmap.set(x, y, black[i]);
+                if let Some((plane, is_red)) = red.as_mut() {
+                    plane.set(x, y, *is_red && black[i]);
+                }
                 n_cov += 1;
                 n_black += u64::from(black[i]);
             }

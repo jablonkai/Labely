@@ -152,6 +152,13 @@ public struct Model: Sendable, Equatable, Codable {
     /// The model prints gray levels.
     public var printsGray: Bool { gray == true }
 
+    /// Prints red and black: elements whose `color` is red print red. Optional so models
+    /// saved before it still decode.
+    public var red: Bool?
+
+    /// The model prints red.
+    public var printsRed: Bool { red == true }
+
     /// Width the printhead covers, in millimetres; 0 when unknown.
     public var headMm: Double { dpi > 0 ? Double(headDots) * 25.4 / Double(dpi) : 0 }
 
@@ -166,7 +173,8 @@ public struct Model: Sendable, Equatable, Codable {
             dpi: m["dpi"]?.int ?? 203,
             headDots: m["head_dots"]?.int ?? 0,
             maxWidthMm: m["max_width_mm"]?.double ?? 0,
-            gray: m["gray"]?.bool ?? false
+            gray: m["gray"]?.bool ?? false,
+            red: m["red"]?.bool ?? false
         )
     }
 }

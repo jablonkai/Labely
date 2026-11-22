@@ -347,6 +347,9 @@
     <string name="fit_fill">Fill</string>
     <string name="fit_fixed">Fixed</string>
     <string name="fit_shrink">Shrink</string>
+    <string name="ink_color">Ink colour</string>
+    <string name="ink_black">Black</string>
+    <string name="ink_red">Red</string>
     <string name="flip_h">Flip across</string>
     <string name="flip_v">Flip down</string>
     <string name="folder">Folder</string>

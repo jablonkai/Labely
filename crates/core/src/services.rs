@@ -88,6 +88,9 @@ pub enum RenderIssue {
 pub struct RenderOutput {
     /// 1-bit raster of the whole label at `dpi`, label orientation.
     pub bitmap: Bitmap1,
+    /// The dots of `bitmap` that print red (elements whose `color` is red, where nothing
+    /// black lies on top). `None` when the page has no red element.
+    pub red: Option<Bitmap1>,
     pub issues: Vec<RenderIssue>,
 }
 
@@ -191,6 +194,9 @@ pub struct ModelInfo {
     /// Prints 16 gray levels (`grayscale` in print.submit).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub gray: bool,
+    /// Prints red and black: elements whose `color` is red print red.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub red: bool,
 }
 
 /// A known printer (discovered, connected or virtual).

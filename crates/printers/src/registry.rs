@@ -54,6 +54,9 @@ pub struct Model {
     /// Prints 16 gray levels with 0x8D rows (docs/protocol.md §7.5).
     #[serde(default)]
     pub gray: bool,
+    /// Prints red and black with 0x8A rows on two-colour paper (docs/protocol.md §7.5).
+    #[serde(default)]
+    pub red: bool,
 }
 
 impl Model {
@@ -69,6 +72,7 @@ impl Model {
             density_default: self.density.default,
             media: self.media.clone(),
             gray: self.gray,
+            red: self.red,
         }
     }
 }

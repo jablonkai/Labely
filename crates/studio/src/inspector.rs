@@ -3,7 +3,7 @@
 //! `element.set_props` or `doc.set_label` edit, as before.
 
 use egui::{Color32, CornerRadius, Margin, RichText, Sense, Stroke, Ui, vec2};
-use labely_core::{Document, Element};
+use labely_core::{Document, Element, InkColor};
 use labely_i18n::Arg;
 use serde_json::{Map, Value, json};
 
@@ -537,7 +537,25 @@ pub fn insert_chips(app: &mut LabelyApp, ui: &mut Ui, text: &str, edits: &mut Ed
     });
 }
 
-/// Stacking order buttons and the locked / hidden switches.
+/// A connected printer, or the document's printer model, prints red.
+pub fn red_printer(app: &LabelyApp) -> bool {
+    let devices = &app.session.services().devices;
+    if devices
+        .connected()
+        .iter()
+        .any(|d| d.model.as_ref().is_some_and(|m| m.red))
+    {
+        return true;
+    }
+    let model = app
+        .session
+        .doc_arc(None)
+        .and_then(|d| d.label.printer_model.clone());
+    model.is_some_and(|id| devices.models().iter().any(|m| m.id == id && m.red))
+}
+
+/// Stacking order buttons, the ink colour on two-colour printers and the locked / hidden
+/// switches.
 pub fn arrange_section(app: &mut LabelyApp, ui: &mut Ui, e: &Element, edits: &mut Edits) {
     divider(ui);
     theme::section(ui, &app.i18n.t("props-arrange"));
@@ -590,6 +608,18 @@ pub fn arrange_section(app: &mut LabelyApp, ui: &mut Ui, e: &Element, edits: &mu
     });
     if let Some(to) = reorder {
         app.run_reporting("element.reorder", json!({"id": e.id, "to": to}));
+    }
+    if e.color == InkColor::Red || red_printer(app) {
+        ui.add_space(4.0);
+        ui.label(RichText::new(app.i18n.t("prop-ink")).color(theme::pal().text2));
+        let items = [
+            (app.i18n.t("ink-black"), None),
+            (app.i18n.t("ink-red"), None),
+        ];
+        let at = usize::from(e.color == InkColor::Red);
+        if let Some(i) = segmented(ui, &items, at) {
+            edits.push(("color".into(), json!(if i == 1 { "red" } else { "black" })));
+        }
     }
     ui.add_space(4.0);
     for key in ["locked", "hidden"] {

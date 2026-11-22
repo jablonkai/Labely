@@ -21,7 +21,7 @@ pub mod session;
 pub mod steps;
 
 pub use command::{Command, CommandError, CommandKind, CommandMeta, Ctx, ErrorCode};
-pub use document::{Document, Element, ElementId, ElementKind, LabelSpec};
+pub use document::{Document, Element, ElementId, ElementKind, InkColor, LabelSpec};
 pub use envelope::Envelope;
 pub use policy::Policy;
 pub use raster::{Bitmap1, Gray4};

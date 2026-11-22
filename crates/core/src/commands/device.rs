@@ -483,6 +483,21 @@ impl PageTransform {
     }
 }
 
+/// `page` with the dots of `red` cleared: the black plane of a two-colour page.
+fn without(
+    mut page: crate::raster::Bitmap1,
+    red: &crate::raster::Bitmap1,
+) -> crate::raster::Bitmap1 {
+    for y in 0..page.height().min(red.height()) {
+        for x in 0..page.width().min(red.width()) {
+            if red.get(x, y) {
+                page.set(x, y, false);
+            }
+        }
+    }
+    page
+}
+
 /// The gray map of a rendered page: the renderer's gray stage, else the 1-bit page.
 fn gray_of(out: &RenderOutput, preview: Option<GrayImage>) -> crate::raster::Gray4 {
     use crate::raster::Gray4;
@@ -613,7 +628,8 @@ impl Command for PrintSubmit {
              printed, `wait: false` returns {job_id} at once. offset_x_mm/offset_y_mm (±10) \
              move the print, mirror flips it for transparent media, rotate_180 turns it \
              for the other output direction. grayscale prints 16 gray levels instead of \
-             dithered dots, on models with `gray`. Run doc.check first.",
+             dithered dots, on models with `gray`. Elements whose color is red print red on \
+             models with `red` and black on the others. Run doc.check first.",
         )
     }
 
@@ -692,6 +708,7 @@ impl Command for PrintSubmit {
         let renderer = ctx.services().renderer.clone();
         let mut pages = Vec::with_capacity(total);
         let mut grays = Vec::with_capacity(if grayscale { total } else { 0 });
+        let mut reds: Vec<Option<crate::raster::Bitmap1>> = Vec::with_capacity(total);
         for &(row, n, c) in &labels {
             for page in 0..doc.pages.len() {
                 let opts = render_options_for(&doc, dpi, page, row, n);
@@ -712,7 +729,16 @@ impl Command for PrintSubmit {
                     }
                     grays.push(gray);
                 }
-                let bitmap = transform.apply(out.bitmap);
+                let (black, red) = match out.red {
+                    Some(red) if !grayscale => (without(out.bitmap, &red), Some(red)),
+                    _ => (out.bitmap, None),
+                };
+                let red = red.map(|r| transform.apply(r));
+                let bitmap = transform.apply(black);
+                for _ in 1..reps {
+                    reds.push(red.clone());
+                }
+                reds.push(red);
                 for _ in 1..reps {
                     pages.push(bitmap.clone());
                 }
@@ -720,16 +746,26 @@ impl Command for PrintSubmit {
             }
         }
         let distinct = (labels.len() * doc.pages.len()) as u32;
+        let planes = if grayscale {
+            PagePlanes::Gray(grays)
+        } else if reds.iter().any(Option::is_some) {
+            PagePlanes::Red(
+                reds.into_iter()
+                    .zip(&pages)
+                    .map(|(r, b)| {
+                        r.unwrap_or_else(|| crate::raster::Bitmap1::new(b.width(), b.height()))
+                    })
+                    .collect(),
+            )
+        } else {
+            PagePlanes::None
+        };
         let request = PrintRequest {
             pages,
             copies: if uniform { copies } else { 1 },
             density,
             media: doc.label.media,
-            planes: if grayscale {
-                PagePlanes::Gray(grays)
-            } else {
-                PagePlanes::None
-            },
+            planes,
             half_cut: None,
         };
         let spec = JobSpec {

@@ -164,3 +164,81 @@ fn print_grayscale_needs_a_gray_model() {
     let job = kit.devices.prints().last().unwrap().1.clone();
     assert_eq!(job.planes, PagePlanes::None);
 }
+
+#[test]
+fn print_red_elements_as_a_red_plane() {
+    use labely_core::services::PagePlanes;
+    let mut kit = test_kit();
+    let s = &mut kit.session;
+    ok(
+        s,
+        "doc.new",
+        json!({"width_mm": 40, "height_mm": 20, "printer_model": "test.fake"}),
+    );
+    ok(
+        s,
+        "element.add_rect",
+        json!({"x_mm": 1, "y_mm": 1, "width_mm": 5, "height_mm": 5}),
+    );
+    ok(s, "device.connect", json!({"address": FAKE_ADDRESS}));
+    ok(s, "print.submit", json!({}));
+    let job = kit.devices.prints().last().unwrap().1.clone();
+    assert_eq!(job.planes, PagePlanes::None, "no red element, no red plane");
+
+    let s = &mut kit.session;
+    let red = ok(
+        s,
+        "element.add_rect",
+        json!({"x_mm": 20, "y_mm": 1, "width_mm": 5, "height_mm": 5}),
+    )["id"]
+        .clone();
+    let r = ok(
+        s,
+        "element.set_props",
+        json!({"id": red, "props": {"color": "red"}}),
+    );
+    assert_eq!(r["element"]["color"], "red");
+    let e = err(
+        s,
+        "element.set_props",
+        json!({"id": red, "props": {"color": "blue"}}),
+    );
+    assert_eq!(e.param.as_deref(), Some("props.color"));
+    ok(s, "print.submit", json!({"copies": 2, "mirror": true}));
+    let job = kit.devices.prints().last().unwrap().1.clone();
+    let PagePlanes::Red(planes) = &job.planes else {
+        panic!("expected red planes, got {:?}", job.planes);
+    };
+    assert_eq!(planes.len(), job.pages.len());
+    let (b, r) = (&job.pages[0], &planes[0]);
+    assert_eq!((r.width(), r.height()), (b.width(), b.height()));
+    let count = |m: &labely_core::Bitmap1| {
+        (0..m.height())
+            .flat_map(|y| (0..m.width()).map(move |x| (x, y)))
+            .filter(|&(x, y)| m.get(x, y))
+            .count()
+    };
+    assert!(count(r) > 0 && count(b) > 0);
+    for y in 0..b.height() {
+        for x in 0..b.width() {
+            assert!(
+                !(b.get(x, y) && r.get(x, y)),
+                "dot ({x}, {y}) is in both planes"
+            );
+        }
+    }
+    // Mirrored: the red rect (x 20–25 mm of 40) lands on the left half.
+    let w = r.width();
+    assert!((0..r.height()).any(|y| (0..w / 2).any(|x| r.get(x, y))));
+    assert!(!(0..r.height()).any(|y| (w / 2..w).any(|x| r.get(x, y))));
+
+    kit.devices.set_red(true);
+    let r = ok(&mut kit.session, "device.list", json!({}));
+    assert_eq!(r["devices"][0]["model"]["red"], true);
+
+    // Grayscale wins: red goes into the gray map.
+    kit.devices.set_gray(true);
+    ok(&mut kit.session, "print.submit", json!({"grayscale": true}));
+    let job = kit.devices.prints().last().unwrap().1.clone();
+    assert!(matches!(job.planes, PagePlanes::Gray(_)));
+}

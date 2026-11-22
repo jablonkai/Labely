@@ -274,6 +274,10 @@ pub struct Element {
     /// Mirror top–bottom inside the frame (before rotation).
     #[serde(default, skip_serializing_if = "is_false")]
     pub flip_v: bool,
+    /// Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black
+    /// on the others.
+    #[serde(default, skip_serializing_if = "InkColor::is_black")]
+    pub color: InkColor,
     /// Group id shared by grouped elements (`element.group`); groups are flat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<u64>,
@@ -309,6 +313,22 @@ impl Element {
         let ey = (hw * s).abs() + (hh * c).abs();
         let (cx, cy) = (self.x_mm + hw, self.y_mm + hh);
         (cx - ex, cy - ey, cx + ex, cy + ey)
+    }
+}
+
+/// Ink colour of an element.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InkColor {
+    #[default]
+    Black,
+    /// The second colour of a two-colour printer and paper.
+    Red,
+}
+
+impl InkColor {
+    pub fn is_black(&self) -> bool {
+        *self == Self::Black
     }
 }
 
@@ -360,6 +380,7 @@ impl Document {
                 m.height_mm = src.height_mm;
                 m.rotation_deg = (-src.rotation_deg).rem_euclid(360.0);
                 m.hidden = src.hidden;
+                m.color = src.color;
                 match link.axis {
                     MirrorAxis::Horizontal => {
                         m.x_mm = lw - src.x_mm - src.width_mm;
@@ -983,6 +1004,7 @@ mod tests {
             hidden: false,
             flip_h: false,
             flip_v: false,
+            color: Default::default(),
             group: None,
             mirror: None,
             kind: ElementKind::Text(TextProps {

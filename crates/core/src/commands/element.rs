@@ -24,6 +24,7 @@ pub const FRAME_KEYS: &[&str] = &[
     "hidden",
     "flip_h",
     "flip_v",
+    "color",
     "mirror",
 ];
 
@@ -220,6 +221,7 @@ pub(crate) fn add(
         hidden: false,
         flip_h: false,
         flip_v: false,
+        color: Default::default(),
         group: None,
         mirror: None,
         kind,
@@ -702,7 +704,7 @@ pub struct SetPropsParams {
     pub doc_id: Option<String>,
     pub id: ElementId,
     /// Partial element JSON: frame fields (name, x_mm, y_mm, width_mm, height_mm,
-    /// rotation_deg, locked, hidden, flip_h, flip_v) and the element type's props (e.g. text, font_size_pt,
+    /// rotation_deg, locked, hidden, flip_h, flip_v, color) and the element type's props (e.g. text, font_size_pt,
     /// data, symbology, stroke_mm). `null` resets a field to its default.
     pub props: Map<String, Value>,
 }

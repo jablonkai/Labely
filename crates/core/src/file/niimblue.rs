@@ -277,6 +277,7 @@ impl Importer {
             hidden: o.get("visible").and_then(Value::as_bool) == Some(false),
             flip_h: flag(o, "flipX"),
             flip_v: flag(o, "flipY"),
+            color: Default::default(),
             group: None,
             mirror: None,
             kind,
@@ -507,6 +508,7 @@ impl Importer {
                 hidden,
                 flip_h: false,
                 flip_v: false,
+                color: Default::default(),
                 group: None,
                 mirror: None,
                 kind: ElementKind::Line(LineProps {
