@@ -339,6 +339,37 @@ fn data_panel_binds_and_insert_date() {
 }
 
 #[test]
+fn records_find_box_jumps_and_offers_print() {
+    let mut app = LabelyApp::new(None, options());
+    app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));
+    app.run(
+        "data.attach_csv",
+        json!({"text": "name,sku\nApple,A1\nPear,P2\nPlum,P3\n"}),
+    );
+    app.ui.show_layers = true;
+    app.ui.left_tab = labely_studio::app::LeftTab::Data;
+    let mut h = harness(app);
+    h.run();
+    // A scanner types the code and sends Enter.
+    let find = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Find record…");
+    find.focus();
+    find.type_text("P3");
+    h.run();
+    h.key_press(Key::Enter);
+    h.run();
+    assert_eq!(h.state().ui.record, 3);
+    assert_eq!(h.state().ui.found_record, Some(3));
+    assert!(
+        h.state().ui.record_query.is_empty(),
+        "cleared for the next scan"
+    );
+    h.get_by_label("Print record 3").click();
+    h.run();
+    assert_eq!(h.state().ui.print.records, "3");
+    assert!(h.state().ui.dialog.is_some(), "print dialog opens");
+}
+
+#[test]
 fn table_editing_and_code_from_image() {
     let mut app = LabelyApp::new(None, options());
     app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));

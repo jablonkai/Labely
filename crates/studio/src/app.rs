@@ -199,6 +199,10 @@ pub struct UiState {
     /// Template listing for the home screen and the templates pane.
     pub template_cache: Option<Vec<labely_core::commands::template::TemplateInfo>>,
     pub layer_query: String,
+    /// Value typed or scanned into the records table's find box.
+    pub record_query: String,
+    /// Record the last find landed on, offered for printing.
+    pub found_record: Option<usize>,
     pub home_query: String,
     /// The zoom was set by fitting the label; refit when the canvas changes size.
     pub fitted: bool,
@@ -276,6 +280,8 @@ impl Default for UiState {
             inspector_label: false,
             template_cache: None,
             layer_query: String::new(),
+            record_query: String::new(),
+            found_record: None,
             home_query: String::new(),
             fitted: false,
             settings_section: "general".to_owned(),
