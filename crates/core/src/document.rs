@@ -379,6 +379,29 @@ impl Document {
     }
 }
 
+impl Document {
+    /// Turn the label a quarter turn: width and height swap. With `rotate_content` every
+    /// element turns with it about the label, so the design keeps its look.
+    pub fn rotate_label(&mut self, cw: bool, rotate_content: bool) {
+        let (w, h) = (self.label.width_mm, self.label.height_mm);
+        if rotate_content {
+            for page in &mut self.pages {
+                for e in &mut page.elements {
+                    let (cx, cy) = (e.x_mm + e.width_mm / 2.0, e.y_mm + e.height_mm / 2.0);
+                    // y points down, so a clockwise turn maps (x, y) to (h − y, x).
+                    let (nx, ny) = if cw { (h - cy, cx) } else { (cy, w - cx) };
+                    e.x_mm = nx - e.width_mm / 2.0;
+                    e.y_mm = ny - e.height_mm / 2.0;
+                    let turn = if cw { 90.0 } else { 270.0 };
+                    e.rotation_deg = (e.rotation_deg + turn).rem_euclid(360.0);
+                }
+            }
+        }
+        self.label.width_mm = h;
+        self.label.height_mm = w;
+    }
+}
+
 impl ElementKind {
     /// Stable type name as used in JSON.
     pub fn type_name(&self) -> &'static str {

@@ -573,7 +573,7 @@ pub fn invoke(app: &mut LabelyApp, id: &str) {
             app.ui.dialog = Some(Dialog::NewDoc(NewDocForm::default()));
         }
         "doc.open" => {
-            if let Some(path) = pick_file(app, &["labely"])
+            if let Some(path) = pick_file(app, &["labely", "json"])
                 && app.run_reporting("doc.open", json!({ "path": path })).ok
             {
                 app.ui.fit_pending = true;
