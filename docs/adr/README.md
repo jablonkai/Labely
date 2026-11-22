@@ -45,3 +45,4 @@
 | [0041](0041-rfid-paper-auto-apply.md) | Automatic use of a recognised paper, bundled RFID table | proposed |
 | [0042](0042-mobile-parity.md) | Mobile parity | proposed |
 | [0043](0043-niimblue-import.md) | NiimBlue import | proposed |
+| [0044](0044-zpl-import.md) | ZPL import | proposed |

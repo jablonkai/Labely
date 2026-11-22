@@ -13,6 +13,7 @@ serde_json.workspace = true
 schemars.workspace = true
 thiserror.workspace = true
 base64.workspace = true
+miniz_oxide.workspace = true
 sha2.workspace = true
 serde_path_to_error = "0.1.20"
 csv.workspace = true

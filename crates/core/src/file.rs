@@ -1,7 +1,8 @@
 //! `.labely` load/save: pretty JSON with a `format_version` gate. Opening also reads
-//! NiimBlue exports ([`niimblue`]).
+//! NiimBlue exports ([`niimblue`]) and ZPL labels ([`zpl`]).
 
 pub mod niimblue;
+pub mod zpl;
 
 use std::path::{Path, PathBuf};
 
@@ -29,6 +30,8 @@ pub enum FileError {
     Parse(String),
     #[error("not a valid NiimBlue label: {0}")]
     NiimBlue(String),
+    #[error("not a valid ZPL label: {0}")]
+    Zpl(String),
     #[error(
         "document format_version {found} is newer than this Labely supports ({supported}); upgrade Labely to open it"
     )]
@@ -80,30 +83,45 @@ pub fn load(path: &Path) -> Result<Document, FileError> {
     from_json(&text)
 }
 
+/// A document imported from another format and what did not come across.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Import {
+    pub doc: Document,
+    pub warnings: Vec<String>,
+}
+
 /// A file opened by [`open`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Opened {
     Labely(Document),
     /// Imported from NiimBlue; it has no `.labely` file yet.
-    NiimBlue(niimblue::Import),
+    NiimBlue(Import),
+    /// Imported from ZPL; it has no `.labely` file yet.
+    Zpl(Import),
 }
 
-/// Open a `.labely` document or import a NiimBlue export, told apart by content. `dpi`
-/// converts NiimBlue dots to mm (default [`niimblue::DEFAULT_DPI`]).
+/// Open a `.labely` document, or import a NiimBlue export or a ZPL label, told apart by
+/// content. `dpi` converts imported dots to mm (default [`niimblue::DEFAULT_DPI`]).
 pub fn open(path: &Path, dpi: Option<f64>) -> Result<Opened, FileError> {
-    let text = std::fs::read_to_string(path).map_err(|source| FileError::Read {
+    let bytes = std::fs::read(path).map_err(|source| FileError::Read {
         path: path.to_owned(),
         source,
     })?;
-    let v: Value = serde_json::from_str(&text).map_err(|e| FileError::Parse(e.to_string()))?;
-    if !niimblue::detect(&v) {
-        return from_value(v).map(Opened::Labely);
-    }
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("Imported");
-    niimblue::import(&v, stem, dpi.unwrap_or(niimblue::DEFAULT_DPI))
+    let dpi = dpi.unwrap_or(niimblue::DEFAULT_DPI);
+    if zpl::detect(&bytes) {
+        return zpl::import(&bytes, stem, dpi)
+            .map(Opened::Zpl)
+            .map_err(FileError::Zpl);
+    }
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| FileError::Parse(e.to_string()))?;
+    if !niimblue::detect(&v) {
+        return from_value(v).map(Opened::Labely);
+    }
+    niimblue::import(&v, stem, dpi)
         .map(Opened::NiimBlue)
         .map_err(FileError::NiimBlue)
 }

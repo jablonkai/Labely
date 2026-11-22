@@ -85,10 +85,11 @@ impl Command for DocNew {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpenParams {
-    /// Path of a `.labely` file or a NiimBlue label/template export (`.json`).
+    /// Path of a `.labely` file, a NiimBlue label/template export (`.json`) or a ZPL
+    /// label (`.zpl`).
     pub path: String,
-    /// Dots per inch of a NiimBlue export (default 203; 300 for 300 dpi printers). The file
-    /// does not record it. Ignored for `.labely` files.
+    /// Dots per inch of a NiimBlue export or ZPL label (default 203; 300 for 300 dpi
+    /// printers). The file does not record it. Ignored for `.labely` files.
     #[serde(default)]
     pub dpi: Option<f64>,
 }
@@ -124,8 +125,9 @@ impl Command for DocOpen {
         CommandMeta::edit(
             "Open document",
             "Open a `.labely` file as a new document and make it active. A NiimBlue label or \
-             template export (JSON) is imported instead: it opens unsaved, warnings name what \
-             did not come across, and `dpi` (default 203) sizes it. Returns {doc_id, name}.",
+             template export (JSON) or a ZPL label is imported instead: it opens unsaved, \
+             warnings name what did not come across, and `dpi` (default 203) sizes it. \
+             Returns {doc_id, name}.",
         )
         .undoable(false)
     }
@@ -143,25 +145,34 @@ impl Command for DocOpen {
         let (doc, saved_path) = match file::open(&path, p.dpi).map_err(file_error)? {
             file::Opened::Labely(doc) => {
                 if p.dpi.is_some() {
-                    ctx.warn("`dpi` applies only to NiimBlue files and was ignored");
+                    ctx.warn("`dpi` applies only to NiimBlue and ZPL files and was ignored");
                 }
                 (doc, Some(path))
             }
-            file::Opened::NiimBlue(im) => {
-                ctx.warn(format!(
-                    "imported from NiimBlue at {} dpi; save it as a .labely file to keep it",
-                    p.dpi.unwrap_or(file::niimblue::DEFAULT_DPI).round()
-                ));
-                for w in im.warnings {
-                    ctx.warn(w);
-                }
-                (im.doc, None)
-            }
+            file::Opened::NiimBlue(im) => imported(ctx, "NiimBlue", p.dpi, im),
+            file::Opened::Zpl(im) => imported(ctx, "ZPL", p.dpi, im),
         };
         let name = doc.name.clone();
         let doc_id = ctx.session().state.add_doc(OpenDoc::new(doc, saved_path));
         Ok(OpenOutput { doc_id, name })
     }
+}
+
+/// Report an imported document's dpi and warnings; it opens without a path.
+fn imported(
+    ctx: &mut Ctx<'_>,
+    from: &str,
+    dpi: Option<f64>,
+    im: file::Import,
+) -> (Document, Option<std::path::PathBuf>) {
+    ctx.warn(format!(
+        "imported from {from} at {} dpi; save it as a .labely file to keep it",
+        dpi.unwrap_or(file::niimblue::DEFAULT_DPI).round()
+    ));
+    for w in im.warnings {
+        ctx.warn(w);
+    }
+    (im.doc, None)
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
