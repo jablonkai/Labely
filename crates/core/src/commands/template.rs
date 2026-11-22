@@ -15,36 +15,102 @@ use super::doc::{OpenOutput, file_error};
 use crate::command::{Command, CommandError, CommandMeta, Ctx};
 use crate::document::Document;
 use crate::file;
+use crate::paper::UserPapers;
 use crate::session::{OpenDoc, Session};
 
-/// The starter set: `(id, .labely JSON)`. Original designs, no vendor content.
-pub const STARTERS: &[(&str, &str)] = &[
-    (
-        "name-badge",
-        include_str!("../../templates/name-badge.labely"),
-    ),
-    (
-        "price-tag",
-        include_str!("../../templates/price-tag.labely"),
-    ),
-    (
-        "asset-tag",
-        include_str!("../../templates/asset-tag.labely"),
-    ),
-    ("address", include_str!("../../templates/address.labely")),
-    ("qr-link", include_str!("../../templates/qr-link.labely")),
-    (
-        "storage-box",
-        include_str!("../../templates/storage-box.labely"),
-    ),
-    ("jar", include_str!("../../templates/jar.labely")),
-    (
-        "cable-flag",
-        include_str!("../../templates/cable-flag.labely"),
-    ),
-    ("wifi", include_str!("../../templates/wifi.labely")),
-    ("shipping", include_str!("../../templates/shipping.labely")),
+/// What a starter template is for; the gallery groups starters by it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Category {
+    Kitchen,
+    Office,
+    Cables,
+    Shipping,
+    Events,
+}
+
+/// One bundled starter template.
+#[derive(Debug, Clone, Copy)]
+pub struct Starter {
+    pub id: &'static str,
+    pub category: Category,
+    /// The `.labely` JSON.
+    pub json: &'static str,
+}
+
+macro_rules! starters {
+    ($($id:literal => $cat:ident),* $(,)?) => {
+        &[$(Starter {
+            id: $id,
+            category: Category::$cat,
+            json: include_str!(concat!("../../templates/", $id, ".labely")),
+        }),*]
+    };
+}
+
+/// The starter set, grouped by category. Original designs, no vendor content (ADR-0001).
+/// Ids are stable: frontends localise the names by id.
+pub const STARTERS: &[Starter] = starters![
+    // Kitchen.
+    "jar" => Kitchen,
+    "spice" => Kitchen,
+    "freezer-bag" => Kitchen,
+    "leftovers" => Kitchen,
+    "meal-prep" => Kitchen,
+    "pantry-bin" => Kitchen,
+    "bake-sale" => Kitchen,
+    "allergens" => Kitchen,
+    "opened-on" => Kitchen,
+    "recipe-qr" => Kitchen,
+    // Office.
+    "price-tag" => Office,
+    "asset-tag" => Office,
+    "storage-box" => Office,
+    "qr-link" => Office,
+    "wifi" => Office,
+    "file-folder" => Office,
+    "binder-spine" => Office,
+    "shelf-label" => Office,
+    "desk-name" => Office,
+    "inventory-bin" => Office,
+    "key-tag" => Office,
+    "return-to-owner" => Office,
+    // Cables.
+    "cable-flag" => Cables,
+    "cable-wrap" => Cables,
+    "patch-panel" => Cables,
+    "power-adapter" => Cables,
+    "network-port" => Cables,
+    "breaker-panel" => Cables,
+    "server-rack" => Cables,
+    "charger" => Cables,
+    "outlet" => Cables,
+    // Shipping.
+    "shipping" => Shipping,
+    "address" => Shipping,
+    "return-address" => Shipping,
+    "fragile" => Shipping,
+    "this-way-up" => Shipping,
+    "keep-cold" => Shipping,
+    "parcel-contents" => Shipping,
+    "box-of" => Shipping,
+    "moving-box" => Shipping,
+    "order-tracking" => Shipping,
+    // Events.
+    "name-badge" => Events,
+    "conference-badge" => Events,
+    "table-number" => Events,
+    "place-card" => Events,
+    "gift-tag" => Events,
+    "party-favor" => Events,
+    "raffle-ticket" => Events,
+    "wedding-favor" => Events,
+    "coat-check" => Events,
 ];
+
+fn starter(id: &str) -> Option<&'static Starter> {
+    STARTERS.iter().find(|s| s.id == id)
+}
 
 /// Longest template or folder name, in characters.
 const MAX_NAME: usize = 80;
@@ -59,15 +125,11 @@ pub enum TemplateRef {
 impl TemplateRef {
     pub fn parse(s: &str) -> Result<Self, CommandError> {
         if let Some(id) = s.strip_prefix("starter:") {
-            return STARTERS
-                .iter()
-                .find(|(i, _)| *i == id)
-                .map(|(i, _)| Self::Starter(i))
-                .ok_or_else(|| {
-                    CommandError::not_found(format!("no starter template `{id}`"))
-                        .with_param("ref")
-                        .with_accepted(STARTERS.iter().map(|(i, _)| format!("starter:{i}")))
-                });
+            return starter(id).map(|s| Self::Starter(s.id)).ok_or_else(|| {
+                CommandError::not_found(format!("no starter template `{id}`"))
+                    .with_param("ref")
+                    .with_accepted(STARTERS.iter().map(|s| format!("starter:{}", s.id)))
+            });
         }
         let Some(rest) = s.strip_prefix("my:") else {
             return Err(
@@ -151,11 +213,7 @@ fn io_error(what: &str, path: &Path, e: &std::io::Error) -> CommandError {
 pub fn load(session: &Session, reference: &str) -> Result<Document, CommandError> {
     match TemplateRef::parse(reference)? {
         TemplateRef::Starter(id) => {
-            let json = STARTERS
-                .iter()
-                .find(|(i, _)| *i == id)
-                .map(|(_, j)| *j)
-                .unwrap_or_default();
+            let json = starter(id).map(|s| s.json).unwrap_or_default();
             file::from_json(json)
                 .map_err(|e| CommandError::internal(format!("starter `{id}` is broken: {e}")))
         }
@@ -208,20 +266,41 @@ pub struct TemplateInfo {
     /// Library folder; empty for the default folder and for starters.
     pub folder: String,
     pub starter: bool,
+    /// What a starter is for; absent for library templates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<Category>,
     pub width_mm: f64,
     pub height_mm: f64,
+    /// Id of the paper (bundled or the user's) of the same size and media, if there is one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paper: Option<String>,
+    /// Whether the template fits the paper passed as `paper`; absent without it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fits: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub printer_model: Option<String>,
 }
 
-fn info(reference: String, folder: &str, starter: bool, doc: &Document) -> TemplateInfo {
+fn info(
+    reference: String,
+    folder: &str,
+    category: Option<Category>,
+    doc: &Document,
+    papers: &UserPapers,
+) -> TemplateInfo {
     TemplateInfo {
         reference,
         name: doc.name.clone(),
         folder: folder.to_owned(),
-        starter,
+        starter: category.is_some(),
+        category,
         width_mm: doc.label.width_mm,
         height_mm: doc.label.height_mm,
+        paper: papers
+            .all()
+            .find(|p| p.matches(&doc.label))
+            .map(|p| p.id.clone()),
+        fits: None,
         printer_model: doc.label.printer_model.clone(),
     }
 }
@@ -235,6 +314,16 @@ pub struct ListParams {
     /// Only this library folder (`""` is the default folder); starters are left out.
     #[serde(default)]
     pub folder: Option<String>,
+    /// Only starters of this category; library templates are left out.
+    #[serde(default)]
+    pub category: Option<Category>,
+    /// Paper id from paper.list or paper.detect (e.g. the loaded roll, `std:50x30`): every
+    /// entry gets `fits`, and the ones that fit come first.
+    #[serde(default)]
+    pub paper: Option<String>,
+    /// With `paper`: leave out the templates that do not fit it (default false).
+    #[serde(default)]
+    pub fitting_only: Option<bool>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -260,8 +349,11 @@ impl Command for TemplateList {
         CommandMeta::query(
             "Templates",
             "List the starter templates and the local library: {library, folders, templates: \
-             [{ref, name, folder, starter, width_mm, height_mm, printer_model}]}. `query` \
-             filters by name; `folder` lists one library folder only. Open one with \
+             [{ref, name, folder, starter, category, width_mm, height_mm, paper, fits, \
+             printer_model}]}. `query` filters by name; `folder` lists one library folder \
+             only; `category` (kitchen, office, cables, shipping, events) lists starters only. \
+             `paper` (a paper id, e.g. the loaded roll from paper.detect) sets `fits` and puts \
+             the fitting templates first; `fitting_only` drops the rest. Open one with \
              template.new {ref}.",
         )
     }
@@ -277,11 +369,24 @@ impl Command for TemplateList {
             .as_deref()
             .map(|f| check_folder("folder", f))
             .transpose()?;
+        let papers = ctx.session.user_papers().unwrap_or_default();
+        let target = match &p.paper {
+            Some(id) => Some(papers.get(id).cloned().ok_or_else(|| {
+                CommandError::not_found(format!("no paper `{id}`"))
+                    .with_param("paper")
+                    .with_hint("list papers with paper.list")
+            })?),
+            None => None,
+        };
         let mut templates = Vec::new();
         if only.is_none() {
-            for (id, json) in STARTERS {
-                if let Ok(doc) = file::from_json(json) {
-                    templates.push(info(format!("starter:{id}"), "", true, &doc));
+            for s in STARTERS {
+                if p.category.is_some_and(|c| c != s.category) {
+                    continue;
+                }
+                if let Ok(doc) = file::from_json(s.json) {
+                    let r = format!("starter:{}", s.id);
+                    templates.push(info(r, "", Some(s.category), &doc, &papers));
                 }
             }
         }
@@ -289,6 +394,8 @@ impl Command for TemplateList {
         let mut folder_list = Vec::new();
         if let Some(lib) = &lib {
             folder_list = folders(lib);
+        }
+        if let Some(lib) = lib.as_ref().filter(|_| p.category.is_none()) {
             let scan: Vec<String> = match &only {
                 Some(f) => vec![f.clone()],
                 None => std::iter::once(String::new())
@@ -304,7 +411,8 @@ impl Command for TemplateList {
                     match file::load(&template_path(lib, &folder, &name)) {
                         Ok(mut doc) => {
                             doc.name = name;
-                            templates.push(info(r.as_ref_string(), &folder, false, &doc));
+                            let r = r.as_ref_string();
+                            templates.push(info(r, &folder, None, &doc, &papers));
                         }
                         Err(e) => ctx.warn(format!("{} skipped: {e}", r.as_ref_string())),
                     }
@@ -315,6 +423,16 @@ impl Command for TemplateList {
         }
         if !needle.is_empty() {
             templates.retain(|t| t.name.to_lowercase().contains(&needle));
+        }
+        if let Some(paper) = &target {
+            for t in &mut templates {
+                t.fits = Some(paper.fits(t.width_mm, t.height_mm));
+            }
+            if p.fitting_only.unwrap_or(false) {
+                templates.retain(|t| t.fits == Some(true));
+            }
+            // Stable: the order within the fitting and the other templates stays.
+            templates.sort_by_key(|t| t.fits != Some(true));
         }
         Ok(ListOutput {
             library: lib.map(|l| l.display().to_string()),

@@ -1,0 +1,79 @@
+{
+  "format_version": 2,
+  "name": "Key tag",
+  "label": {
+    "width_mm": 30.0,
+    "height_mm": 15.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 1.5,
+          "y_mm": 2.5,
+          "width_mm": 10.0,
+          "height_mm": 10.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "icon",
+          "icon": "home",
+          "keep_aspect": true
+        },
+        {
+          "id": 2,
+          "x_mm": 13.0,
+          "y_mm": 1.0,
+          "width_mm": 16.0,
+          "height_mm": 7.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Garage",
+          "font_family": "Noto Sans",
+          "font_size_pt": 9.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 3,
+          "x_mm": 13.0,
+          "y_mm": 8.0,
+          "width_mm": 16.0,
+          "height_mm": 6.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Spare",
+          "font_family": "Noto Sans",
+          "font_size_pt": 7.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "align": "left",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 4
+}

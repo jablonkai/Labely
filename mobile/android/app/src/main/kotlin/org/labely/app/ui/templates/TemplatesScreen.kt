@@ -64,6 +64,7 @@ private const val MINE = "\u0000mine"
 fun TemplatesScreen(state: AppState, onNewLabel: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(ALL) }
+    var category by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Template?>(null) }
     var acting by remember { mutableStateOf<Template?>(null) }
     var renaming by remember { mutableStateOf<Template?>(null) }
@@ -78,7 +79,7 @@ fun TemplatesScreen(state: AppState, onNewLabel: () -> Unit) {
     val shown = state.templates.filter { t ->
         val inFilter = when (filter) {
             ALL -> true
-            STARTERS -> t.starter
+            STARTERS -> t.starter && (category == null || t.category == category)
             MINE -> !t.starter
             else -> !t.starter && t.folder == filter
         }
@@ -99,6 +100,14 @@ fun TemplatesScreen(state: AppState, onNewLabel: () -> Unit) {
                 Chip(stringResource(R.string.filter_mine), filter == MINE) { filter = MINE }
                 folders.forEach { f -> Chip(f, filter == f) { filter = f } }
                 Chip("+ " + stringResource(R.string.folder), false) { newFolder = true }
+            }
+        }
+        if (filter == STARTERS) {
+            item {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(stringResource(R.string.filter_all), category == null) { category = null }
+                    CATEGORIES.forEach { (id, res) -> Chip(stringResource(res), category == id) { category = id } }
+                }
             }
         }
         item {
@@ -208,7 +217,12 @@ fun TemplateGrid(templates: List<Template>, state: AppState, onOpen: (Template) 
                             ThumbTile(state.thumbs[t.ref], t.widthMm, t.heightMm)
                             Column(Modifier.padding(horizontal = 4.dp)) {
                                 Text(templateName(t), style = Type.bodyStrong.copy(fontSize = 16.sp), maxLines = 1)
-                                Text(sizeText(t.widthMm, t.heightMm), style = Type.caption)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(sizeText(t.widthMm, t.heightMm), style = Type.caption)
+                                    if (t.fits == true) {
+                                        Text(stringResource(R.string.template_fits), style = Type.caption.copy(color = Palette.primary), maxLines = 1)
+                                    }
+                                }
                             }
                         }
                     }
@@ -230,6 +244,55 @@ private val STARTER_NAMES = mapOf(
     "starter:cable-flag" to R.string.template_cable_flag,
     "starter:wifi" to R.string.template_wifi,
     "starter:shipping" to R.string.template_shipping,
+    "starter:spice" to R.string.template_spice,
+    "starter:freezer-bag" to R.string.template_freezer_bag,
+    "starter:leftovers" to R.string.template_leftovers,
+    "starter:meal-prep" to R.string.template_meal_prep,
+    "starter:pantry-bin" to R.string.template_pantry_bin,
+    "starter:bake-sale" to R.string.template_bake_sale,
+    "starter:allergens" to R.string.template_allergens,
+    "starter:opened-on" to R.string.template_opened_on,
+    "starter:recipe-qr" to R.string.template_recipe_qr,
+    "starter:file-folder" to R.string.template_file_folder,
+    "starter:binder-spine" to R.string.template_binder_spine,
+    "starter:shelf-label" to R.string.template_shelf_label,
+    "starter:desk-name" to R.string.template_desk_name,
+    "starter:inventory-bin" to R.string.template_inventory_bin,
+    "starter:key-tag" to R.string.template_key_tag,
+    "starter:return-to-owner" to R.string.template_return_to_owner,
+    "starter:cable-wrap" to R.string.template_cable_wrap,
+    "starter:patch-panel" to R.string.template_patch_panel,
+    "starter:power-adapter" to R.string.template_power_adapter,
+    "starter:network-port" to R.string.template_network_port,
+    "starter:breaker-panel" to R.string.template_breaker_panel,
+    "starter:server-rack" to R.string.template_server_rack,
+    "starter:charger" to R.string.template_charger,
+    "starter:outlet" to R.string.template_outlet,
+    "starter:return-address" to R.string.template_return_address,
+    "starter:fragile" to R.string.template_fragile,
+    "starter:this-way-up" to R.string.template_this_way_up,
+    "starter:keep-cold" to R.string.template_keep_cold,
+    "starter:parcel-contents" to R.string.template_parcel_contents,
+    "starter:box-of" to R.string.template_box_of,
+    "starter:moving-box" to R.string.template_moving_box,
+    "starter:order-tracking" to R.string.template_order_tracking,
+    "starter:conference-badge" to R.string.template_conference_badge,
+    "starter:table-number" to R.string.template_table_number,
+    "starter:place-card" to R.string.template_place_card,
+    "starter:gift-tag" to R.string.template_gift_tag,
+    "starter:party-favor" to R.string.template_party_favor,
+    "starter:raffle-ticket" to R.string.template_raffle_ticket,
+    "starter:wedding-favor" to R.string.template_wedding_favor,
+    "starter:coat-check" to R.string.template_coat_check,
+)
+
+/** Starter categories, in the order of `template.list`. */
+private val CATEGORIES = listOf(
+    "kitchen" to R.string.template_category_kitchen,
+    "office" to R.string.template_category_office,
+    "cables" to R.string.template_category_cables,
+    "shipping" to R.string.template_category_shipping,
+    "events" to R.string.template_category_events,
 )
 
 /** Starter names are translated like in the studio; library templates keep their own name. */

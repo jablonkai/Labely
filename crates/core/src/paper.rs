@@ -51,6 +51,15 @@ impl Paper {
             && (self.width_mm - label.width_mm).abs() <= SIZE_TOLERANCE_MM
             && (self.height_mm - label.height_mm).abs() <= SIZE_TOLERANCE_MM
     }
+
+    /// A design of `width_mm` × `height_mm` prints on this paper: the width matches (within
+    /// [`SIZE_TOLERANCE_MM`]) and so does the height, unless the paper is continuous, which
+    /// takes any length. Die-cut media (gap, black mark, clear) of one size are alike.
+    pub fn fits(&self, width_mm: f64, height_mm: f64) -> bool {
+        (self.width_mm - width_mm).abs() <= SIZE_TOLERANCE_MM
+            && (self.media == MediaType::Continuous
+                || (self.height_mm - height_mm).abs() <= SIZE_TOLERANCE_MM)
+    }
 }
 
 #[derive(Default, Deserialize)]

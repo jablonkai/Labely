@@ -43,7 +43,7 @@ Hints:
 | `paper.add` | edit | name, width_mm, height_mm, corner_radius_mm, media, barcode → paper with its `my:` id |
 | `paper.delete` | edit | id (`my:` only) → unlinked |
 | `paper.link`, `paper.unlink` | edit | barcode, id → previous |
-| `template.list` | query | query, folder → library, folders, templates [{ref, name, folder, starter, width_mm, height_mm, printer_model}] |
+| `template.list` | query | query, folder, category (`kitchen`, `office`, `cables`, `shipping`, `events`; starters only), paper (a paper id: sets `fits`, fitting first), fitting_only → library, folders, templates [{ref, name, folder, starter, category, width_mm, height_mm, paper, fits, printer_model}] |
 | `template.new` | edit | ref (`starter:<id>` or `my:[<folder>/]<name>`), name |
 | `template.save` | edit | name, folder, overwrite, doc_id → ref |
 | `template.move` | edit | ref, name, folder → ref |

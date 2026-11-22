@@ -950,7 +950,7 @@ expression: r
       "undoable": false
     },
     {
-      "description": "List the starter templates and the local library: {library, folders, templates: [{ref, name, folder, starter, width_mm, height_mm, printer_model}]}. `query` filters by name; `folder` lists one library folder only. Open one with template.new {ref}.",
+      "description": "List the starter templates and the local library: {library, folders, templates: [{ref, name, folder, starter, category, width_mm, height_mm, paper, fits, printer_model}]}. `query` filters by name; `folder` lists one library folder only; `category` (kitchen, office, cables, shipping, events) lists starters only. `paper` (a paper id, e.g. the loaded roll from paper.detect) sets `fits` and puts the fitting templates first; `fitting_only` drops the rest. Open one with template.new {ref}.",
       "id": "template.list",
       "journal": false,
       "kind": "query",
@@ -976,6 +976,28 @@ expression: r
             "items": {
               "description": "One `template.list` entry.",
               "properties": {
+                "category": {
+                  "description": "What a starter is for; absent for library templates.",
+                  "enum": [
+                    "kitchen",
+                    "office",
+                    "cables",
+                    "shipping",
+                    "events",
+                    null
+                  ],
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "fits": {
+                  "description": "Whether the template fits the paper passed as `paper`; absent without it.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
                 "folder": {
                   "description": "Library folder; empty for the default folder and for starters.",
                   "type": "string"
@@ -986,6 +1008,13 @@ expression: r
                 },
                 "name": {
                   "type": "string"
+                },
+                "paper": {
+                  "description": "Id of the paper (bundled or the user's) of the same size and media, if there is one.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "printer_model": {
                   "type": [
@@ -1029,9 +1058,41 @@ expression: r
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "category": {
+            "default": null,
+            "description": "Only starters of this category; library templates are left out.",
+            "enum": [
+              "kitchen",
+              "office",
+              "cables",
+              "shipping",
+              "events",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fitting_only": {
+            "default": null,
+            "description": "With `paper`: leave out the templates that do not fit it (default false).",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "folder": {
             "default": null,
             "description": "Only this library folder (`\"\"` is the default folder); starters are left out.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paper": {
+            "default": null,
+            "description": "Paper id from paper.list or paper.detect (e.g. the loaded roll, `std:50x30`): every\nentry gets `fits`, and the ones that fit come first.",
             "type": [
               "string",
               "null"

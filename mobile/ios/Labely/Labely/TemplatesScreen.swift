@@ -14,6 +14,7 @@ struct TemplatesScreen: View {
     let onNewLabel: () -> Void
     @State private var query = ""
     @State private var filter = Filter.all
+    @State private var category: String?
     @State private var naming = false
     @State private var folderName = ""
     /// The folder being renamed; none while a new one is named.
@@ -26,7 +27,7 @@ struct TemplatesScreen: View {
             let inFilter: Bool =
                 switch filter {
                 case .all: true
-                case .starters: t.starter
+                case .starters: t.starter && (category == nil || t.category == category)
                 case .mine: !t.starter
                 case .folder(let f): !t.starter && t.folder == f
                 }
@@ -58,6 +59,16 @@ struct TemplatesScreen: View {
                             renaming = nil
                             folderName = ""
                             naming = true
+                        }
+                    }
+                }
+                if filter == .starters {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            Chip(text: L("filter_all"), selected: category == nil) { category = nil }
+                            ForEach(starterCategories, id: \.id) { c in
+                                Chip(text: c.name, selected: category == c.id) { category = c.id }
+                            }
                         }
                     }
                 }
@@ -141,8 +152,13 @@ struct TemplateGrid: View {
                             HStack(spacing: 4) {
                                 VStack(alignment: .leading) {
                                     Text(displayName(t)).style(.bodyStrong.with(size: 16)).lineLimit(1)
-                                    Text(([sizeText(t.widthMm, t.heightMm)] + (t.folder.isEmpty ? [] : [t.folder])).joined(separator: " · "))
-                                        .style(.caption).lineLimit(1)
+                                    HStack(spacing: 6) {
+                                        Text(([sizeText(t.widthMm, t.heightMm)] + (t.folder.isEmpty ? [] : [t.folder])).joined(separator: " · "))
+                                            .style(.caption).lineLimit(1)
+                                        if t.fits == true {
+                                            Text(L("template_fits")).style(.caption.with(color: Palette.primary)).lineLimit(1)
+                                        }
+                                    }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 if editable {
@@ -220,7 +236,58 @@ private let starterNames: [String: String] = [
     "starter:cable-flag": "template_cable_flag",
     "starter:wifi": "template_wifi",
     "starter:shipping": "template_shipping",
+    "starter:spice": "template_spice",
+    "starter:freezer-bag": "template_freezer_bag",
+    "starter:leftovers": "template_leftovers",
+    "starter:meal-prep": "template_meal_prep",
+    "starter:pantry-bin": "template_pantry_bin",
+    "starter:bake-sale": "template_bake_sale",
+    "starter:allergens": "template_allergens",
+    "starter:opened-on": "template_opened_on",
+    "starter:recipe-qr": "template_recipe_qr",
+    "starter:file-folder": "template_file_folder",
+    "starter:binder-spine": "template_binder_spine",
+    "starter:shelf-label": "template_shelf_label",
+    "starter:desk-name": "template_desk_name",
+    "starter:inventory-bin": "template_inventory_bin",
+    "starter:key-tag": "template_key_tag",
+    "starter:return-to-owner": "template_return_to_owner",
+    "starter:cable-wrap": "template_cable_wrap",
+    "starter:patch-panel": "template_patch_panel",
+    "starter:power-adapter": "template_power_adapter",
+    "starter:network-port": "template_network_port",
+    "starter:breaker-panel": "template_breaker_panel",
+    "starter:server-rack": "template_server_rack",
+    "starter:charger": "template_charger",
+    "starter:outlet": "template_outlet",
+    "starter:return-address": "template_return_address",
+    "starter:fragile": "template_fragile",
+    "starter:this-way-up": "template_this_way_up",
+    "starter:keep-cold": "template_keep_cold",
+    "starter:parcel-contents": "template_parcel_contents",
+    "starter:box-of": "template_box_of",
+    "starter:moving-box": "template_moving_box",
+    "starter:order-tracking": "template_order_tracking",
+    "starter:conference-badge": "template_conference_badge",
+    "starter:table-number": "template_table_number",
+    "starter:place-card": "template_place_card",
+    "starter:gift-tag": "template_gift_tag",
+    "starter:party-favor": "template_party_favor",
+    "starter:raffle-ticket": "template_raffle_ticket",
+    "starter:wedding-favor": "template_wedding_favor",
+    "starter:coat-check": "template_coat_check",
 ]
+
+/// Starter categories, in the order of `template.list`.
+private var starterCategories: [(id: String, name: String)] {
+    [
+        ("kitchen", L("template_category_kitchen")),
+        ("office", L("template_category_office")),
+        ("cables", L("template_category_cables")),
+        ("shipping", L("template_category_shipping")),
+        ("events", L("template_category_events")),
+    ]
+}
 
 /// Starter names are translated like in the studio; library templates keep their own name.
 func displayName(_ t: Template) -> String {

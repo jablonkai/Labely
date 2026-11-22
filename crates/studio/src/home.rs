@@ -33,7 +33,9 @@ pub(crate) const QUICK_SIZES: [(f64, f64); 7] = [
 
 /// Template listing, read once and kept until the library may have changed.
 fn cached_templates(app: &mut LabelyApp) -> Vec<TemplateInfo> {
-    if app.ui.template_cache.is_none() {
+    let paper = templates::loaded_paper(app);
+    if app.ui.template_cache.is_none() || app.ui.template_cache_paper != paper {
+        app.ui.template_cache_paper = paper;
         app.ui.template_cache = Some(templates::list(app).map(|l| l.0).unwrap_or_default());
     }
     app.ui.template_cache.clone().unwrap_or_default()
@@ -559,15 +561,25 @@ fn main(app: &mut LabelyApp, ui: &mut Ui) {
         });
 }
 
+/// Starter cards on the home screen without a search; "All" opens the rest.
+const HOME_STARTERS: usize = 8;
+
 fn template_sections(app: &mut LabelyApp, ui: &mut Ui) {
     let q = app.ui.home_query.to_lowercase();
     let all = cached_templates(app);
     let matches = |app: &LabelyApp, t: &TemplateInfo| {
         q.is_empty() || templates::display_name(app, t).to_lowercase().contains(&q)
     };
+    // `template.list` puts the starters that fit the loaded roll first; the home screen shows
+    // the first few, the library page all of them.
     let starters: Vec<_> = all
         .iter()
         .filter(|t| t.starter && matches(app, t))
+        .take(if q.is_empty() {
+            HOME_STARTERS
+        } else {
+            usize::MAX
+        })
         .cloned()
         .collect();
     let own: Vec<_> = all
@@ -631,7 +643,11 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click());
     let name = templates::display_name(app, t);
     let size = format!("{} × {} mm", mm(t.width_mm), mm(t.height_mm));
-    let label = format!("{name} · {size}");
+    let fits = (t.fits == Some(true)).then(|| app.i18n.t("templates-fits"));
+    let label = match &fits {
+        Some(f) => format!("{name} · {size} · {f}"),
+        None => format!("{name} · {size}"),
+    };
     let enabled = ui.is_enabled();
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &label));
     let hovered = resp.hovered();
@@ -680,7 +696,7 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
         theme::pal().text,
         rect.width() - 24.0,
     );
-    theme::fit_text(
+    let size_rect = theme::fit_text(
         ui.painter(),
         egui::pos2(rect.left() + 12.0, well.bottom() + 28.0),
         egui::Align2::LEFT_TOP,
@@ -689,6 +705,15 @@ fn template_card(app: &mut LabelyApp, ui: &mut Ui, t: &TemplateInfo, width: f32)
         theme::pal().muted,
         rect.width() - 24.0,
     );
+    if let Some(f) = &fits {
+        templates::fits_note(
+            ui.painter(),
+            size_rect.right() + 8.0,
+            size_rect.center().y,
+            rect.right() - 12.0,
+            f,
+        );
+    }
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

@@ -10,9 +10,17 @@ label each. The vendor app keeps templates in a cloud account and caps folders a
 import for non-members; Labely keeps everything local and unlimited.
 
 ## Decision
-- **Starters.** Ten original templates (`crates/core/templates/*.labely`) are compiled into
-  `labely-core`. They are built with commands and must pass `doc.check` without errors (a
-  test checks this). The studio shows localised names from `template-<id>` keys.
+- **Starters.** Fifty original templates (`crates/core/templates/*.labely`) are compiled into
+  `labely-core`, each in one category: kitchen, office, cables, shipping or events. Every one
+  sits on a size of the bundled paper table. They must pass `doc.check` with the real renderer
+  at 203 dpi without warnings, and every code on them must decode (a test checks this). The
+  studio and the mobile apps show localised names from `template-<id>` keys.
+- **Paper fit (#44).** `template.list` tags each template with the bundled or user paper of
+  its size (`paper`). Given `paper` (e.g. the roll `paper.detect` recognised) it sets `fits`
+  and lists the fitting templates first; `fitting_only` drops the rest. A template fits when
+  its width matches within 0.5 mm and its height does too, unless the roll is continuous.
+  Gap, black-mark and clear rolls of one size count as the same. The studio and mobile home
+  screens pass the loaded roll, so its templates come first.
 - **Library.** A directory set by the frontend (`Session::set_template_dir`); the CLI, the
   headless MCP server and the studio use `<app-data>/templates`. Templates are `.labely`
   files in it (the default folder) or in one level of sub-folders. There is no index file:

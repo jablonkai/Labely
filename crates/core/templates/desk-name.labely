@@ -1,0 +1,66 @@
+{
+  "format_version": 2,
+  "name": "Desk name",
+  "label": {
+    "width_mm": 50.0,
+    "height_mm": 15.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 2.0,
+          "y_mm": 0.5,
+          "width_mm": 46.0,
+          "height_mm": 8.5,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Alex Sample",
+          "font_family": "Noto Sans",
+          "font_size_pt": 13.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        },
+        {
+          "id": 2,
+          "x_mm": 2.0,
+          "y_mm": 9.0,
+          "width_mm": 46.0,
+          "height_mm": 5.5,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "Design team · Desk 12",
+          "font_family": "Noto Sans",
+          "font_size_pt": 7.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 3
+}

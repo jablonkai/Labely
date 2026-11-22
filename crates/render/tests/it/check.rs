@@ -74,3 +74,28 @@ fn blank_image_is_low_contrast() {
     let r = rules(&mut s);
     assert!(r.contains(&("low_contrast".to_owned(), Some(id))), "{r:?}");
 }
+
+/// Starters are examples: at the printer's 203 dpi they raise no warnings and every code
+/// decodes. Notes (such as text shrunk to fit) are allowed.
+#[test]
+fn starters_print_cleanly() {
+    let mut s = session();
+    let mut bad = Vec::new();
+    for t in labely_core::commands::template::STARTERS {
+        let r = format!("starter:{}", t.id);
+        let env = s.execute("template.new", json!({ "ref": r }));
+        assert!(env.ok, "{r}: {:?}", env.error);
+        let env = s.execute("doc.check", json!({"dpi": 203}));
+        let check = env.result.unwrap();
+        let loud: Vec<&Value> = check["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|i| i["severity"] != "info")
+            .collect();
+        if check["ok"] != true || !loud.is_empty() {
+            bad.push(format!("{r}: {loud:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}

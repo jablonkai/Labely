@@ -193,7 +193,10 @@ public final class AppState {
 
     public func loadTemplates() async {
         await report {
-            let r = try await engine.call("template.list")
+            // With the loaded roll, the templates that fit it come first (`fits`).
+            var params: JSON = [:]
+            if let id = detected?.paper?.id { params = ["paper": JSON(id)] }
+            let r = try await engine.call("template.list", params)
             templates = Template.list(r)
             templateFolders = (r["folders"]?.array ?? []).compactMap(\.string)
             for t in templates where thumbs[t.ref] == nil {

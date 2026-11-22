@@ -1,0 +1,80 @@
+{
+  "format_version": 2,
+  "name": "Network port",
+  "label": {
+    "width_mm": 25.0,
+    "height_mm": 15.0,
+    "corner_radius_mm": 0.0,
+    "media": "gap",
+    "printer_model": "niimbot.b21_pro"
+  },
+  "pages": [
+    {
+      "elements": [
+        {
+          "id": 1,
+          "x_mm": 0.0,
+          "y_mm": 0.0,
+          "width_mm": 25.0,
+          "height_mm": 6.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "rect",
+          "stroke_mm": 0.3,
+          "fill": true,
+          "corner_radius_mm": 0.0
+        },
+        {
+          "id": 2,
+          "x_mm": 0.5,
+          "y_mm": 0.0,
+          "width_mm": 24.0,
+          "height_mm": 6.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "LAN",
+          "font_family": "Noto Sans",
+          "font_size_pt": 8.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.4,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": true
+        },
+        {
+          "id": 3,
+          "x_mm": 0.5,
+          "y_mm": 6.5,
+          "width_mm": 24.0,
+          "height_mm": 8.0,
+          "rotation_deg": 0.0,
+          "locked": false,
+          "hidden": false,
+          "type": "text",
+          "text": "A-14",
+          "font_family": "Noto Sans",
+          "font_size_pt": 12.0,
+          "bold": true,
+          "italic": false,
+          "underline": false,
+          "align": "center",
+          "valign": "middle",
+          "line_spacing": 1.0,
+          "letter_spacing_mm": 0.0,
+          "wrap": true,
+          "fit": "shrink",
+          "invert": false
+        }
+      ]
+    }
+  ],
+  "next_id": 4
+}
