@@ -222,15 +222,25 @@ extension EditorState {
             found = r["codes"]?.objects.first
         }
         guard let code = found, let text = code["text"]?.string else { return false }
-        let two = code["kind"]?.string == "code2d"
+        await addCode(kind: code["kind"]?.string ?? "barcode", symbology: code["symbology"], text: text, label: l)
+        return true
+    }
+
+    /// Add the code the camera scanned as an element, selected (#41).
+    public func addCode(scanned code: ScannedCode) async {
+        guard let l = doc?.label else { return }
+        await addCode(kind: code.kind, symbology: JSON(code.symbology), text: code.text, label: l)
+    }
+
+    private func addCode(kind: String, symbology: JSON?, text: String, label l: LabelInfo) async {
+        let two = kind == "code2d"
         let s = min(l.heightMm * 0.6, l.widthMm * 0.6)
         let frame = two ? centred(s, s) : centred(l.widthMm * 0.7, l.heightMm * 0.4)
         await exec(
             two ? "element.add_code2d" : "element.add_barcode",
-            frame.with("data", JSON(text)).with("symbology", code["symbology"]),
+            frame.with("data", JSON(text)).with("symbology", symbology),
             select: true
         ).value
-        return true
     }
 
     // MARK: - Tables

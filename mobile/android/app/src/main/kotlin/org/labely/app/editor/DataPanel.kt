@@ -41,10 +41,18 @@ import org.labely.app.ui.theme.Type
 
 /**
  * M4 · Adatok és rekordok: the data source, a record stepper and the rows. The canvas above
- * shows the chosen record. Without data it offers the file picker ([onPick]).
+ * shows the chosen record. Without data it offers the file picker ([onPick]) and the camera
+ * scanner ([onScan]), which adds the scanned code as an element.
  */
 @Composable
-fun DataPanel(ed: EditorState, modifier: Modifier = Modifier, onImages: () -> Unit = {}, onOptions: () -> Unit = {}, onPick: () -> Unit) {
+fun DataPanel(
+    ed: EditorState,
+    modifier: Modifier = Modifier,
+    onImages: () -> Unit = {},
+    onOptions: () -> Unit = {},
+    onScan: () -> Unit = {},
+    onPick: () -> Unit,
+) {
     val data = ed.data
     if (data == null) {
         Column(modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
@@ -54,6 +62,7 @@ fun DataPanel(ed: EditorState, modifier: Modifier = Modifier, onImages: () -> Un
                 org.labely.app.ui.SecondaryButton(stringResource(R.string.data_images), onImages, Modifier.weight(1f), Ic.Image)
                 org.labely.app.ui.SecondaryButton(stringResource(R.string.serials), onOptions, Modifier.weight(1f), Ic.Hash)
             }
+            org.labely.app.ui.SecondaryButton(stringResource(R.string.scan_add), onScan, Modifier.fillMaxWidth(), Ic.Scan)
         }
         return
     }

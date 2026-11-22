@@ -286,4 +286,23 @@ struct FeatureTests {
         let old = try JSONDecoder().decode(Prefs.self, from: Data(#"{"unit":"inch"}"#.utf8))
         #expect(old.appearance == .system && old.unit == .inch)
     }
+
+    @Test func scannedCodesBecomeElements() async throws {
+        #expect(ScannedCode.of(.ean13, text: "5901234123457") == ScannedCode(kind: "barcode", symbology: "ean13", text: "5901234123457"))
+        #expect(ScannedCode.of(.itf14, text: "15400141288763")?.symbology == "itf")
+        #expect(ScannedCode.of(.code39FullASCII, text: "A")?.symbology == "code39")
+        #expect(ScannedCode.of(.qr, text: "https://labely.org")?.kind == "code2d")
+        // Labely prints neither, and an empty read is no code.
+        #expect(ScannedCode.of(.microQR, text: "x") == nil)
+        #expect(ScannedCode.of(.qr, text: "") == nil)
+        #expect(ScannedCode.symbologies.allSatisfy { ScannedCode.of($0, text: "1") != nil })
+
+        let ed = try await editor()
+        await ed.addCode(scanned: try #require(ScannedCode.of(.qr, text: "https://labely.org")))
+        let qr = try #require(ed.selected)
+        #expect(qr.type == "code2d" && qr.symbology == "qr" && qr.data == "https://labely.org")
+        await ed.addCode(scanned: try #require(ScannedCode.of(.ean8, text: "96385074")))
+        let ean = try #require(ed.selected)
+        #expect(ean.type == "barcode" && ean.symbology == "ean8" && ean.data == "96385074")
+    }
 }

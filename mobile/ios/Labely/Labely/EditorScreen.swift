@@ -16,6 +16,8 @@ struct EditorScreen: View {
     @State private var showData = false
     @State private var pickingData = false
     @State private var pickingImages = false
+    /// The data panel's camera scanner: the scanned code becomes an element.
+    @State private var scanning = false
     @State private var renaming = false
     @State private var newName = ""
     @State private var savingCopy: PickedFiles?
@@ -45,7 +47,9 @@ struct EditorScreen: View {
                 .background(Palette.canvas)
                 Divider().overlay(Palette.border)
                 if showData {
-                    DataPanel(ed: ed, onChoose: { pickingData = true }, onImages: { pickingImages = true }) { open(.dataOptions) }
+                    DataPanel(ed: ed, onChoose: { pickingData = true }, onImages: { pickingImages = true }, onOptions: { open(.dataOptions) }) {
+                        scanning = true
+                    }
                 } else {
                     Inspector(ed: ed, open: open)
                 }
@@ -61,6 +65,12 @@ struct EditorScreen: View {
             }
             .sheet(item: $sheet) { s in sheetView(s, doc) }
             .sheet(item: $savingCopy) { files in SaveView(urls: files.urls).ignoresSafeArea() }
+            .fullScreenCover(isPresented: $scanning) {
+                ScanSheet(onDismiss: { scanning = false }) { code in
+                    scanning = false
+                    Task { await ed.addCode(scanned: code) }
+                }
+            }
             .fileImporter(isPresented: $pickingData, allowedContentTypes: dataFileTypes) { result in
                 if case .success(let url) = result { ed.attachFile(url) }
             }

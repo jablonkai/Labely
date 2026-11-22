@@ -1,5 +1,6 @@
 # Latest stable versions, checked on 2026-11-16 (ADR-0026); AppFunctions, KSP and Robolectric
-# on 2026-11-17 (ADR-0028). AppFunctions has no stable release yet: rc01 is the newest.
+# on 2026-11-17 (ADR-0028); CameraX and zxing-cpp on 2026-11-22 (#41). AppFunctions has no stable
+# release yet: rc01 is the newest.
 [versions]
 agp = "9.5.1"
 kotlin = "2.4.21"
@@ -13,6 +14,8 @@ appfunctions = "1.0.0-rc01"
 ksp = "2.3.14"
 robolectric = "4.18"
 junit = "4.13.2"
+camerax = "1.7.0"
+zxingCpp = "3.1.1"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -30,6 +33,11 @@ appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler"
 appfunctions-testing = { module = "androidx.appfunctions:appfunctions-testing", version.ref = "appfunctions" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 junit = { module = "junit:junit", version.ref = "junit" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+# Open-source barcode reader (Apache-2.0), so the app needs no Play services (#41).
+zxing-cpp = { module = "io.github.zxing-cpp:android", version.ref = "zxingCpp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
