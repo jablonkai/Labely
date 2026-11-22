@@ -248,6 +248,17 @@ class EditorState(val app: AppState, val docId: String) {
         },
     )
 
+    /** Set the ink colour of the unlocked part of the selection: red or black. */
+    fun setRed(red: Boolean) = batch(
+        selectedElements.filter { !it.locked && it.red != red }.map {
+            "element.set_props" to json("id" to it.id, "props" to json("color" to if (red) "red" else "black"))
+        },
+    )
+
+    /** A two-colour printer is connected, or is the document's printer. */
+    val redPrinter: Boolean
+        get() = app.printer?.model?.red == true || app.model(doc?.label?.printerModel)?.red == true
+
     /** Move the unlocked part of the selection by ([dxMm], [dyMm]) in one undo step. */
     fun moveBy(dxMm: Double, dyMm: Double, ids: List<Long> = selection): Job {
         val moving = doc?.elements.orEmpty().filter { it.id in ids && !it.locked }

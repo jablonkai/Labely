@@ -74,6 +74,11 @@ impl Renderer for FakeRenderer {
             });
         }
         let mut bitmap = Bitmap1::new(w as u32, h as u32);
+        let mut red = page
+            .elements
+            .iter()
+            .any(|e| !e.hidden && e.color == labely_core::InkColor::Red)
+            .then(|| Bitmap1::new(w as u32, h as u32));
         let mut issues = Vec::new();
         let mut codes = Vec::new();
         for e in page.elements.iter().filter(|e| !e.hidden) {
@@ -84,6 +89,9 @@ impl Renderer for FakeRenderer {
             for y in y0.max(0)..y1.min(h) {
                 for x in x0.max(0)..x1.min(w) {
                     bitmap.set(x as u32, y as u32, true);
+                    if let Some(r) = red.as_mut() {
+                        r.set(x as u32, y as u32, e.color == labely_core::InkColor::Red);
+                    }
                 }
             }
             let inside = x0 >= 0 && y0 >= 0 && x1 <= w && y1 <= h;
@@ -150,7 +158,11 @@ impl Renderer for FakeRenderer {
         if memo.len() > 32 {
             memo.remove(0);
         }
-        Ok(RenderOutput { bitmap, issues })
+        Ok(RenderOutput {
+            bitmap,
+            red,
+            issues,
+        })
     }
 
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode> {
@@ -299,6 +311,7 @@ pub fn fake_model() -> ModelInfo {
         density_default: 3,
         media: vec![MediaType::Gap, MediaType::Continuous],
         gray: false,
+        red: false,
     }
 }
 
@@ -317,6 +330,8 @@ struct HubState {
     settings: DeviceSettings,
     /// The fake model reports gray levels.
     gray: bool,
+    /// The fake model prints red.
+    red: bool,
 }
 
 /// One fake printer at [`FAKE_ADDRESS`]; records every [`PrintRequest`].
@@ -340,9 +355,16 @@ impl FakeDeviceHub {
         lock(&self.state).gray = gray;
     }
 
+    /// Whether the fake model prints red (default false).
+    pub fn set_red(&self, red: bool) {
+        lock(&self.state).red = red;
+    }
+
     fn model(&self) -> ModelInfo {
+        let s = lock(&self.state);
         ModelInfo {
-            gray: lock(&self.state).gray,
+            gray: s.gray,
+            red: s.red,
             ..fake_model()
         }
     }
@@ -569,6 +591,7 @@ mod tests {
             hidden: false,
             flip_h: false,
             flip_v: false,
+            color: Default::default(),
             group: None,
             mirror: None,
             kind: ElementKind::Rect(Default::default()),

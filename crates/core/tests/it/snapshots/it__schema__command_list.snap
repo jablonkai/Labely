@@ -2242,6 +2242,22 @@ expression: r
                           }
                         ],
                         "properties": {
+                          "color": {
+                            "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                            "oneOf": [
+                              {
+                                "enum": [
+                                  "black"
+                                ],
+                                "type": "string"
+                              },
+                              {
+                                "const": "red",
+                                "description": "The second colour of a two-colour printer and paper.",
+                                "type": "string"
+                              }
+                            ]
+                          },
                           "flip_h": {
                             "description": "Mirror left–right inside the frame (before rotation).",
                             "type": "boolean"
@@ -5575,6 +5591,22 @@ expression: r
               }
             ],
             "properties": {
+              "color": {
+                "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "black"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "red",
+                    "description": "The second colour of a two-colour printer and paper.",
+                    "type": "string"
+                  }
+                ]
+              },
               "flip_h": {
                 "description": "Mirror left–right inside the frame (before rotation).",
                 "type": "boolean"
@@ -6992,6 +7024,22 @@ expression: r
               }
             ],
             "properties": {
+              "color": {
+                "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "black"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "red",
+                    "description": "The second colour of a two-colour printer and paper.",
+                    "type": "string"
+                  }
+                ]
+              },
               "flip_h": {
                 "description": "Mirror left–right inside the frame (before rotation).",
                 "type": "boolean"
@@ -7124,7 +7172,7 @@ expression: r
           },
           "props": {
             "additionalProperties": true,
-            "description": "Partial element JSON: frame fields (name, x_mm, y_mm, width_mm, height_mm,\nrotation_deg, locked, hidden, flip_h, flip_v) and the element type's props (e.g. text, font_size_pt,\ndata, symbology, stroke_mm). `null` resets a field to its default.",
+            "description": "Partial element JSON: frame fields (name, x_mm, y_mm, width_mm, height_mm,\nrotation_deg, locked, hidden, flip_h, flip_v, color) and the element type's props (e.g. text, font_size_pt,\ndata, symbology, stroke_mm). `null` resets a field to its default.",
             "type": "object"
           }
         },
@@ -7907,6 +7955,22 @@ expression: r
               }
             ],
             "properties": {
+              "color": {
+                "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "black"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "red",
+                    "description": "The second colour of a two-colour printer and paper.",
+                    "type": "string"
+                  }
+                ]
+              },
               "flip_h": {
                 "description": "Mirror left–right inside the frame (before rotation).",
                 "type": "boolean"
@@ -8828,6 +8892,22 @@ expression: r
               }
             ],
             "properties": {
+              "color": {
+                "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "black"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "red",
+                    "description": "The second colour of a two-colour printer and paper.",
+                    "type": "string"
+                  }
+                ]
+              },
               "flip_h": {
                 "description": "Mirror left–right inside the frame (before rotation).",
                 "type": "boolean"
@@ -9749,6 +9829,22 @@ expression: r
               }
             ],
             "properties": {
+              "color": {
+                "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                "oneOf": [
+                  {
+                    "enum": [
+                      "black"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "const": "red",
+                    "description": "The second colour of a two-colour printer and paper.",
+                    "type": "string"
+                  }
+                ]
+              },
               "flip_h": {
                 "description": "Mirror left–right inside the frame (before rotation).",
                 "type": "boolean"
@@ -10887,6 +10983,22 @@ expression: r
                 }
               ],
               "properties": {
+                "color": {
+                  "description": "Ink colour. `red` prints red on two-colour printers (`red` in device.list) and black\non the others.",
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "black"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "const": "red",
+                      "description": "The second colour of a two-colour printer and paper.",
+                      "type": "string"
+                    }
+                  ]
+                },
                 "flip_h": {
                   "description": "Mirror left–right inside the frame (before rotation).",
                   "type": "boolean"
@@ -12837,6 +12949,10 @@ expression: r
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "red": {
+                      "description": "Prints red and black: elements whose `color` is red print red.",
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -12993,6 +13109,10 @@ expression: r
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "red": {
+                      "description": "Prints red and black: elements whose `color` is red print red.",
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -13114,6 +13234,10 @@ expression: r
                 },
                 "name": {
                   "type": "string"
+                },
+                "red": {
+                  "description": "Prints red and black: elements whose `color` is red print red.",
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -13235,6 +13359,10 @@ expression: r
               },
               "name": {
                 "type": "string"
+              },
+              "red": {
+                "description": "Prints red and black: elements whose `color` is red print red.",
+                "type": "boolean"
               }
             },
             "required": [
@@ -13819,7 +13947,7 @@ expression: r
       "undoable": false
     },
     {
-      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Jobs go through the print queue; by default the command waits until the job has printed, `wait: false` returns {job_id} at once. offset_x_mm/offset_y_mm (±10) move the print, mirror flips it for transparent media, rotate_180 turns it for the other output direction. grayscale prints 16 gray levels instead of dithered dots, on models with `gray`. Run doc.check first.",
+      "description": "Render and print at the connected model's dpi: one label per data record (`records` like `1,3,5-7`, default all) or `count` labels without data, with bindings and serials filled in. copies 1–999 (default 1) or per record from `copies_column`; density defaults to the label's, else the model's. Jobs go through the print queue; by default the command waits until the job has printed, `wait: false` returns {job_id} at once. offset_x_mm/offset_y_mm (±10) move the print, mirror flips it for transparent media, rotate_180 turns it for the other output direction. grayscale prints 16 gray levels instead of dithered dots, on models with `gray`. Elements whose color is red print red on models with `red` and black on the others. Run doc.check first.",
       "id": "print.submit",
       "journal": false,
       "kind": "device",

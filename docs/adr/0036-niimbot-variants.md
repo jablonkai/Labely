@@ -50,7 +50,9 @@ models have a cutter or print gray levels, and the values of the cut fields are 
 
 ## Consequences
 - None of this has run on hardware. The B21 Pro has one colour, no gray levels and no cutter.
-- No user can print in two colours or cut yet: no command sets the new request fields. No
+- No user can print in two colours or cut yet: no command sets the new request fields.
+  Update (#45): an element `color` of `red` now fills the red plane from `print.submit`;
+  the registry marks the B21-C2B with `red`. Cutting is still open. No
   command schema changed, so `API_VERSION` stays 3.
 - The feature-matrix rows for two-colour printing and the cutter options stay open. They need
   the document colour, the dialog and a list of cutter models.

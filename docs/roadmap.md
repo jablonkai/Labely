@@ -150,7 +150,7 @@ Phase 6 lands in slices, one pull request each (ADR-0035, ADR-0036, ADR-0037, AD
 | Slice | Scope | Status |
 |---|---|---|
 | 6.1 Print tasks | the four missing NIIMBOT tasks (D11_V1, B21_V1, B21_L2B, H1S); every registered model prints on the simulator; shared model codes | done (ADR-0035) |
-| 6.2 NIIMBOT variants | two-colour (0x8A) and grayscale (0x8D) rows, cut fields and half-cut, the nine OSS-only models; driver side only, on the simulator | done (ADR-0036); the editor colour and the cut options of the print dialog are open |
+| 6.2 NIIMBOT variants | two-colour (0x8A) and grayscale (0x8D) rows, cut fields and half-cut, the nine OSS-only models; driver side only, on the simulator | done (ADR-0036); the editor colour is in (#45); the cut options of the print dialog are open |
 | 6.3 Other vendors | Phomemo, Marklife, generic ESC/POS, TSPL and ZPL drivers; TCP transport; on the simulator | done (ADR-0037); nothing ran on hardware; the mobile BLE link for Phomemo and Marklife, a model picker for `usb:` and `tcp:`, USB printer class and the Marklife P50 are open |
 | 6.4 Desktop packaging | cargo-dist for the CLI; signed and notarised macOS app, Windows MSI, Linux AppImage and deb | done (ADR-0038); only the macOS packages were built, unsigned; the MSI, AppImage, deb and a Developer ID signature with notarisation are open until CI and the certificates are there |
 | 6.5 Store builds and releases | Play and App Store builds; tag-driven release workflow with SHA256SUMS | done (ADR-0039); no workflow has run and nothing is signed or in a store; the certificates, the store listings, the store uploads and a public repository are open |
@@ -161,8 +161,9 @@ Phase 6 lands in slices, one pull request each (ADR-0035, ADR-0036, ADR-0037, AD
 Ideas parked until everything above is done.
 
 - **Printer follow-ups from Phase 6** (ADR-0040). Each needs hardware that is not here yet.
-  - Editor colour for two-colour printers. The gray render path is in (#40): `print.submit`
-    `grayscale` on the B1 Pro, B2 Pro and B21 Pro; it has not printed on hardware yet.
+  - Two-colour and gray printing are in code but have not printed on hardware: element
+    `color` red on the B21-C2B, as a red plane (#45), and `print.submit` `grayscale` on the
+    B1 Pro, B2 Pro and B21 Pro (#40).
   - Cut options in the print request and the print dialog.
   - Mobile BLE link for Phomemo and Marklife, a model picker for `usb:` and `tcp:`, the USB
     printer class and the Marklife P50.

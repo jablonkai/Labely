@@ -1414,3 +1414,55 @@ fn templates_for_the_loaded_roll_come_first() {
     h.run();
     assert!(h.query_by_label("Jar").is_some());
 }
+
+#[test]
+fn ink_colour_only_for_a_two_colour_printer() {
+    let mut app = LabelyApp::new(None, options());
+    app.run(
+        "doc.new",
+        json!({"width_mm": 40, "height_mm": 20, "printer_model": "niimbot.d110"}),
+    );
+    app.run(
+        "element.add_rect",
+        json!({"x_mm": 2, "y_mm": 2, "width_mm": 10, "height_mm": 10, "fill": true}),
+    );
+    let id = app.session.doc(None).unwrap().elements().next().unwrap().id;
+    app.select(&[id]);
+    let mut h = harness(app);
+    h.run();
+    assert!(h.query_by_label("Red").is_none(), "one-colour printer");
+
+    let env = h
+        .state_mut()
+        .run("doc.set_label", json!({"printer_model": "niimbot.b21_c2b"}));
+    assert!(env.ok, "{:?}", env.error);
+    h.run();
+    h.get_by_label("Red").click();
+    h.run();
+    let color = |h: &Harness<'_, LabelyApp>| {
+        h.state()
+            .session
+            .doc(None)
+            .unwrap()
+            .element(id)
+            .unwrap()
+            .color
+    };
+    assert_eq!(color(&h), labely_core::InkColor::Red);
+    // The canvas shows the red dots in red.
+    let raster = h.state().session.services().renderer.render(
+        h.state().session.doc(None).unwrap(),
+        &labely_core::services::RenderOptions::at_dpi(203),
+    );
+    assert!(raster.unwrap().red.is_some());
+
+    // Back on a one-colour printer, a red element can still be set back to black.
+    h.state_mut()
+        .run("doc.set_label", json!({"printer_model": "niimbot.d110"}));
+    h.run();
+    h.get_by_label("Black").click();
+    h.run();
+    assert_eq!(color(&h), labely_core::InkColor::Black);
+    h.run();
+    assert!(h.query_by_label("Red").is_none());
+}

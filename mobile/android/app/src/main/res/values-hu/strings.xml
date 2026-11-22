@@ -347,6 +347,9 @@
     <string name="fit_fill">Kitöltés</string>
     <string name="fit_fixed">Rögzített</string>
     <string name="fit_shrink">Zsugorítás</string>
+    <string name="ink_color">Tintaszín</string>
+    <string name="ink_black">Fekete</string>
+    <string name="ink_red">Piros</string>
     <string name="flip_h">Tükrözés vízsz.</string>
     <string name="flip_v">Tükrözés függ.</string>
     <string name="folder">Mappa</string>

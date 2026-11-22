@@ -45,6 +45,17 @@ struct ArrangeSheet: View {
                     Spacer()
                 }
 
+                if ed.redPrinter || ed.selectedElements.contains(where: \.isRed) {
+                    GroupTitle(L("ink_color"))
+                    let red = !ed.selectedElements.isEmpty && ed.selectedElements.allSatisfy(\.isRed)
+                    Picker(L("ink_color"), selection: Binding(get: { red }, set: { ed.setRed($0) })) {
+                        Text(L("ink_black")).tag(false)
+                        Text(L("ink_red")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 GroupTitle(L("nudge"))
                 HStack(spacing: 8) {
                     IconToggle(icon: .chevLeft, label: L("nudge_left")) { ed.nudge(dx: -nudge, dy: 0) }

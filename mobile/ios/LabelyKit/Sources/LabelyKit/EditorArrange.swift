@@ -97,6 +97,21 @@ extension EditorState {
         })
     }
 
+    /// Set the ink colour of the unlocked part of the selection: red or black.
+    @discardableResult
+    public func setRed(_ red: Bool) -> Task<Void, Never> {
+        batch(selectedElements.filter { !$0.locked && $0.isRed != red }.map { e in
+            ("element.set_props", ["id": .int(e.id), "props": ["color": JSON(red ? "red" : "black")]])
+        })
+    }
+
+    /// A two-colour printer is connected, or is the document's printer.
+    public var redPrinter: Bool {
+        if app.printer?.model?.printsRed == true { return true }
+        guard let id = doc?.label.printerModel else { return false }
+        return app.model(id)?.printsRed == true
+    }
+
     // MARK: - Align, distribute, group
 
     private var selectionIds: JSON { .array(selectedElements.map { .int($0.id) }) }

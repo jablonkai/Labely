@@ -50,6 +50,7 @@ impl Doc {
             hidden: false,
             flip_h: false,
             flip_v: false,
+            color: Default::default(),
             group: None,
             mirror: None,
             kind,
@@ -1354,4 +1355,40 @@ fn crop_uses_part_of_the_image() {
 fn font_list_has_the_bundled_family() {
     let fonts = LabelRenderer::new().fonts();
     assert!(fonts.iter().any(|f| f == DEFAULT_FONT), "{fonts:?}");
+}
+
+#[test]
+fn red_plane_follows_z_order() {
+    let mut d = Doc::new(30.0, 10.0);
+    d.add(0.0, 0.0, 10.0, 10.0, 0.0, rect(0.0, true, 0.0));
+    let red = d.add(5.0, 0.0, 15.0, 10.0, 0.0, rect(0.0, true, 0.0));
+    d.add(15.0, 0.0, 10.0, 10.0, 0.0, rect(0.0, true, 0.0));
+    let out = render(&d.doc, 203);
+    assert!(out.red.is_none(), "no red element, no red plane");
+
+    for e in &mut d.doc.pages[0].elements {
+        if e.id == red {
+            e.color = InkColor::Red;
+        }
+    }
+    let out = render(&d.doc, 203);
+    let r = out.red.expect("red plane");
+    assert_eq!(
+        (r.width(), r.height()),
+        (out.bitmap.width(), out.bitmap.height())
+    );
+    let at = |mm: f64| (mm * 203.0 / 25.4) as u32;
+    let y = at(5.0);
+    // (x mm, ink, red)
+    for (x, ink, is_red) in [
+        (2.0, true, false),
+        (7.0, true, true),
+        (12.0, true, true),
+        (17.0, true, false),
+        (22.0, true, false),
+        (28.0, false, false),
+    ] {
+        assert_eq!(out.bitmap.get(at(x), y), ink, "ink at {x} mm");
+        assert_eq!(r.get(at(x), y), is_red, "red at {x} mm");
+    }
 }

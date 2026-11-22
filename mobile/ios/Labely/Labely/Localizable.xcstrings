@@ -1137,6 +1137,54 @@
         }
       }
     },
+    "ink_black": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Black"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fekete"
+          }
+        }
+      }
+    },
+    "ink_color": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ink colour"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tintaszín"
+          }
+        }
+      }
+    },
+    "ink_red": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red"
+          }
+        },
+        "hu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piros"
+          }
+        }
+      }
+    },
     "inspector_hint": {
       "localizations": {
         "en": {

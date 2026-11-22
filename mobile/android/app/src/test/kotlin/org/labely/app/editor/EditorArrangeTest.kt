@@ -82,6 +82,26 @@ class EditorArrangeTest {
     }
 
     @Test
+    fun inkColourRedAndBack() {
+        val ed = editor()
+        val (a, b) = two(ed)
+        // No two-colour printer yet: the picker is off.
+        assertFalse(ed.redPrinter)
+        onMain { app.loadModels() }
+        onMain { ed.setLabelProps("printer_model" to "niimbot.b21_c2b").join() }
+        assertTrue(ed.redPrinter)
+        onMain { ed.select(listOf(a, b)) }
+        onMain { ed.setRed(true).join() }
+        assertTrue(ed.el(a).red && ed.el(b).red)
+        onMain { ed.undo().join() }
+        assertFalse(ed.el(a).red || ed.el(b).red)
+        onMain { ed.select(listOf(a)) }
+        onMain { ed.setRed(true).join() }
+        onMain { ed.setRed(false).join() }
+        assertFalse(ed.el(a).red)
+    }
+
+    @Test
     fun alignGroupHideAndOrder() {
         val ed = editor()
         val (a, b) = two(ed)

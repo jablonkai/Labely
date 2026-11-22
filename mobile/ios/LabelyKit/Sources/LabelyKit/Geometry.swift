@@ -134,6 +134,8 @@ extension Element {
     public var isRotated: Bool { abs(rotationDeg) > 0.01 }
     public var flipH: Bool { raw["flip_h"]?.bool ?? false }
     public var flipV: Bool { raw["flip_v"]?.bool ?? false }
+    /// Prints red on a two-colour printer (`color` is `red`).
+    public var isRed: Bool { raw["color"]?.string == "red" }
     /// The group the element belongs to.
     public var group: Int64? { raw["group"]?.int64 }
     /// The element this one is a linked mirror copy of.

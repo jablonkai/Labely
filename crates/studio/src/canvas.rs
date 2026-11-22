@@ -192,13 +192,18 @@ fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) 
         return;
     };
     let (w, h) = (out.bitmap.width() as usize, out.bitmap.height() as usize);
-    let mut gray = Vec::with_capacity(w * h);
+    let mut rgb = Vec::with_capacity(w * h * 3);
     for y in 0..out.bitmap.height() {
         for x in 0..out.bitmap.width() {
-            gray.push(if out.bitmap.get(x, y) { 0u8 } else { 255 });
+            let red = out.red.as_ref().is_some_and(|r| r.get(x, y));
+            rgb.extend(match (out.bitmap.get(x, y), red) {
+                (_, true) => INK_RED,
+                (true, false) => [0, 0, 0],
+                (false, false) => [255, 255, 255],
+            });
         }
     }
-    let image = egui::ColorImage::from_gray([w, h], &gray);
+    let image = egui::ColorImage::from_rgb([w, h], &rgb);
     match &mut app.raster {
         Some(r) if r.size == [w, h] => {
             r.texture.set(image, egui::TextureOptions::NEAREST);
@@ -217,6 +222,15 @@ fn ensure_raster(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>) 
             });
         }
     }
+}
+
+/// On-screen colour of the dots that print red.
+const INK_RED: [u8; 3] = [214, 40, 40];
+
+/// Channel `c` of the red ink at gray `g` (255 white, 0 full ink).
+fn tint(c: u8, g: u8) -> u8 {
+    let ink = 255 - u16::from(g);
+    (255 - (ink * (255 - u16::from(c)) + 127) / 255) as u8
 }
 
 /// Largest side of the on-screen render, pixels.
@@ -245,16 +259,19 @@ fn ensure_smooth(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>, 
         page: 0,
         values: values.clone(),
     };
-    let Ok(Some(gray)) = services.renderer.render_preview_gray(doc, &opts) else {
+    let Ok((out, Some(gray))) = services.renderer.render_with_preview(doc, &opts) else {
         app.smooth = None;
         return;
     };
     let (gw, gh) = (gray.width as usize, gray.height as usize);
+    let red = out
+        .red
+        .filter(|r| (r.width() as usize, r.height() as usize) == (gw, gh));
     let (w, h) = (gw.div_ceil(2).max(1), gh.div_ceil(2).max(1));
-    let mut px = Vec::with_capacity(w * h);
+    let mut px = Vec::with_capacity(w * h * 3);
     for y in 0..h {
         for x in 0..w {
-            let (mut sum, mut n) = (0u32, 0u32);
+            let (mut sum, mut n) = ([0u32; 3], 0u32);
             for (sx, sy) in [
                 (2 * x, 2 * y),
                 (2 * x + 1, 2 * y),
@@ -262,14 +279,18 @@ fn ensure_smooth(app: &mut LabelyApp, ctx: &egui::Context, doc: &Arc<Document>, 
                 (2 * x + 1, 2 * y + 1),
             ] {
                 if sx < gw && sy < gh {
-                    sum += u32::from(gray.data[sy * gw + sx]);
+                    let g = gray.data[sy * gw + sx];
+                    let is_red = red.as_ref().is_some_and(|r| r.get(sx as u32, sy as u32));
+                    for (c, total) in sum.iter_mut().enumerate() {
+                        *total += u32::from(if is_red { tint(INK_RED[c], g) } else { g });
+                    }
                     n += 1;
                 }
             }
-            px.push((sum / n.max(1)) as u8);
+            px.extend(sum.map(|v| (v / n.max(1)) as u8));
         }
     }
-    let image = egui::ColorImage::from_gray([w, h], &px);
+    let image = egui::ColorImage::from_rgb([w, h], &px);
     match &mut app.smooth {
         Some(s) if s.size == [w, h] => {
             s.texture.set(image, egui::TextureOptions::LINEAR);

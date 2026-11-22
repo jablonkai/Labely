@@ -82,6 +82,9 @@ data class Element(
     val flipH: Boolean get() = raw.optBoolean("flip_h")
     val flipV: Boolean get() = raw.optBoolean("flip_v")
 
+    /** Prints red on a two-colour printer (`color` is `red`). */
+    val red: Boolean get() = raw.optString("color") == "red"
+
     /** The source element of a linked mirror copy. */
     val mirrorOf: Long? get() = raw.optJSONObject("mirror")?.optLong("of")
     val italic: Boolean get() = raw.optBoolean("italic")
@@ -180,6 +183,8 @@ data class Model(
     val maxWidthMm: Double = 0.0,
     /** Prints 16 gray levels (`grayscale` in print.submit). */
     val gray: Boolean = false,
+    /** Prints red and black: elements whose `color` is red print red. */
+    val red: Boolean = false,
 ) {
     /** Width the printhead covers, mm. */
     val headMm: Double get() = if (dpi > 0) headDots * 25.4 / dpi else 0.0
@@ -210,6 +215,7 @@ data class Device(
                     headDots = it.optInt("head_dots"),
                     maxWidthMm = it.optDouble("max_width_mm", 0.0),
                     gray = it.optBoolean("gray"),
+                    red = it.optBoolean("red"),
                 )
             },
             firmware = o.optString("firmware").ifEmpty { null },

@@ -90,6 +90,12 @@ private fun ArrangeContent(ed: EditorState) {
         if (one != null) Action(Ic.Rotate, stringResource(R.string.turn_90), !one.locked) { ed.rotate(one.id, one.rotationDeg + 90) }
     }
 
+    if (ed.redPrinter || selected.any { it.red }) {
+        Heading(stringResource(R.string.ink_color))
+        val red = selected.isNotEmpty() && selected.all { it.red }
+        Segmented(listOf(stringResource(R.string.ink_black), stringResource(R.string.ink_red)), if (red) 1 else 0) { ed.setRed(it == 1) }
+    }
+
     Heading(stringResource(if (n > 1) R.string.arrange_align else R.string.arrange_align_label))
     Actions {
         Action(Ic.AlignLeft, stringResource(R.string.align_left), movable) { ed.align("left") }

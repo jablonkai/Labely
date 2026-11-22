@@ -231,6 +231,32 @@ struct ArrangeTests {
         #expect(ed.selected?.mirrorOf == nil && app.message == nil)
     }
 
+    @Test func inkColourGoesRedAndBack() async throws {
+        let ed = try await editor()
+        await ed.addRect().value
+        let a = try #require(ed.selected)
+        await ed.addEllipse().value
+        let b = try #require(ed.selected)
+        // No two-colour printer yet: the picker is off.
+        #expect(!ed.redPrinter)
+        await app.loadModels()
+        await ed.exec("doc.set_label", ["printer_model": "niimbot.b21_c2b"]).value
+        #expect(ed.redPrinter)
+
+        ed.selectAll()
+        await ed.setRed(true).value
+        #expect(ed.doc?.elements.allSatisfy(\.isRed) == true)
+        await ed.undo().value
+        #expect(ed.doc?.elements.contains(where: \.isRed) == false)
+        ed.tap(nil)
+        ed.multiSelect = false
+        ed.tap(a.id)
+        await ed.setRed(true).value
+        #expect(ed.selected?.isRed == true && ed.doc?.elements.first { $0.id == b.id }?.isRed == false)
+        await ed.setRed(false).value
+        #expect(ed.selected?.isRed == false && app.message == nil)
+    }
+
     @Test func copiesAndPastesAlsoBetweenDocuments() async throws {
         let ed = try await editor()
         await ed.addText("Copy me").value
