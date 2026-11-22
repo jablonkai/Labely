@@ -17,6 +17,7 @@ mod schema;
 mod shell;
 mod templates;
 mod text_data;
+mod zpl;
 
 use labely_core::{CommandError, Session};
 use serde_json::{Value, json};

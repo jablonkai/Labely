@@ -405,7 +405,7 @@ expression: r
       "undoable": true
     },
     {
-      "description": "Open a `.labely` file as a new document and make it active. A NiimBlue label or template export (JSON) is imported instead: it opens unsaved, warnings name what did not come across, and `dpi` (default 203) sizes it. Returns {doc_id, name}.",
+      "description": "Open a `.labely` file as a new document and make it active. A NiimBlue label or template export (JSON) or a ZPL label is imported instead: it opens unsaved, warnings name what did not come across, and `dpi` (default 203) sizes it. Returns {doc_id, name}.",
       "id": "doc.open",
       "journal": true,
       "kind": "edit",
@@ -434,7 +434,7 @@ expression: r
         "properties": {
           "dpi": {
             "default": null,
-            "description": "Dots per inch of a NiimBlue export (default 203; 300 for 300 dpi printers). The file\ndoes not record it. Ignored for `.labely` files.",
+            "description": "Dots per inch of a NiimBlue export or ZPL label (default 203; 300 for 300 dpi\nprinters). The file does not record it. Ignored for `.labely` files.",
             "format": "double",
             "type": [
               "number",
@@ -442,7 +442,7 @@ expression: r
             ]
           },
           "path": {
-            "description": "Path of a `.labely` file or a NiimBlue label/template export (`.json`).",
+            "description": "Path of a `.labely` file, a NiimBlue label/template export (`.json`) or a ZPL\nlabel (`.zpl`).",
             "type": "string"
           }
         },

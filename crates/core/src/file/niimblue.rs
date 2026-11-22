@@ -19,12 +19,7 @@ pub const DEFAULT_DPI: f64 = 203.2;
 /// Corner radius NiimBlue draws for a `rounded_rect` label, in dots.
 const ROUND_RADIUS_DOTS: f64 = 10.0;
 
-/// An imported document and what did not come across.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Import {
-    pub doc: Document,
-    pub warnings: Vec<String>,
-}
+pub use super::Import;
 
 /// Whether `v` looks like a NiimBlue export rather than a `.labely` document.
 pub fn detect(v: &Value) -> bool {

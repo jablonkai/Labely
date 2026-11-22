@@ -2767,6 +2767,7 @@ dependencies = [
  "csv",
  "insta",
  "labely-testkit",
+ "miniz_oxide 0.9.1",
  "schemars",
  "serde",
  "serde_json",
