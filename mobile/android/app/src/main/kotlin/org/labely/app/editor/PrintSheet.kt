@@ -86,6 +86,7 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
     var offsetY by remember(printer?.address) { mutableDoubleStateOf(saved.second) }
     var mirror by remember { mutableStateOf(false) }
     var rotate180 by remember { mutableStateOf(false) }
+    var grayscale by remember { mutableStateOf(false) }
     val picked = if (records > 0 && which == 2) parseRecords(range, records) else null
     val rangeBad = records > 0 && which == 2 && picked == null
     val perCopy = when {
@@ -171,6 +172,12 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
             }
         }
 
+        if (model?.gray == true) {
+            Group {
+                SwitchRow(stringResource(R.string.print_grayscale), stringResource(R.string.print_grayscale_sub), grayscale) { grayscale = it }
+            }
+        }
+
         Group {
             ListRow(
                 stringResource(R.string.print_advanced),
@@ -230,6 +237,7 @@ fun PrintSheet(ed: EditorState, onDismiss: () -> Unit) {
                             offsetYMm = offsetY,
                             mirror = mirror,
                             rotate180 = rotate180,
+                            grayscale = grayscale && model?.gray == true,
                             total = labels,
                         ),
                     )

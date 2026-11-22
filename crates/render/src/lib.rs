@@ -105,6 +105,14 @@ impl Renderer for LabelRenderer {
         self.render_with_gray(doc, opts).map(|(_, g)| Some(g))
     }
 
+    fn render_with_preview(
+        &self,
+        doc: &Document,
+        opts: &RenderOptions,
+    ) -> Result<(RenderOutput, Option<GrayImage>), RenderError> {
+        self.render_with_gray(doc, opts).map(|(o, g)| (o, Some(g)))
+    }
+
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode> {
         codes::decode(bitmap)
     }

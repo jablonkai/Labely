@@ -172,6 +172,8 @@ data class Model(
     val dpi: Int = 203,
     val headDots: Int = 0,
     val maxWidthMm: Double = 0.0,
+    /** Prints 16 gray levels (`grayscale` in print.submit). */
+    val gray: Boolean = false,
 ) {
     /** Width the printhead covers, mm. */
     val headMm: Double get() = if (dpi > 0) headDots * 25.4 / dpi else 0.0
@@ -201,6 +203,7 @@ data class Device(
                     dpi = it.optInt("dpi", 203),
                     headDots = it.optInt("head_dots"),
                     maxWidthMm = it.optDouble("max_width_mm", 0.0),
+                    gray = it.optBoolean("gray"),
                 )
             },
             firmware = o.optString("firmware").ifEmpty { null },

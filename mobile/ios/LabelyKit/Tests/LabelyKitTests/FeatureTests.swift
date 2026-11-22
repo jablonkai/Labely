@@ -215,21 +215,29 @@ struct FeatureTests {
         await ed.print(c)?.value
         #expect(ed.progress?.done == 4 && ed.progress?.state == "done")
 
+        // The simulated B21 Pro prints gray levels.
+        #expect(app.printer?.model?.printsGray == true)
+        var g = PrintOptions()
+        g.records = "1"
+        g.grayscale = true
+        await ed.print(g)?.value
+        #expect(ed.progress?.done == 1 && ed.progress?.state == "done")
+
         await app.refreshJobs()
-        #expect(app.jobs.count == 2 && app.jobs.allSatisfy(\.finished) && !app.queuePaused)
+        #expect(app.jobs.count == 3 && app.jobs.allSatisfy(\.finished) && !app.queuePaused)
         await app.pauseQueue().value
         #expect(app.queuePaused)
         await app.resumeQueue().value
         await app.clearJobs().value
         #expect(app.jobs.isEmpty && !app.queuePaused)
 
-        #expect(app.history.count == 2 && app.history.allSatisfy { $0.hasFile && $0.address == AppState.simAddress })
+        #expect(app.history.count == 3 && app.history.allSatisfy { $0.hasFile && $0.address == AppState.simAddress })
         await app.closeEditor().value
         await app.printAgain(try #require(app.history.first)).value
         #expect(app.editor != nil && app.reprint?.id == app.history.first?.id)
         await app.closeEditor().value
         await app.deleteHistory(try #require(app.history.last)).value
-        #expect(app.history.count == 1)
+        #expect(app.history.count == 2)
         await app.clearHistory().value
         #expect(app.history.isEmpty && app.message == nil)
 

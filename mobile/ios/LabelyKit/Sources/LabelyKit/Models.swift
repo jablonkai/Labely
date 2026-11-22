@@ -139,6 +139,12 @@ public struct Model: Sendable, Equatable, Codable {
     /// Dots of the printhead; with `dpi`, the widest line it prints.
     public var headDots = 0
     public var maxWidthMm = 0.0
+    /// Prints 16 gray levels (`grayscale` in print.submit). Optional so models saved
+    /// before it still decode.
+    public var gray: Bool?
+
+    /// The model prints gray levels.
+    public var printsGray: Bool { gray == true }
 
     /// Width the printhead covers, in millimetres; 0 when unknown.
     public var headMm: Double { dpi > 0 ? Double(headDots) * 25.4 / Double(dpi) : 0 }
@@ -153,7 +159,8 @@ public struct Model: Sendable, Equatable, Codable {
             densityDefault: m["density_default"]?.int ?? 3,
             dpi: m["dpi"]?.int ?? 203,
             headDots: m["head_dots"]?.int ?? 0,
-            maxWidthMm: m["max_width_mm"]?.double ?? 0
+            maxWidthMm: m["max_width_mm"]?.double ?? 0,
+            gray: m["gray"]?.bool ?? false
         )
     }
 }

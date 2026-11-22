@@ -27,6 +27,7 @@ struct PrintSheet: View {
     @State private var offsetY = 0.0
     @State private var mirror = false
     @State private var rotate180 = false
+    @State private var grayscale = false
     @State private var jobs = false
 
     var body: some View {
@@ -109,6 +110,12 @@ struct PrintSheet: View {
                     }
                     RowDivider()
                     densityRow(doc, model)
+                }
+
+                if model?.printsGray == true {
+                    ListGroup {
+                        SwitchRow(title: L("print_grayscale"), subtitle: L("print_grayscale_sub"), isOn: grayscale) { grayscale = $0 }
+                    }
                 }
 
                 ListGroup {
@@ -199,6 +206,7 @@ struct PrintSheet: View {
         o.offsetYMm = offsetY
         o.mirror = mirror
         o.rotate180 = rotate180
+        o.grayscale = grayscale && ed.app.printer?.model?.printsGray == true
         return o
     }
 

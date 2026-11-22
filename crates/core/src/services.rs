@@ -129,6 +129,17 @@ pub trait Renderer: Send + Sync {
         let _ = (doc, opts);
         Ok(None)
     }
+    /// [`Renderer::render`] and [`Renderer::render_preview_gray`] of one page in one pass.
+    fn render_with_preview(
+        &self,
+        doc: &Document,
+        opts: &RenderOptions,
+    ) -> Result<(RenderOutput, Option<GrayImage>), RenderError> {
+        Ok((
+            self.render(doc, opts)?,
+            self.render_preview_gray(doc, opts)?,
+        ))
+    }
     /// Decode every barcode/2D code visible in `bitmap` (for the readability check).
     fn decode_codes(&self, bitmap: &Bitmap1) -> Vec<DecodedCode>;
     /// Encode a 1-bit bitmap as PNG.
@@ -177,6 +188,9 @@ pub struct ModelInfo {
     pub density_max: u8,
     pub density_default: u8,
     pub media: Vec<MediaType>,
+    /// Prints 16 gray levels (`grayscale` in print.submit).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub gray: bool,
 }
 
 /// A known printer (discovered, connected or virtual).

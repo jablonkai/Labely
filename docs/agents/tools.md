@@ -102,7 +102,7 @@ Hints:
 | `device.calibrate` | device | address, media (default: the label's) |
 | `device.settings` | device | address → settings {auto_off_level, sound_power, sound_bluetooth} |
 | `device.set_settings` | device | address, auto_off_level (1–4), sound_power, sound_bluetooth → settings |
-| `print.submit` | device | address, copies, density, records, count, copies_column, offset_x_mm, offset_y_mm, mirror, rotate_180, wait → job_id, state |
+| `print.submit` | device | address, copies, density, records, count, copies_column, offset_x_mm, offset_y_mm, mirror, rotate_180, grayscale (models with `gray`), wait → job_id, state |
 | `job.list` | query | → paused, jobs [{id, state, address, doc_name, pages_done, pages_total, error, …}] |
 | `job.get` | query | id |
 | `job.wait` | device | id, timeout_ms (default 60000, max 600000) |

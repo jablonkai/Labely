@@ -1173,6 +1173,50 @@ fn print_dialog_takes_copies_from_a_column() {
 }
 
 #[test]
+fn print_dialog_offers_grayscale_only_on_a_gray_printer() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = LabelyApp::new(
+        None,
+        StudioOptions {
+            history_dir: Some(dir.path().join("history")),
+            ..options()
+        },
+    );
+    app.run("doc.new", json!({"width_mm": 30, "height_mm": 20}));
+    app.run(
+        "element.add_rect",
+        json!({"x_mm": 2, "y_mm": 2, "width_mm": 10, "height_mm": 10, "fill": "#808080"}),
+    );
+    // A fake printer has no gray levels: no option.
+    let fake = format!(
+        "fake:{}?model=niimbot.d110",
+        dir.path().join("out").display()
+    );
+    assert!(labely_studio::menu::connect(&mut app, &fake));
+    app.ui.print.address = fake;
+    app.ui.dialog = Some(labely_studio::app::Dialog::Print);
+    let mut h = harness(app);
+    h.run();
+    assert!(h.query_by_label("Grayscale").is_none());
+
+    let env = h
+        .state_mut()
+        .run("device.connect", json!({"address": "sim:niimbot.b21_pro"}));
+    assert!(env.ok, "{:?}", env.error);
+    h.state_mut().ui.print.address = "sim:niimbot.b21_pro".into();
+    h.run();
+    h.get_by_label("Grayscale").click();
+    h.run();
+    assert!(h.state().ui.print.grayscale);
+    h.get_by_label("Print 1 label").click();
+    h.run_steps(3);
+    let job = h.state().session.jobs().list()[0].clone();
+    let done = h.state().session.jobs().wait(&job.id, None).unwrap();
+    assert!(done.error.is_none(), "{:?}", done.error);
+    assert_eq!(done.pages_done, 1);
+}
+
+#[test]
 fn failed_connect_shows_troubleshooting_tips() {
     let mut app = LabelyApp::new(None, options());
     app.run("doc.new", json!({"width_mm": 50, "height_mm": 30}));

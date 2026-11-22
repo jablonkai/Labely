@@ -117,3 +117,50 @@ fn print_offset_mirror_and_rotate() {
     let e = err(s, "print.submit", json!({"offset_y_mm": -10.5}));
     assert_eq!(e.param.as_deref(), Some("offset_y_mm"));
 }
+
+#[test]
+fn print_grayscale_needs_a_gray_model() {
+    use labely_core::services::PagePlanes;
+    let mut kit = test_kit();
+    let s = &mut kit.session;
+    ok(
+        s,
+        "doc.new",
+        json!({"width_mm": 40, "height_mm": 20, "printer_model": "test.fake"}),
+    );
+    ok(
+        s,
+        "element.add_rect",
+        json!({"x_mm": 1, "y_mm": 1, "width_mm": 5, "height_mm": 5}),
+    );
+    ok(s, "device.connect", json!({"address": FAKE_ADDRESS}));
+    let e = err(s, "print.submit", json!({"grayscale": true}));
+    assert_eq!(e.param.as_deref(), Some("grayscale"));
+    assert!(kit.devices.prints().is_empty());
+
+    kit.devices.set_gray(true);
+    let r = ok(&mut kit.session, "device.list", json!({}));
+    assert_eq!(r["devices"][0]["model"]["gray"], true);
+    ok(
+        &mut kit.session,
+        "print.submit",
+        json!({"grayscale": true, "copies": 2, "rotate_180": true}),
+    );
+    let job = kit.devices.prints().last().unwrap().1.clone();
+    let PagePlanes::Gray(gray) = &job.planes else {
+        panic!("expected gray planes, got {:?}", job.planes);
+    };
+    assert_eq!(gray.len(), job.pages.len());
+    let (g, b) = (&gray[0], &job.pages[0]);
+    assert_eq!((g.width(), g.height()), (b.width(), b.height()));
+    // The fake renderer has no gray stage: the map follows the turned 1-bit page.
+    for y in 0..b.height() {
+        for x in 0..b.width() {
+            assert_eq!(g.get(x, y) == 15, b.get(x, y), "dot ({x}, {y})");
+        }
+    }
+
+    ok(&mut kit.session, "print.submit", json!({}));
+    let job = kit.devices.prints().last().unwrap().1.clone();
+    assert_eq!(job.planes, PagePlanes::None);
+}

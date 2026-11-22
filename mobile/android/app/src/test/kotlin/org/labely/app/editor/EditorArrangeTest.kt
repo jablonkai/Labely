@@ -232,9 +232,14 @@ class EditorArrangeTest {
         onMain { while (ed.progress?.finished != true) delay(10) }
         assertEquals("done", ed.progress!!.state)
         assertEquals(3, ed.progress!!.done)
+        // The simulated B21 Pro prints gray levels.
+        assertTrue(app.printer?.model?.gray == true)
+        ed.print(PrintOptions(grayscale = true, total = 1))
+        onMain { while (ed.progress?.finished != true) delay(10) }
+        assertEquals("done", ed.progress!!.state)
 
         onMain { app.refreshHistory() }
-        assertEquals(2, app.history.size)
+        assertEquals(3, app.history.size)
         assertTrue(app.history.all { it.state == "done" })
         onMain { app.refreshJobs() }
         assertTrue(app.jobs.all { it.finished })
@@ -245,7 +250,7 @@ class EditorArrangeTest {
         onMain { app.clearJobs().join() }
         assertTrue(app.jobs.isEmpty())
         onMain { app.deleteHistory(app.history.first()).join() }
-        assertEquals(1, app.history.size)
+        assertEquals(2, app.history.size)
     }
 
     private fun editor(): EditorState {

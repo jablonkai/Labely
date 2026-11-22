@@ -44,6 +44,8 @@ data class PrintOptions(
     val offsetYMm: Double = 0.0,
     val mirror: Boolean = false,
     val rotate180: Boolean = false,
+    /** 16 gray levels; only for a model with [org.labely.app.engine.Model.gray]. */
+    val grayscale: Boolean = false,
     /** Labels expected, for the progress bar until the engine reports its own total. */
     val total: Int = 1,
 )
@@ -714,6 +716,7 @@ class EditorState(val app: AppState, val docId: String) {
                         "count" to o.count,
                         "offset_x_mm" to o.offsetXMm.takeIf { it != 0.0 }, "offset_y_mm" to o.offsetYMm.takeIf { it != 0.0 },
                         "mirror" to o.mirror.takeIf { it }, "rotate_180" to o.rotate180.takeIf { it },
+                        "grayscale" to o.grayscale.takeIf { it },
                         "wait" to false,
                     )
                     val jobId = r.getString("job_id")
