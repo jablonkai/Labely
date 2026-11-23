@@ -383,6 +383,12 @@ impl PrintQueue {
             };
             let finished = {
                 let mut st = lock(&self.shared.state);
+                // Hold the history lock before anyone hears the job is done, so a
+                // `job.history` right after a finished job already lists it.
+                let history = st
+                    .history_dir
+                    .clone()
+                    .map(|dir| (dir, lock(&self.shared.history)));
                 let Some(job) = st
                     .jobs
                     .iter_mut()
@@ -409,52 +415,17 @@ impl PrintQueue {
                     }
                 }
                 self.shared.emit(job);
-                let out = (job.info.clone(), job.doc.clone(), st.history_dir.clone());
+                let out = (job.info.clone(), job.doc.clone(), history);
                 trim_finished(&mut st);
                 self.shared.changed.notify_all();
                 out
             };
-            if let (info, doc, Some(dir)) = finished
-                && let Err(e) = self.record(&dir, &info, &doc)
+            if let (info, doc, Some((dir, _guard))) = finished
+                && let Err(e) = record(&dir, &info, &doc)
             {
                 warn_history(&e);
             }
         }
-    }
-
-    fn record(&self, dir: &Path, info: &JobInfo, doc: &Document) -> Result<(), CommandError> {
-        let _guard = lock(&self.shared.history);
-        std::fs::create_dir_all(dir).map_err(|e| io_error("create", dir, &e))?;
-        let mut entries = read_history(dir)?;
-        let base = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
-        let id = (1..)
-            .map(|n| {
-                if n == 1 {
-                    base.clone()
-                } else {
-                    format!("{base}-{n}")
-                }
-            })
-            .find(|id| {
-                !entries.iter().any(|e| &e.id == id) && !dir.join(format!("{id}.labely")).exists()
-            })
-            .unwrap_or(base);
-        let file_name = format!("{id}.labely");
-        let snapshot = file::save(doc, &dir.join(&file_name)).is_ok();
-        entries.push(HistoryEntry {
-            id,
-            printed_at: info.finished_at.clone().unwrap_or_else(now),
-            doc_name: info.doc_name.clone(),
-            address: info.address.clone(),
-            model: info.model.clone(),
-            labels: info.labels,
-            copies: info.copies,
-            pages_printed: info.pages_done,
-            state: info.state,
-            error: info.error.as_ref().map(|e| e.message.clone()),
-            file: snapshot.then_some(file_name),
-        });
-        write_history(dir, &entries)
     }
 
     /// History entries, newest first.
@@ -635,4 +606,39 @@ fn trim_finished(st: &mut State) {
             true
         }
     });
+}
+
+/// Append a finished job to the history. The caller holds the history lock.
+fn record(dir: &Path, info: &JobInfo, doc: &Document) -> Result<(), CommandError> {
+    std::fs::create_dir_all(dir).map_err(|e| io_error("create", dir, &e))?;
+    let mut entries = read_history(dir)?;
+    let base = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+    let id = (1..)
+        .map(|n| {
+            if n == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{n}")
+            }
+        })
+        .find(|id| {
+            !entries.iter().any(|e| &e.id == id) && !dir.join(format!("{id}.labely")).exists()
+        })
+        .unwrap_or(base);
+    let file_name = format!("{id}.labely");
+    let snapshot = file::save(doc, &dir.join(&file_name)).is_ok();
+    entries.push(HistoryEntry {
+        id,
+        printed_at: info.finished_at.clone().unwrap_or_else(now),
+        doc_name: info.doc_name.clone(),
+        address: info.address.clone(),
+        model: info.model.clone(),
+        labels: info.labels,
+        copies: info.copies,
+        pages_printed: info.pages_done,
+        state: info.state,
+        error: info.error.as_ref().map(|e| e.message.clone()),
+        file: snapshot.then_some(file_name),
+    });
+    write_history(dir, &entries)
 }
