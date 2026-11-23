@@ -594,8 +594,9 @@ mod tests {
     fn packager_config_adds_build_facts() -> Result<()> {
         let config = packager_config(BASE, std::path::Path::new("/t"), None)?;
         assert_eq!(config["version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(config["binariesDir"], "/t/dist");
-        assert_eq!(config["outDir"], "/t/packager");
+        let t = std::path::Path::new("/t");
+        assert_eq!(config["binariesDir"], t.join("dist").display().to_string());
+        assert_eq!(config["outDir"], t.join("packager").display().to_string());
         assert_eq!(config["macos"]["signingIdentity"], serde_json::Value::Null);
         // The checked-in part stays.
         assert_eq!(config["identifier"], "org.labely.studio");
