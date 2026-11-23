@@ -90,10 +90,12 @@ impl NativeBle for ShellBle {
         let (t2, open2) = (Arc::clone(&t), Arc::clone(&open));
         std::thread::spawn(move || {
             while open2.load(Ordering::Acquire) {
-                let got = t2.lock().unwrap().recv(Duration::from_millis(5));
+                // Poll without blocking: holding the lock while waiting starves the
+                // writer on platforms whose mutex is not fair (Linux).
+                let got = t2.lock().unwrap().recv(Duration::ZERO);
                 match got {
                     Ok(Some(b)) => sink.push(b),
-                    Ok(None) => std::thread::yield_now(),
+                    Ok(None) => std::thread::sleep(Duration::from_millis(1)),
                     Err(_) => break,
                 }
             }

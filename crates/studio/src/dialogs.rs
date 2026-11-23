@@ -1327,7 +1327,9 @@ mod tests {
             path: "/x/Tag.png".into(),
         };
         assert_eq!(f.target(None), "/x/Tag.png");
-        assert_eq!(f.target(Some(7)), "/x/Tag-007.png");
+        // The record suffix rebuilds the file name, so it uses the platform separator.
+        let expected = std::path::Path::new("/x").join("Tag-007.png");
+        assert_eq!(f.target(Some(7)), expected.display().to_string());
         let f = super::ExportForm {
             path: "/x/Tag-{record}".into(),
             ..f
