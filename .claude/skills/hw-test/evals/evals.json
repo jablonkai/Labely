@@ -20,7 +20,15 @@
       "prompt": "Test the new grayscale print path on the printer. It's not here today though, I left it at the office.",
       "expected_output": "Falls back to sim:niimbot.b21_pro and/or fake:<dir>, runs print --grayscale against it, views fake PNG output, runs relevant cargo tests, and states clearly that no real hardware was tested and a real check is still pending.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "Does not scan for or connect to a real BLE printer",
+        "Exercises the grayscale print path on the simulator (sim:) or the fake printer (fake:)",
+        "Produces a rendered PNG or test output showing the grayscale result",
+        "Runs the relevant printer/protocol test suites",
+        "States clearly that the real-device test is still outstanding and what to check on the B21 Pro later",
+        "Shows visible gray output (a decoded simulator image or test with multiple gray levels), not just a 1-bit fake: PNG",
+        "Uses a test label that actually contains shades"
+      ]
     }
   ]
 }

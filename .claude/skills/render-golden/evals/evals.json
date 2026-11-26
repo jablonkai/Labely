@@ -20,7 +20,13 @@
       "prompt": "Added a new golden test for vertical text in crates/render/tests/it/main.rs, it says missing golden. Generate it.",
       "expected_output": "Runs cargo xtask bless, checks that the only new/changed file is the new PNG, views it to confirm it shows vertical text as intended, reruns tests green.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "A vertical-text golden test exists in crates/render/tests/it/main.rs",
+        "A new golden PNG is created under crates/render/tests/golden/",
+        "Only the new golden PNG is added or changed; no existing golden is rewritten",
+        "Looks at the new PNG and describes it before accepting it",
+        "Reports cargo test -p labely-render passing afterwards"
+      ]
     }
   ]
 }

@@ -20,7 +20,13 @@
       "prompt": "Nevezd át a kind_code2d kulcsot kind_qr-re mindenhol, és a magyar szöveg legyen 'QR-kód'.",
       "expected_output": "Notices kind_ keys are built dynamically (L(\"kind_\\(type)\") in Kinds.swift, matching element kinds), so renaming one member would break the lookup; explains this, checks Android and iOS usages with grep, and either keeps the key and only changes the Hungarian value or changes code and both resource sets together, then runs cargo xtask i18n-check.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "No kind_code2d key remains in Android values/, values-hu/ or the iOS xcstrings catalogs",
+        "kind_qr exists in Android values/ and values-hu/ and in Localizable.xcstrings",
+        "The Hungarian value of kind_qr is exactly 'QR-kód' on every surface",
+        "Handles the runtime-built key family (e.g. kind_\\(type) in Swift / kind_ prefix in Kotlin), so the QR element still finds its label",
+        "Runs cargo xtask i18n-check and reports it passing"
+      ]
     }
   ]
 }

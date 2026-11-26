@@ -38,11 +38,19 @@ Ask the user for the version if they did not give one. Show the current one
 If there are no tags yet, `docs/releasing.md` says the first release should be a pre-release
 (`-rc.1`), because the release workflow has never run end to end.
 
+The tag must be exactly the `Cargo.toml` version, because the mobile builds read the file, not
+the tag. So a first release asked for as "0.2.0" is bumped to `0.2.0-rc.1` and tagged
+`v0.2.0-rc.1`. Never bump to `0.2.0` and then tag an rc: the version and the tag must agree.
+
 ### 2. Bump the version in both places
 
 - `Cargo.toml`: `[workspace.package] version`. Every crate, the studio packages and the
-  Android app read it from there; the Android version code is derived (ADR-0040:
-  `1.2.3` → `100200399`, `1.2.3-rc.4` → `100200304`), so do not edit Gradle.
+  Android app read it from there; the Android version code is derived, so do not edit Gradle.
+  The formula in `mobile/android/app/build.gradle.kts` (ADR-0040) is
+  `(major·1 000 000 + minor·1 000 + patch)·100 + stage`, where stage is 99 for a release and
+  the rc number for a pre-release. Examples: `1.2.3` → `100200399`, `1.2.3-rc.4` → `100200304`,
+  `0.2.0` → `200099`, `0.2.0-rc.1` → `200001`. Compute it from the formula when you quote it;
+  don't pattern-match the 1.x example.
 - `mobile/ios/Labely/Labely.xcodeproj/project.pbxproj`: every `MARKETING_VERSION = …;` line
   (there are two). An xtask test compares them with `Cargo.toml`.
 - Let cargo refresh `Cargo.lock` (any build does it) and commit it with the bump.

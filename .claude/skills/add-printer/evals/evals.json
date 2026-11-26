@@ -4,9 +4,20 @@
     {
       "id": 1,
       "prompt": "támogasd a Phomemo M04S nyomtatót is, ugyanaz a nyelv mint az M02-nél szerintem",
-      "expected_output": "Treats it as a new model of an existing language (case A), checks docs/protocol-languages.md §8 where the M04S is listed as left out, looks for a cited source for head width and dpi before adding anything, adds the spec row and a phomemo.json entry only if evidence exists (otherwise explains it stays out), updates registry/it.rs tests, and does not copy any OSS code.",
+      "expected_output": "Treats it as a new model of an existing language (case A), checks docs/protocol-languages.md §8 where the M04S is listed as left out, looks for a cited source for head width and dpi before adding anything, adds the spec row and a phomemo.json entry only if evidence exists (otherwise explains it stays out), updates registry/it.rs tests, and does not copy any OSS code. Note: public sources indicate the M04S is not byte-compatible with the M02 job layout; a good run checks the user's assumption against cited evidence instead of reusing the M02 task blindly.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "Updates a spec doc (docs/printers.md, docs/protocol.md or docs/protocol-languages.md) for the M04S with cited evidence",
+        "Adds an M04S model entry to the printer registry (models JSON or BUILTIN)",
+        "Copies no vendor code, assets or UI strings, and uses no vendor cloud API",
+        "Adds the M04S to the per-model table in docs/protocol-languages.md (and docs/feature-matrix.md if it lists models)",
+        "Adds or extends a test that covers the M04S model (registry lookup or encoder output)",
+        "Lists unverified facts (dpi, print width, BLE name, dialect) as open questions instead of asserting them",
+        "Reports the relevant cargo tests passing",
+        "Invents no protocol values (density/heat ranges, BLE name prefixes) without a cited source; unknowns become open questions",
+        "Writes an ADR for the new task/dialect, or states why none is needed",
+        "Runs the clean-room-reviewer agent (or an equivalent ADR-0001 check) on the diff"
+      ]
     },
     {
       "id": 2,
