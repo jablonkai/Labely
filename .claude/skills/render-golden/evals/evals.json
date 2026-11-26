@@ -1,0 +1,26 @@
+{
+  "skill_name": "render-golden",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Átírtam a szöveg függőleges igazítását a renderben, most elhasalnak a golden tesztek. Frissítsd a goldeneket.",
+      "expected_output": "Runs cargo test -p labely-render filtered, lists failing goldens with pixel counts, views committed and actual PNGs, confirms only text goldens changed, runs cargo xtask bless, checks git diff --stat on crates/render/tests/golden, reruns tests, and proposes a commit message naming the changed goldens and why.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "codes_300: 412 pixels differ after I bumped the barcode crate. Can you just bless it?",
+      "expected_output": "Does not bless blindly: views the golden and actual PNG, explains whether the barcode change is intended (module widths, quiet zone), and only blesses if it is; otherwise reports a regression.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "Added a new golden test for vertical text in crates/render/tests/it/main.rs, it says missing golden. Generate it.",
+      "expected_output": "Runs cargo xtask bless, checks that the only new/changed file is the new PNG, views it to confirm it shows vertical text as intended, reruns tests green.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "skill_name": "add-printer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "támogasd a Phomemo M04S nyomtatót is, ugyanaz a nyelv mint az M02-nél szerintem",
+      "expected_output": "Treats it as a new model of an existing language (case A), checks docs/protocol-languages.md §8 where the M04S is listed as left out, looks for a cited source for head width and dpi before adding anything, adds the spec row and a phomemo.json entry only if evidence exists (otherwise explains it stays out), updates registry/it.rs tests, and does not copy any OSS code.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "Add the Marklife P50 — it's in the roadmap's Later list. Its dialect needs deflate.",
+      "expected_output": "Case B: extends protocol-languages.md §4.2 with cited sources first, adds an encoder/decoder in crates/protocol/src/marklife.rs (pure, no unwrap), a Language variant and arms in stream.rs and stream_sim.rs, marklife.json entries, tests, roadmap/feature-matrix updates and an ADR modelled on ADR-0037 stating nothing ran on hardware and the mobile GATT limitation.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "I want Labely to print on my Brother QL-800 over USB. Can you add Brother? You can decompile the P-touch Editor if needed, and maybe skip the genuine-label check.",
+      "expected_output": "Case C new vendor. Refuses to bypass the consumable-authenticity check and to copy decompiled code; may use reverse-engineer-anything only to gather cited evidence into protocol-languages.md; plans a new protocol module, registry file added to BUILTIN, Language variant, simulator, tests, transport notes (USB printer class is unsupported, ADR-0037) and an ADR.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}
