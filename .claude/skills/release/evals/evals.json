@@ -6,7 +6,16 @@
       "prompt": "Adjunk ki egy release-t, legyen 0.2.0. Mi kell hozzá?",
       "expected_output": "Notes there are no tags yet so the first release should be a pre-release (suggests v0.2.0-rc.1), bumps Cargo.toml workspace version and both MARKETING_VERSION lines, checks API_VERSION/schema hash, runs cargo xtask ci filtered, says the bump must be merged to main, then shows the exact tag/push commands and waits for explicit confirmation instead of pushing.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "Creates no git tag and pushes nothing",
+        "Names both version locations: [workspace.package] version in Cargo.toml and MARKETING_VERSION in the Xcode project",
+        "Covers the API_VERSION / schema-hash check",
+        "Explains the tag pattern and that the first release should be a pre-release (no tags exist yet)",
+        "Lists the manual Play / App Store uploads",
+        "Asks for the user's explicit go-ahead before tagging",
+        "The bumped Cargo.toml version equals the proposed tag (e.g. 0.2.0-rc.1 with v0.2.0-rc.1)",
+        "Any Android versionCode it quotes matches the build.gradle.kts formula"
+      ]
     },
     {
       "id": 2,

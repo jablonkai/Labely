@@ -6,7 +6,17 @@
       "prompt": "Adj hozzá egy új commandot: variable.remove, ami töröl egy dokumentumváltozót név alapján, és legyen visszavonható.",
       "expected_output": "Adds a VariableRemove edit command in crates/core/src/commands/variable.rs with deny_unknown_fields params (doc_id, name) and a not_found error listing existing names, registers it in builtin_entries next to variable.set, adds integration tests (happy path, not_found with param, history.undo restores), updates PINNED in crates/core/tests/it/schema.rs from cargo xtask schema-hash without bumping API_VERSION unless needed, refreshes the insta snapshot with INSTA_UPDATE=always, and adds a row to docs/agents/tools.md.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "Adds a variable.remove command in crates/core/src/commands/ (variable.rs or a new file)",
+        "Registers variable.remove in crates/core/src/registry.rs",
+        "Removal is undoable: the command's undo restores the variable, and a test covers undo",
+        "Adds integration tests for variable.remove (success and unknown-name error)",
+        "Updates the pinned schema hash in crates/core/tests/it/schema.rs and the insta command_list snapshot",
+        "Adds a variable.remove row to docs/agents/tools.md",
+        "Reports cargo test -p labely-core passing",
+        "Does not bump API_VERSION silently: asks the user or explains why not",
+        "Its own variable.remove test passes in a build of its own worktree (not a shared, mixed target dir)"
+      ]
     },
     {
       "id": 2,

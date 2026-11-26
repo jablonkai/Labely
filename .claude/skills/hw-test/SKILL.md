@@ -121,3 +121,17 @@ the virtual printers and say clearly that no real hardware was involved:
   the simulator), `cargo test -p labely-mcp`.
 
 Simulator output needs no confirmation; it consumes nothing.
+
+**Grayscale and other non-1-bit paths.** `fake:` writes only the 1-bit page
+(`crates/printers/src/fake.rs`), so a grayscale job looks the same as a dithered one there, and
+a fake PNG proves nothing about gray. Instead:
+- print a label that actually has shades, such as an image element holding a gray ramp with
+  discrete bands (the hello label has none);
+- run it with `--grayscale` on `sim:niimbot.b21_pro` (it must finish `done`), and the same
+  without `--grayscale` as a control;
+- check that a model without gray mode refuses it (`sim:niimbot.b1` → `bad_params`);
+- run `cargo test -p labely-printers gray`, which asserts that the gray rows reach the
+  simulator.
+
+Then name the gap: whether the firmware accepts the gray job, and how the levels look on paper,
+can only be seen on the device.

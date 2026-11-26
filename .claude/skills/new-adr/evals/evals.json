@@ -20,7 +20,15 @@
       "prompt": "We decided to drop the TCP default port 9100 in favour of requiring an explicit port. Record that decision.",
       "expected_output": "Writes a new proposed ADR with context on ADR-0037's 9100 default, decision and consequences; does not edit ADR-0037's decision text but adds a pointer or marks it partially changed; indexes it in docs/adr/README.md and links it from docs/protocol-languages.md §7.1 and docs/agents/tools.md where the default is documented.",
       "files": [],
-      "assertions": []
+      "assertions": [
+        "Creates docs/adr/0045-<slug>.md (the next free number)",
+        "Follows the 0000-template sections (Context, Decision, Consequences)",
+        "Uses status 'proposed' and today's date, like the other ADRs",
+        "Adds a row for the new ADR to docs/adr/README.md in the existing format",
+        "Links the earlier ADR or doc that set the 9100 default, and amends or cross-references it",
+        "Does not change code silently: either keeps it docs-only or names the code follow-up",
+        "Links the new ADR from the docs that state the 9100 default (or lists them as follow-ups)"
+      ]
     }
   ]
 }

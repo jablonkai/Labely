@@ -21,7 +21,11 @@ accepts a regression. The job of this skill is to make sure only *intended* pixe
 - `cargo xtask bless` = `LABELY_BLESS=1 cargo test -p labely-render` (see `xtask/src/main.rs`).
   It rewrites **every** golden in that crate, and creates missing ones. It is the only golden
   set: there are no other `LABELY_BLESS` users and no other `tests/golden` directories.
-  Unchanged renders produce byte-identical PNGs, so git only shows the ones that really moved.
+  A full bless re-encodes PNGs whose pixels did not change, so git shows byte-only churn in
+  goldens you never meant to touch. Bless only the tests that need it (step 3).
+- The golden directory is compiled into the test binary (`CARGO_MANIFEST_DIR`). With a
+  `CARGO_TARGET_DIR` shared between worktrees, a bless can run another worktree's binary and
+  write there. Check that the new or changed PNG appears in *your* `git status`.
 - Not covered here: `crates/core/tests/it/snapshots/*.snap` (insta, schema; AGENTS.md
   "Schema changes") and the studio's egui_kittest tests.
 
@@ -55,11 +59,17 @@ changed but is unrelated to your change is a bug to fix, not to bless.
 If a change is unintended, fix the code and go back to step 1. Report it to the user rather
 than blessing around it.
 
-### 3. Bless
+### 3. Bless only what you judged intended
+
+Bless the failing or new tests by name, so no other golden is rewritten:
 
 ```sh
-cargo xtask bless 2>&1 | grep -E "test result|error"
+LABELY_BLESS=1 cargo test -p labely-render --test it <test_name> -- --exact 2>&1 | grep -E "test result|error"
 ```
+
+Use `cargo xtask bless` (every golden) only when a change deliberately moves most of them,
+such as a font or dithering change. Afterwards, restore the goldens whose pixels did not
+move: if step 1 did not list a golden as failing, `git checkout -- <png>` it.
 
 ### 4. Review the diff before committing
 
