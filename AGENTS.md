@@ -33,8 +33,11 @@ Rules:
   does, bump `API_VERSION` in `crates/core/src/lib.rs` (once per release) and paste the new
   hash into `crates/core/tests/it/schema.rs`. Then refresh the insta snapshot with
   `INSTA_UPDATE=always cargo test -p labely-core`.
-- **UI text.** Studio and CLI text goes in `crates/i18n/locales/{en,hu}/*.ftl`. The two
-  languages must have the same keys.
+- **UI text.** Studio and CLI text goes in `crates/i18n/locales/{en,hu}/*.ftl`. Android text
+  goes in `mobile/android/app/src/main/res/values{,-hu}/`. iOS text goes in the
+  `mobile/ios/Labely/Labely/*.xcstrings` catalogs, and every `L("key")` must be in
+  `Localizable.xcstrings` (ADR-0032). EN and HU must have the same keys, which
+  `cargo xtask i18n-check` checks.
 - **File access.** A new command that reads or writes files must call `Ctx::check_path`
   (ADR-0012).
 
@@ -55,7 +58,8 @@ MCP client config:
 
 - **Headless flags.** `--root DIR` (repeatable) is the directory the agent may read and write;
   the default is the current directory. `--allow-print` lets the agent print. `--headless`
-  never bridges, and `--connect` only bridges.
+  never bridges, and `--connect` only bridges. `--connection FILE` points at a different
+  studio connection file.
 - **Studio.** The studio serves MCP on `127.0.0.1:7878/mcp`. It requires the bearer token from
   `<app-data>/mcp-connection.json` and refuses non-local `Origin` headers. Agents can print
   only while "Allow agents to print" is ticked.
