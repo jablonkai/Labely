@@ -1,0 +1,26 @@
+{
+  "skill_name": "add-command",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Adj hozzá egy új commandot: variable.remove, ami töröl egy dokumentumváltozót név alapján, és legyen visszavonható.",
+      "expected_output": "Adds a VariableRemove edit command in crates/core/src/commands/variable.rs with deny_unknown_fields params (doc_id, name) and a not_found error listing existing names, registers it in builtin_entries next to variable.set, adds integration tests (happy path, not_found with param, history.undo restores), updates PINNED in crates/core/tests/it/schema.rs from cargo xtask schema-hash without bumping API_VERSION unless needed, refreshes the insta snapshot with INSTA_UPDATE=always, and adds a row to docs/agents/tools.md.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "I want agents to be able to import a label from an SVG file: add a command element.add_svg that takes a path and a frame.",
+      "expected_output": "Puts the command in crates/core/src/commands/element.rs, resolves the path with ctx.check_path(\"path\", &p.path, false) before reading, tests ErrorCode::Forbidden under Policy::restricted, considers menu placement (in_menu(\"insert\", …)) and then adds cmd-element-add-svg to both en and hu studio.ftl, runs the schema-hash flow and documents the command in docs/agents/tools.md.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "elhasalt az api_version_matches_schema_hash teszt, miután adtam egy opcionális `bold` paramétert a table.edit-hez. Mit kell csinálni?",
+      "expected_output": "Explains the hash pins command schemas; runs cargo xtask schema-hash, checks whether API_VERSION was already bumped since the last release before bumping, pastes the new hash into PINNED in crates/core/tests/it/schema.rs, refreshes the command_list snapshot with INSTA_UPDATE=always cargo test -p labely-core, and updates the table.edit row in docs/agents/tools.md.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "skill_name": "release",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Adjunk ki egy release-t, legyen 0.2.0. Mi kell hozzá?",
+      "expected_output": "Notes there are no tags yet so the first release should be a pre-release (suggests v0.2.0-rc.1), bumps Cargo.toml workspace version and both MARKETING_VERSION lines, checks API_VERSION/schema hash, runs cargo xtask ci filtered, says the bump must be merged to main, then shows the exact tag/push commands and waits for explicit confirmation instead of pushing.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "The version bump PR is merged. Tag it and push, then tell me what I have to upload to the stores.",
+      "expected_output": "Verifies HEAD is the merged bump on main and the tag matches Cargo.toml, asks for confirmation with the exact command before tagging, then watches the Release run with gh, reports unsigned notices, and explains downloading store-android/store-ios artefacts and uploading the AAB to Play Console and IPA via Transporter.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "I added a new command param since the last release. Does the release need anything special for that?",
+      "expected_output": "Explains API_VERSION in crates/core/src/lib.rs pinned with the schema hash in crates/core/tests/it/schema.rs, bumped once per release; runs cargo xtask schema-hash, compares against the last tag, and follows the AGENTS.md schema-change steps including the insta snapshot refresh, asking before bumping.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "skill_name": "i18n-key",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Új fordítási kulcs kell: a nyomtatás képernyőn legyen egy 'Print a test label' gomb a studióban, Androidon és iOS-en is.",
+      "expected_output": "Adds a kebab-case key (e.g. print-test-label) under the print section of both en and hu studio.ftl, the same snake_case key (e.g. print_test_label) to values/strings.xml and values-hu/strings.xml and to Localizable.xcstrings at its alphabetical position with en and hu values, uses natural informal Hungarian with existing terms (e.g. 'Tesztcímke nyomtatása'), and runs cargo xtask i18n-check.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "prompt": "cargo xtask i18n-check fails with `hu/studio.ftl: missing `data-find-clear`` and `mobile/ios/Labely/Labely/DataPanel.swift: key `records_empty` is not in mobile/ios/Labely/Labely/Localizable.xcstrings`. Fix it.",
+      "expected_output": "Reads the EN data-find-clear entry and adds a matching Hungarian line at the same position in hu/studio.ftl; checks the Android records_empty string (reusing its EN/HU text) and adds the key with both languages to Localizable.xcstrings; validates the JSON and reruns cargo xtask i18n-check.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 3,
+      "prompt": "Nevezd át a kind_code2d kulcsot kind_qr-re mindenhol, és a magyar szöveg legyen 'QR-kód'.",
+      "expected_output": "Notices kind_ keys are built dynamically (L(\"kind_\\(type)\") in Kinds.swift, matching element kinds), so renaming one member would break the lookup; explains this, checks Android and iOS usages with grep, and either keeps the key and only changes the Hungarian value or changes code and both resource sets together, then runs cargo xtask i18n-check.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}
