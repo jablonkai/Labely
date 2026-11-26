@@ -3126,13 +3126,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "English or Hungarian, set per app"
+            "value": "Set per app in system settings"
           }
         },
         "hu": {
           "stringUnit": {
             "state": "translated",
-            "value": "Magyar vagy angol, alkalmazásonként"
+            "value": "Alkalmazásonként, a rendszerbeállításokban"
           }
         }
       }
