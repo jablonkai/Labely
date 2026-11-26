@@ -540,8 +540,20 @@ fn packager_config(
     Ok(config)
 }
 
+/// The cargo-packager formats of ADR-0038 on the host OS. Without `--formats`, cargo-packager
+/// builds NSIS on Windows rather than the MSI.
+const fn default_formats() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "app,dmg"
+    } else if cfg!(target_os = "windows") {
+        "wix"
+    } else {
+        "appimage,deb"
+    }
+}
+
 /// Builds the studio and packages it with cargo-packager (ADR-0038): `.app` and `.dmg` on
-/// macOS, MSI on Windows, AppImage and deb on Linux. `formats` narrows that list.
+/// macOS, MSI on Windows, AppImage and deb on Linux. `formats` replaces that list.
 ///
 /// macOS signs when `LABELY_SIGNING_IDENTITY` is set, and notarises when the `APPLE_*`
 /// variables of cargo-packager are set too.
@@ -567,10 +579,9 @@ fn package(formats: Option<String>) -> Result<()> {
     let mut cmd = Command::new(env!("CARGO"));
     cmd.current_dir(&repo)
         .args(["packager", "--config", &config.to_string()]);
-    if let Some(formats) = &formats {
-        cmd.args(["--formats", formats]);
-    }
-    eprintln!("$ cargo packager --config <packager.json> {formats:?}");
+    let formats = formats.as_deref().unwrap_or(default_formats());
+    cmd.args(["--formats", formats]);
+    eprintln!("$ cargo packager --config <packager.json> --formats {formats}");
     let status = cmd.status().context(
         "running cargo packager (install it with `cargo install cargo-packager --locked`)",
     )?;
