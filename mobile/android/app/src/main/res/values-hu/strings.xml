@@ -269,7 +269,7 @@
 
     <!-- Settings -->
     <string name="settings_language">Nyelv</string>
-    <string name="settings_language_sub">Magyar vagy angol, alkalmazásonként</string>
+    <string name="settings_language_sub">Alkalmazásonként, a rendszerbeállításokban</string>
     <string name="settings_permissions">Engedélyek</string>
     <string name="settings_permissions_sub">Bluetooth-hozzáférés a nyomtatókhoz</string>
     <string name="settings_version">Verzió</string>

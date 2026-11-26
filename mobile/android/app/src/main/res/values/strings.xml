@@ -269,7 +269,7 @@
 
     <!-- Settings -->
     <string name="settings_language">Language</string>
-    <string name="settings_language_sub">English or Hungarian, set per app</string>
+    <string name="settings_language_sub">Set per app in system settings</string>
     <string name="settings_permissions">Permissions</string>
     <string name="settings_permissions_sub">Bluetooth access for printers</string>
     <string name="settings_version">Version</string>

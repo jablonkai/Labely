@@ -152,6 +152,12 @@ fn key_diff(
     }
 }
 
+/// The `labely-i18n` source that embeds every locale's Fluent files.
+const I18N_LIB: &str = "crates/i18n/src/lib.rs";
+
+/// The Xcode project whose `knownRegions` must list every locale.
+const IOS_PROJECT: &str = "mobile/ios/Labely/Labely.xcodeproj/project.pbxproj";
+
 /// Android string resource directories checked by `i18n-check`.
 const ANDROID_RES: &[&str] = &["mobile/android/app/src/main/res"];
 
@@ -166,11 +172,12 @@ const IOS_CATALOGS: &[&str] = &[
 /// `Localizable.xcstrings` (ADR-0032, ADR-0033).
 const IOS_SOURCES: &str = "mobile/ios/Labely/Labely";
 
-/// Every key of an Xcode string catalog must have an EN and a HU value (a string or plural
-/// variants). Returns the keys.
+/// Every key of an Xcode string catalog must have a value (a string or plural variants) in
+/// every language of `langs`. Returns the keys.
 fn xcstrings_check(
     path: &std::path::Path,
     label: &str,
+    langs: &[String],
     errors: &mut Vec<String>,
 ) -> Result<std::collections::BTreeSet<String>> {
     let catalog: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path)?)?;
@@ -178,7 +185,8 @@ fn xcstrings_check(
         .as_object()
         .ok_or_else(|| anyhow::anyhow!("{label}: no `strings`"))?;
     for (key, entry) in strings {
-        for lang in ["en", "hu"] {
+        for lang in langs {
+            let lang = lang.as_str();
             let loc = &entry["localizations"][lang];
             let value = loc["stringUnit"]["value"]
                 .as_str()
@@ -223,24 +231,80 @@ fn swift_l_keys(dir: &std::path::Path) -> Result<Vec<(String, String)>> {
     Ok(out)
 }
 
-/// EN and HU must define the same message ids (ADR-0009): the Fluent files, the Android
-/// string resources and the iOS string catalogs.
+/// The non-English locales: the subdirectories of `crates/i18n/locales` other than `en`,
+/// sorted. English is the source every other locale is compared with (docs/i18n/README.md).
+fn i18n_locales(root: &std::path::Path) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(root).with_context(|| format!("reading {}", root.display()))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if entry.file_type()?.is_dir() && name != "en" {
+            out.push(name);
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// The Android `values-…` qualifier of a locale code: `hu` → `hu`, `pt-BR` → `pt-rBR`.
+fn android_qualifier(code: &str) -> String {
+    match code.split_once('-') {
+        Some((lang, region)) => format!("{lang}-r{region}"),
+        None => code.to_owned(),
+    }
+}
+
+/// Every locale must define the same message ids as English (ADR-0009) on every surface: the
+/// Fluent files (also embedded in `labely-i18n`), the Android string resources and the iOS
+/// string catalogs (also a known region of the Xcode project).
 fn i18n_check() -> Result<()> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/i18n/locales");
-    let en = ftl_keys(&root.join("en"))?;
-    let hu = ftl_keys(&root.join("hu"))?;
-    let mut errors = Vec::new();
-    key_diff("hu", &en, &hu, &mut errors);
-    let mut files = en.len();
     let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let root = repo.join("crates/i18n/locales");
+    let locales = i18n_locales(&root)?;
+    let en = ftl_keys(&root.join("en"))?;
+    let mut errors = Vec::new();
+    let i18n_lib = std::fs::read_to_string(repo.join(I18N_LIB))?;
+    for code in std::iter::once("en").chain(locales.iter().map(String::as_str)) {
+        if !i18n_lib.contains(&format!("include_str!(\"../locales/{code}/")) {
+            errors.push(format!("{I18N_LIB}: locale `{code}` is not embedded"));
+        }
+    }
+    for code in &locales {
+        key_diff(code, &en, &ftl_keys(&root.join(code))?, &mut errors);
+    }
+    let mut files = en.len() * (1 + locales.len());
     for res in ANDROID_RES {
         let en = android_string_keys(&repo.join(res).join("values"))?;
-        let hu = android_string_keys(&repo.join(res).join("values-hu"))?;
-        key_diff(&format!("{res}/values-hu"), &en, &hu, &mut errors);
-        files += en.len();
+        for code in &locales {
+            let dir = format!("values-{}", android_qualifier(code));
+            if !repo.join(res).join(&dir).is_dir() {
+                errors.push(format!("{res}/{dir}: missing (locale `{code}`)"));
+                continue;
+            }
+            let other = android_string_keys(&repo.join(res).join(&dir))?;
+            key_diff(&format!("{res}/{dir}"), &en, &other, &mut errors);
+        }
+        files += en.len() * (1 + locales.len());
     }
+    let pbxproj = std::fs::read_to_string(repo.join(IOS_PROJECT))?;
+    let regions = pbxproj
+        .split_once("knownRegions = (")
+        .and_then(|(_, rest)| rest.split_once(')'))
+        .map(|(list, _)| list)
+        .unwrap_or_default();
+    for code in &locales {
+        let listed = regions
+            .split(',')
+            .any(|r| r.trim().trim_matches('"') == code);
+        if !listed {
+            errors.push(format!("{IOS_PROJECT}: `{code}` is not in knownRegions"));
+        }
+    }
+    let langs: Vec<String> = std::iter::once("en".to_owned())
+        .chain(locales.iter().cloned())
+        .collect();
     for catalog in IOS_CATALOGS {
-        let keys = xcstrings_check(&repo.join(catalog), catalog, &mut errors)?;
+        let keys = xcstrings_check(&repo.join(catalog), catalog, &langs, &mut errors)?;
         if catalog.ends_with("/Localizable.xcstrings") {
             for (file, key) in swift_l_keys(&repo.join(IOS_SOURCES))? {
                 if !keys.contains(&key) {
@@ -589,6 +653,21 @@ mod tests {
     use super::*;
 
     const BASE: &str = include_str!("../../crates/studio/packaging/packager.json");
+
+    #[test]
+    fn android_qualifier_adds_the_region_prefix() {
+        assert_eq!(android_qualifier("hu"), "hu");
+        assert_eq!(android_qualifier("pt-BR"), "pt-rBR");
+    }
+
+    #[test]
+    fn i18n_locales_lists_the_non_english_locales() -> Result<()> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/i18n/locales");
+        let locales = i18n_locales(&root)?;
+        assert!(locales.iter().any(|l| l == "hu"));
+        assert!(!locales.iter().any(|l| l == "en"));
+        Ok(())
+    }
 
     #[test]
     fn packager_config_adds_build_facts() -> Result<()> {

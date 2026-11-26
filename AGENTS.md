@@ -33,11 +33,12 @@ Rules:
   does, bump `API_VERSION` in `crates/core/src/lib.rs` (once per release) and paste the new
   hash into `crates/core/tests/it/schema.rs`. Then refresh the insta snapshot with
   `INSTA_UPDATE=always cargo test -p labely-core`.
-- **UI text.** Studio and CLI text goes in `crates/i18n/locales/{en,hu}/*.ftl`. Android text
-  goes in `mobile/android/app/src/main/res/values{,-hu}/`. iOS text goes in the
+- **UI text.** Studio and CLI text goes in `crates/i18n/locales/<code>/*.ftl`. Android text
+  goes in `mobile/android/app/src/main/res/values{,-<code>}/`. iOS text goes in the
   `mobile/ios/Labely/Labely/*.xcstrings` catalogs, and every `L("key")` must be in
-  `Localizable.xcstrings` (ADR-0032). EN and HU must have the same keys, which
-  `cargo xtask i18n-check` checks.
+  `Localizable.xcstrings` (ADR-0032). Every locale must have the same keys as English, which
+  `cargo xtask i18n-check` checks. The locales, their style guides and how to add one are in
+  [docs/i18n/README.md](docs/i18n/README.md).
 - **File access.** A new command that reads or writes files must call `Ctx::check_path`
   (ADR-0012).
 
